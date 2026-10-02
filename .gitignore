@@ -1,0 +1,27 @@
+# Rust
+/target/
+**/target/
+
+# Node / frontend
+node_modules/
+ui/dist/
+
+# Env & secrets
+.env
+.env.*
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs & temp
+*.log
+tmp/
