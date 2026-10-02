@@ -1,0 +1,11 @@
+[package]
+name = "weave-files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "File and directory tools (M1 File Core / M2 Rename / M3 Duplicates)."
+
+[dependencies]
+
+[lints]
+workspace = true

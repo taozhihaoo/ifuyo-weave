@@ -1,0 +1,15 @@
+[package]
+name = "weave-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Weave stable domain contracts: ids, errors, tool trait, registry, path safety."
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

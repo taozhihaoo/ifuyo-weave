@@ -1,0 +1,11 @@
+[package]
+name = "weave-documents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Document tools: PDF / Office inspection and processing (M8)."
+
+[dependencies]
+
+[lints]
+workspace = true

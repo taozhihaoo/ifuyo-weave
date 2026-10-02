@@ -1,0 +1,11 @@
+[package]
+name = "weave-data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Structured data tools: CSV / JSON / TSV (M5)."
+
+[dependencies]
+
+[lints]
+workspace = true

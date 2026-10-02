@@ -1,0 +1,11 @@
+[package]
+name = "weave-batch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Unified batch engine: Job / Preview / Execute / Cancel / Retry / Undo (M7)."
+
+[dependencies]
+
+[lints]
+workspace = true

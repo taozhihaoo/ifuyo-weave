@@ -1,0 +1,11 @@
+[package]
+name = "weave-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared test infrastructure: temp workspaces, fixtures, deterministic random, fault injection."
+
+[dependencies]
+
+[lints]
+workspace = true

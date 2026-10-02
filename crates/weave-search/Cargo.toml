@@ -1,0 +1,11 @@
+[package]
+name = "weave-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tool and command search (M11)."
+
+[dependencies]
+
+[lints]
+workspace = true
