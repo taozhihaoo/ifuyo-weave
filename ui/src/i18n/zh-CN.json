@@ -1,0 +1,17 @@
+{
+  "app.milestone": "M0 Foundation",
+  "app.language": "语言",
+  "ipc.status.connected": "IPC 已连接",
+  "ipc.status.connecting": "IPC 连接中…",
+  "ipc.status.failed": "IPC 未连接",
+  "ipc.roundtrip": "IPC 往返",
+  "command.ping": "运行 IPC Ping",
+  "command.showInfo": "显示应用信息",
+  "drop.hint": "把一个文件拖进来，验证 Drop → Understand 链路",
+  "drop.result.title": "探测结果",
+  "drop.result.kind": "类型",
+  "drop.result.size": "大小",
+  "error.title": "操作未完成",
+  "error.suggestion": "建议",
+  "error.retry": "重试"
+}

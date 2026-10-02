@@ -25,3 +25,6 @@ Desktop.ini
 # Logs & temp
 *.log
 tmp/
+
+# Tauri generated schemas
+src-tauri/gen/

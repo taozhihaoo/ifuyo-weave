@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"M0 minimal capability: core event/window/app defaults only. No filesystem, shell, process or network access is granted to the UI.","local":true,"windows":["main"],"permissions":["core:default"]}}
