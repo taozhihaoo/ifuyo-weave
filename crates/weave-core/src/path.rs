@@ -203,6 +203,12 @@ pub fn validate_absolute_path(input: &str) -> Result<PathValidation, WeaveError>
     Ok(validation)
 }
 
+/// Windows 大小写不敏感冲突检测：两个路径规范化后忽略大小写指向同一目标即冲突。
+/// 这是 M2 碰撞检测（含 case-only rename 场景）的契约基础；完整语义由 M1/M2 持续完善。
+pub fn paths_conflict(a: &str, b: &str) -> bool {
+    windows_paths_equivalent(a, b)
+}
+
 /// Windows 语义下的等价判断：规范化后做大小写不敏感比较。
 /// M0 使用简单折叠；完整大小写契约由 M1 建立。
 pub fn windows_paths_equivalent(a: &str, b: &str) -> bool {
@@ -352,6 +358,17 @@ mod tests {
             r"c:\data\file.TXT"
         ));
         assert!(!windows_paths_equivalent(r"C:\a.txt", r"C:\b.txt"));
+    }
+
+    #[test]
+    fn case_insensitive_conflict_contract_for_m2_collision() {
+        // case-only rename：同一目录内 a.jpg → A.jpg 属于同目标冲突，必须可检测。
+        assert!(paths_conflict(r"C:\work\a.jpg", r"C:\WORK\A.JPG"));
+        assert!(paths_conflict(r"C:\work\a.jpg", r"C:\work\A.jpg"));
+        // 不同目标不冲突。
+        assert!(!paths_conflict(r"C:\work\a.jpg", r"C:\work\b.jpg"));
+        // 规范化差异（. 组件）不影响等价判断。
+        assert!(paths_conflict(r"C:\work\.\a.jpg", r"C:\work\a.jpg"));
     }
 
     #[test]

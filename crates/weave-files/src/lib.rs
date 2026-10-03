@@ -1,4 +1,19 @@
-//! weave-files — File and directory tools (M1 File Core / M2 Rename / M3 Duplicates).
+//! weave-files — Weave 文件核心（M1）。
 //!
-//! This crate is an intentional placeholder: the workspace establishes the
-//! crate boundary now so later milestones fill it in without structural churn.
+//! 职责（M1 §5.2）：filesystem domain、file inspection、directory scanning、
+//! metadata collection、hashing、path safety integration。
+//!
+//! 架构位置：
+//!
+//! ```text
+//! Application(src-tauri) → weave-files → Filesystem trait → std / OS
+//! ```
+//!
+//! 一切文件系统访问经过 [`fs::Filesystem`] 抽象（可测试、可故障注入），
+//! 一切路径先过 `weave_core::path` 校验。本 crate 只报告事实，不推测意图。
+
+pub mod fs;
+pub mod metadata;
+
+pub use fs::Filesystem;
+pub use metadata::FileStat;

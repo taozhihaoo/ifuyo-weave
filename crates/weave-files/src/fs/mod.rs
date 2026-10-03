@@ -1,0 +1,37 @@
+//! 文件系统抽象（M1 §7）。
+//!
+//! 目标不是包装 `std::fs` 的全部 API，而是抽象业务真正需要的最小边界：
+//! exists / stat / read_dir / open_read（未来写操作按需扩展，M1 不预设计）。
+//!
+//! 设计约束：
+//! - `stat` 返回自有的 [`FileStat`]（而非 `std::fs::Metadata`）——std 的
+//!   Metadata 无法手工构造，会使测试替身不可能；自有结构使内存 fake 可行。
+//! - 语义为 **lstat**（不跟随符号链接），配合 weave-files 的 symlink 策略。
+//! - `read_dir` 按目录批量返回名称（目录内条目数有限，内存可控），
+//!   调用方负责排序与递归（流式遍历语义由 scanner 保证）。
+
+pub mod fault;
+pub mod std_fs;
+
+pub use fault::FaultFilesystem;
+pub use std_fs::StdFilesystem;
+
+use std::io;
+use std::path::Path;
+
+use crate::metadata::FileStat;
+
+/// 业务所需的文件系统边界。实现必须是线程安全且无内部可变状态
+/// （故障注入等状态由包装器持有）。
+pub trait Filesystem: Send + Sync {
+    fn exists(&self, path: &Path) -> bool;
+
+    /// lstat 语义：不跟随符号链接。
+    fn stat(&self, path: &Path) -> io::Result<FileStat>;
+
+    /// 列出目录的直接条目名（不含 `.` / `..`）。顺序不保证——调用方排序。
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>>;
+
+    /// 打开只读流。Hash 等流式消费方按 chunk 读取，禁止整读入内存（M1 §7.1）。
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn io::Read + Send>>;
+}

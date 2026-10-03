@@ -14,6 +14,7 @@
 
 pub mod cancellation;
 pub mod error;
+pub mod facts;
 pub mod id;
 pub mod path;
 pub mod preview;
@@ -26,6 +27,9 @@ pub mod tool;
 pub mod prelude {
     pub use crate::cancellation::CancellationToken;
     pub use crate::error::{ErrorKind, Recoverability, WeaveError};
+    pub use crate::facts::{
+        FileKind, HashAlgorithm, HashResult, HashStatus, ScanStatus, TextEncoding,
+    };
     pub use crate::id::{InputKind, JobId, OperationId, ToolCategory, ToolId};
     pub use crate::path::{PathValidation, validate_absolute_path, validate_path};
     pub use crate::preview::{Preview, PreviewItem};
