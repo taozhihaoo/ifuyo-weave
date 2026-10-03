@@ -165,3 +165,56 @@ EnumWindows 均无窗口、无 panic、invoke 永久 pending）。已确认与�
 无关（原始 invoke 同样挂起）。JS 侧已补 catch 使任何对话框失败可见。
 Drop 入口不受影响（Tauri 运行时原生处理）。M2 排查方向：最小复现仓库
 + rfd/COM 线程模型；若确认为环境特异则关闭。
+
+---
+
+# M2 Decisions（D28–D32）
+
+## D28 — 依赖：regex + chrono（M2 §44 评估记录）
+
+- `regex 1.x`（RustCrypto 生态，MIT/Apache）：Rename RegexReplace 与
+  Organizer NamePattern 需要；编译错误映射为结构化 `rename.invalidRegex`。
+- `chrono 0.4`（default-features=false + clock/std，MIT/Apache）：Date 规则
+  需要本地时区日期格式化（YYYY-MM-DD/YYYYMMDD/YYYY-MM）。UTC 无法表达
+  用户语义的"拍摄日期"，自研时区转换不可靠，故引入。
+- 两者均为高维护性成熟依赖；转递依赖已过 cargo deny + 前端 337 包审计。
+
+## D29 — History 存储形态：版本化 JSON + 原子写 + 损坏隔离（M2 §54）
+
+- `entries.json`（schema_version=1，容量 500，最新在前，Atomic temp+rename）
+  + `transactions/{op_id}.json`（每操作一份，InProgress→Completed 两阶段
+  落盘，M2 §82 crash safety）。
+- 拒绝 SQLite：§54 明确"最简单可靠的持久化形式"，M2 历史无并发写、无
+  部分查询需求，JSON 足够且损坏可肉眼诊断；M7 如需查询再评估。
+- 损坏策略：解析失败 ⇒ `*.corrupt-{ts}` 隔离 + 空状态安全降级，绝不阻塞
+  启动；未知 schema 版本同样隔离（不静默猜测迁移）。
+- 容量淘汰仅删 entries 条目，事务文件保留（淘汰条目的 Undo 仍可用）。
+
+## D30 — 跨文件系统 Move 明确拒绝（M2 §71）
+
+执行器校验 source/target 卷前缀（盘符或 UNC server+share），不匹配 ⇒
+`move.crossVolumeUnsupported` 结构化失败，条目原样保留。拒绝 copy+delete
+模拟：无可靠的"copy→flush→verify→remove→rollback"事务模型前，宁可拒绝
+也不假装支持（M2 §71 授权，charter #116"宁可拒绝执行"）。
+
+## D31 — PlanCache 内存态 + 模板消费扩展名语义
+
+- **PlanCache**：build 产生的 Plan 以 operation_id 为键缓存在服务端内存，
+  execute 仅收 operation_id —— 源快照（size/mtime）不过 IPC，且天然满足
+  §11"Preview 与 Execute 同一 Plan"。应用重启后缓存清空 ⇒ execute 返回
+  `plan.unknownOrExpired`（需重建 Plan）；事务本身已落盘，crash safety
+  不受影响。M7 持久化 Job 时再评估 Plan 落盘。
+- **模板语义**：模板（若提供）为最后一步，组合出**完整最终名**并无条件
+  消费扩展名——`vacation-{counter}.{ext}` 与 `new-{counter}.txt` 都产出
+  单扩展名的正确结果（无 `.jpg.jpg` 双拼）。非模板路径下 Prefix/Suffix/
+  Replace/Regex 仅作用于 base，扩展名受 Extension 规则显式控制。
+- **环判定修正**：`a→b` 且 `b→b(NoOp)` 不是环——NoOp 条目永不让位，
+  `a→b` 是真实的 ExistingTarget。环判定排除 NoOp 条目的 source。
+
+## D32 — Undo 的 LIFO + 占位暂存（swap/cycle 可还原）
+
+朴素 LIFO 在 swap 场景必然全冲突（互为原位占据者）。算法：撤销某条目
+时若原位被同事务**待撤销条目**的当前位置占据，将占据者暂存到
+`.{stem}.weave-undo-tmp{ext}` 并重定向该条目的还原起点为 tmp；后续轮次
+tmp→其 source。不变量：全部条目处理后 `leaked_temps == 0`（测试断言）。
+外部文件占据（不在事务内）⇒ UndoConflict 拒绝覆盖（M2 §49）。

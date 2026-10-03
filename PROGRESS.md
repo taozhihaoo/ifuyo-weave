@@ -98,10 +98,13 @@ Quality:
 Known Limitations:
 
 - Plan 缓存为内存态：应用重启后需重新 Preview（事务本身已落盘，crash 后
-  InProgress 事务被 Undo 明确拒绝并提示恢复）
+  InProgress 事务被 Undo 明确拒绝并提示恢复）（D31）
 - 跨卷 Move 明确拒绝（D30）；Organizer 非递归
 - 统一规则列表无法表达逐条目不同规则 ⇒ uniform 规则下真环仅 case-only 场景，
   执行器对真环的支持由手工 Plan 测试覆盖
+- **D27 沿袭**：Open File/Folder 按钮依赖的对话框插件在本机挂起（P1
+  BLOCKED），Rename/Organizer 面板的文件选择按钮同样不可用；路径输入框
+  与 Drop 手势不受影响。待 D27 排查后自动恢复
 
 ## M0 Foundation
 

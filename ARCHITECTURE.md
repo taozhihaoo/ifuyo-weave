@@ -66,6 +66,25 @@ weave-app (src-tauri)
 一切路径先过 `weave_core::path`。扫描/哈希跑在 spawn_blocking 任务里，
 进度/取消经 JobTracker（IPC 管道，非 M7 引擎）。详见 docs/file-core.md。
 
+## M2 Rename/Organizer 边界
+
+```text
+m2_commands (IPC) → rename_service (编排 + PlanCache) → weave-files
+   ├── rename/: rule.rs（9 类规则纯函数管线）+ plan.rs（快照 + 四类碰撞）
+   ├── execute.rs: 逐项 Revalidate → 直通 / 两阶段（CaseOnly+Cycle 临时让位）
+   ├── organize.rs: 非递归 root 快照 + first-match-wins + root 边界
+   └── undo.rs: LIFO + swap 占位暂存（leaked_temps==0 不变量）
+weave-history: 事务 InProgress→Completed 两阶段落盘 + entries.json（版本化）
+```
+
+- **Plan 是事实快照**：Preview 与 Execute 共用同一 Plan（服务端 PlanCache
+  以 operation_id 缓存，源快照不过 IPC）；Execute 前逐项 Revalidate，
+  外部变化 ⇒ `rename.sourceChanged` 安全失败，绝不智能纠正。
+- **No Overwrite**：执行时目标重现 ⇒ 该项 Failed；默认无 Overwrite 策略。
+- **事务按实际顺序**：两阶段 temp 步亦入事务，支撑 swap/cycle 的 LIFO
+  Undo（占位暂存）；崩溃遗留 InProgress 事务被 Undo 明确拒绝。
+- 语义全文：docs/file-core.md（M2 章节）。
+
 ## Tool Contract（charter #24）
 
 ```text
