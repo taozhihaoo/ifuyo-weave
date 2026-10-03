@@ -16,10 +16,15 @@ pub mod std_fs;
 pub use fault::{FaultFilesystem, FsFault};
 pub use std_fs::StdFilesystem;
 
-use std::io;
+use std::io::{self, Read, Seek};
 use std::path::Path;
 
 use crate::metadata::FileStat;
+
+/// 可 Seek 的只读流：partial hash 的首/尾定位读需要（M3 §4）。
+/// std::fs::File / io::Cursor 天然满足；测试替身用 Cursor 或自定义。
+pub trait ReadSeek: Read + Seek + Send {}
+impl<T: Read + Seek + Send> ReadSeek for T {}
 
 /// 业务所需的文件系统边界。实现必须是线程安全且无内部可变状态
 /// （故障注入等状态由包装器持有）。
@@ -33,7 +38,8 @@ pub trait Filesystem: Send + Sync {
     fn read_dir(&self, path: &Path) -> io::Result<Vec<String>>;
 
     /// 打开只读流。Hash 等流式消费方按 chunk 读取，禁止整读入内存（M1 §7.1）。
-    fn open_read(&self, path: &Path) -> io::Result<Box<dyn io::Read + Send>>;
+    /// M2 扩展：返回 ReadSeek（partial hash 的首/尾定位读需要 Seek，M3 §4）。
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn ReadSeek>>;
 
     /// 原生重命名/同卷移动（M2 §70：避免 copy+delete 模拟）。
     /// 目标已存在时的行为由平台决定——调用方必须先做碰撞校验（M2 §21）。

@@ -3,7 +3,7 @@
 use std::io;
 use std::path::Path;
 
-use super::Filesystem;
+use super::{Filesystem, ReadSeek};
 use crate::metadata::FileStat;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -28,7 +28,7 @@ impl Filesystem for StdFilesystem {
         Ok(names)
     }
 
-    fn open_read(&self, path: &Path) -> io::Result<Box<dyn io::Read + Send>> {
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn ReadSeek>> {
         // 显式只读 + 不创建；share mode 使用 std 默认（Windows 上允许共享读）。
         Ok(Box::new(std::fs::File::open(path)?))
     }

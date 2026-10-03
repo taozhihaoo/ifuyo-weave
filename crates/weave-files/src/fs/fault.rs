@@ -105,7 +105,7 @@ impl Filesystem for FaultFilesystem {
         self.inner.read_dir(path)
     }
 
-    fn open_read(&self, path: &Path) -> io::Result<Box<dyn io::Read + Send>> {
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn super::ReadSeek>> {
         if let Some(err) = self.trip(FsFault::OpenLocked, || {
             io::Error::from_raw_os_error(windows_sharing_violation_code())
         }) {
@@ -161,7 +161,7 @@ fn windows_sharing_violation_code() -> i32 {
 
 /// 读取 N 字节后注入 I/O 错误——覆盖"partial read 后失败"路径。
 struct FailAfterReader {
-    inner: Box<dyn io::Read + Send>,
+    inner: Box<dyn super::ReadSeek>,
     bytes_before_failure: u64,
 }
 
@@ -178,6 +178,12 @@ impl io::Read for FailAfterReader {
             return Err(io::Error::other("injected read failure"));
         }
         Ok(n)
+    }
+}
+
+impl io::Seek for FailAfterReader {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.inner.seek(pos)
     }
 }
 

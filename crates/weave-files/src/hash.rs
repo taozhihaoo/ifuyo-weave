@@ -267,7 +267,7 @@ mod tests {
             fn read_dir(&self, _p: &Path) -> io::Result<Vec<String>> {
                 Ok(vec![])
             }
-            fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
+            fn open_read(&self, p: &Path) -> io::Result<Box<dyn crate::fs::ReadSeek>> {
                 StdFilesystem.open_read(p)
             }
             fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {

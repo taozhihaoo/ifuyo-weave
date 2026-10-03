@@ -13,6 +13,7 @@
 //! 一切路径先过 `weave_core::path` 校验。本 crate 只报告事实，不推测意图。
 
 pub mod classify;
+pub mod duplicates;
 pub mod encoding;
 pub mod execute;
 pub mod fs;

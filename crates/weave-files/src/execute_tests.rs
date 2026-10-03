@@ -748,7 +748,7 @@ fn rename_permission_failure_is_structured_and_batch_continues() {
         fn read_dir(&self, p: &Path) -> std::io::Result<Vec<String>> {
             self.inner.read_dir(p)
         }
-        fn open_read(&self, p: &Path) -> std::io::Result<Box<dyn std::io::Read + Send>> {
+        fn open_read(&self, p: &Path) -> std::io::Result<Box<dyn crate::fs::ReadSeek>> {
             self.inner.open_read(p)
         }
         fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {

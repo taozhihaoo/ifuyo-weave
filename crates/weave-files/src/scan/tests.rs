@@ -252,7 +252,7 @@ fn child_read_failure_aggregates_and_continues() {
                 Err(io::Error::from(io::ErrorKind::PermissionDenied))
             }
         }
-        fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
+        fn open_read(&self, p: &Path) -> io::Result<Box<dyn crate::fs::ReadSeek>> {
             StdFilesystem.open_read(p)
         }
         fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
@@ -319,7 +319,7 @@ fn file_deleted_during_scan_is_recorded_not_silent() {
             }
             Ok(names)
         }
-        fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
+        fn open_read(&self, p: &Path) -> io::Result<Box<dyn crate::fs::ReadSeek>> {
             StdFilesystem.open_read(p)
         }
         fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
