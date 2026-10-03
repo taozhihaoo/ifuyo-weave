@@ -162,3 +162,39 @@ format 限额 1 MiB（TextLimits 最紧档）⇒ 同步预览最坏延迟有界�
 - [x] 建立真实基线，证明算法没有明显浪费（§138–§141 全部有数字）
 - [x] Regex 安全 = 引擎线性性质（§140 如实表述）
 - [x] Compare 超限显式拒绝 + 降级标注（§141）
+
+## M5 Data — 2026-10-04
+
+- 环境同上（release 构建，内存 fixture）；复现：`cargo run --release -p weave-data --example m5_perf [rows]`
+- 内存模型（§137）：解析/变换 O(输入)；Compare 窗口 16 MiB 上界；会话
+  500k 行驻留上限（DataLimits，§88/§166 统一来源）
+
+### CSV Scan / Filter / Sort（§158）
+
+| rows | scan | filter | sort |
+| --- | --- | --- | --- |
+| 10,000 | 1 ms | 0 ms | 1 ms |
+| 100,000 | 17 ms | 10 ms | 16 ms |
+
+Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（§22/§23）。
+
+### JSONL Scan（§160）
+
+| rows | elapsed | valid |
+| --- | --- | --- |
+| 10,000 | 4 ms | 10,000 |
+| 100,000 | 48 ms | 100,000 |
+
+### Conversion（§161）
+
+| rows | csv→json | csv→jsonl |
+| --- | --- | --- |
+| 10,000 | 8 ms | 7 ms |
+| 100,000 | 83 ms | 82 ms |
+
+对照 M5 目标：
+
+- [x] 建立真实基线（§158：每项有数字，无 "fast enough"）
+- [x] Regex 安全 = 引擎线性性质（§140）
+- [x] Compare 超窗降级 + P1 修复锚点 102 ms（M4 节）
+- 峰值内存：会话 O(输入) + 视图索引向量；未做进程级 RSS 测量
