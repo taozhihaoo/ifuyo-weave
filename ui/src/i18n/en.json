@@ -1,5 +1,7 @@
 {
   "app.milestone": "M1 File Core",
+  "open.file": "Open file…",
+  "open.folder": "Open folder…",
   "app.language": "Language",
   "ipc.status.connected": "IPC connected",
   "ipc.status.connecting": "IPC connecting…",

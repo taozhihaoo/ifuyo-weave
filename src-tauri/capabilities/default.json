@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "M0 minimal capability: core event/window/app defaults only. No filesystem, shell, process or network access is granted to the UI.",
+  "description": "M0/M1 minimal capability: core defaults plus the user-initiated file dialog (Open File/Folder buttons, M1 §20). No filesystem, shell, process or network access is granted to the UI.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:default"]
 }

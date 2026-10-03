@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listCommands, runCommand } from "../commands/registry";
 import type { IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
@@ -173,6 +174,18 @@ function App() {
     return { phase: "idle" };
   })();
 
+  const openViaDialog = async (directory: boolean): Promise<void> => {
+    // M1 §20：Open File / Open Folder 与 Drop 同级的入口（dialog 为用户显式发起）。
+    const selected = await openDialog({
+      multiple: false,
+      directory,
+      title: directory ? t("open.folder") : t("open.file"),
+    });
+    if (typeof selected === "string" && selected) {
+      dispatchPath(selected);
+    }
+  };
+
   const toggleLocale = (): void => {
     const next: Locale = locale === "zh-CN" ? "en" : "zh-CN";
     useAppStore.getState().setLocale(next);
@@ -265,6 +278,12 @@ function App() {
       ) : null}
 
       <section style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+        <button type="button" onClick={() => void openViaDialog(false)} style={buttonStyle}>
+          {t("open.file")}
+        </button>
+        <button type="button" onClick={() => void openViaDialog(true)} style={buttonStyle}>
+          {t("open.folder")}
+        </button>
         {listCommands().map((command) => (
           <button
             key={command.id}

@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 weave-core = { path = "../crates/weave-core" }
 weave-files = { path = "../crates/weave-files" }
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
