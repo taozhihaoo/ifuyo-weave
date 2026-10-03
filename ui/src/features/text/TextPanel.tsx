@@ -454,6 +454,15 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
         </div>
       ) : null}
 
+      {content.length === 0 && !busy ? (
+        <div
+          role="note"
+          style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}
+        >
+          {tab === "compare" ? t("text.empty.compare") : t("text.empty.default")}
+        </div>
+      ) : null}
+
       {tab === "format" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}>
           <div style={rowStyle}>
