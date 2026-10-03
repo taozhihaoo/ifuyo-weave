@@ -29,6 +29,16 @@ export const commands = {
 	cancelJob: (jobId: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("cancel_job", { jobId })),
 	/**  统一工具发现（Command Palette / Quick Drop 的单一事实源）。 */
 	listTools: () => __TAURI_INVOKE<ToolDescriptorDto[]>("list_tools"),
+	buildRenamePlan: (inputs: string[], rules: RenameRuleDto[], template: string | null) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_rename_plan", { inputs, rules, template })),
+	buildOrganizerPlan: (root: string, rules: OrganizerRuleDto[]) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_organizer_plan", { root, rules })),
+	/**  执行已确认的 Plan（服务端缓存取回；任务内 Revalidate + Safe Rename）。 */
+	executePlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_plan", { operationId })),
+	/**  撤销一个历史操作（LIFO + 占位暂存；任务内执行）。 */
+	undoOperation: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("undo_operation", { operationId })),
+	/**  最近操作（M2 §56 latest first）。 */
+	getHistory: (limit: number | null) => typedError<HistoryEntryDto[], IpcError>(__TAURI_INVOKE("get_history", { limit })),
+	/**  读取某操作的事务详情（Undo 前检查）。 */
+	getOperation: (operationId: string) => typedError<TransactionDto, IpcError>(__TAURI_INVOKE("get_operation", { operationId })),
 };
 
 /* Types */
@@ -92,6 +102,19 @@ export type HashResultDto = {
 	status: string,
 };
 
+export type HistoryEntryDto = {
+	operationId: string,
+	kind: string,
+	timestampMs: number | null,
+	summary: string,
+	itemCount: number | null,
+	successCount: number | null,
+	failedCount: number | null,
+	skippedCount: number | null,
+	undoable: boolean,
+	status: string,
+};
+
 /**
  *  统一错误在 IPC 边界的 DTO。weave-core 不依赖 specta；
  *  错误在 Application 层显式翻译（Domain Error → Application → UI）。
@@ -119,13 +142,57 @@ export type JobStatusDto = {
 	progressCurrent: number | null,
 	hash: HashResultDto | null,
 	scan: ScanReportDto | null,
+	/**  M2：Rename/Organizer 执行（或 Undo 计数）结果。 */
+	plan: PlanReportDto | null,
+	undo: UndoReportDto | null,
 	error: IpcError | null,
+};
+
+export type OrganizerConditionDto = { type: "any" } | { type: "extensionIn"; extensions: string[] } | { type: "nameContains"; text: string } | { type: "namePattern"; pattern: string } | { type: "sizeLargerThan"; bytes: number | null } | { type: "sizeSmallerThan"; bytes: number | null } | { type: "modifiedBefore"; epoch_ms: number | null } | { type: "modifiedAfter"; epoch_ms: number | null };
+
+export type OrganizerRuleDto = {
+	condition: OrganizerConditionDto,
+	targetFolder: string,
+};
+
+export type PlanDto = {
+	operationId: string,
+	kind: string,
+	items: PlanItemDto[],
+	readyCount: number | null,
+	conflictCount: number | null,
+	invalidCount: number | null,
+	noopCount: number | null,
+};
+
+export type PlanItemDto = {
+	itemId: string,
+	sourcePath: string,
+	targetPath: string,
+	status: string,
+	collision: string,
+	warnings: string[],
+	errors: IpcError[],
+};
+
+/**  任务终态载荷：Plan 执行报告（或 Undo 计数）。 */
+export type PlanReportDto = {
+	operationId: string,
+	items: PlanItemDto[],
+	executed: number | null,
+	failed: number | null,
+	skipped: number | null,
+	undoable: boolean,
+	durationMs: number | null,
+	transaction: TransactionDto | null,
 };
 
 /**  `ping` 的应答。真实 IPC 往返，不是前端本地 mock。 */
 export type Pong = {
 	message: string,
 };
+
+export type RenameRuleDto = { type: "prefix"; text: string } | { type: "suffix"; text: string } | { type: "replace"; find: string; replace_with: string } | { type: "regexReplace"; pattern: string; replacement: string } | { type: "counter"; start: number | null; step: number | null; width: number | null } | { type: "date"; field: string; format: string } | { type: "case"; form: string } | { type: "extension"; new_extension: string } | { type: "template"; template: string };
 
 export type ScanErrorDto = {
 	relativePath: string,
@@ -170,6 +237,26 @@ export type ToolDescriptorDto = {
 	id: string,
 	category: string,
 	inputKinds: string[],
+};
+
+export type TransactionDto = {
+	operationId: string,
+	kind: string,
+	reversible: string,
+	items: TransactionItemDto[],
+};
+
+export type TransactionItemDto = {
+	itemId: string,
+	sourcePath: string,
+	targetPath: string,
+	status: string,
+};
+
+export type UndoReportDto = {
+	restored: number | null,
+	conflicts: number | null,
+	leakedTemps: number | null,
 };
 
 /* Tauri Specta runtime */

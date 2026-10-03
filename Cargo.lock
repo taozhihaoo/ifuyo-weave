@@ -4107,6 +4107,7 @@ dependencies = [
  "tracing-subscriber",
  "weave-core",
  "weave-files",
+ "weave-history",
  "weave-testkit",
 ]
 

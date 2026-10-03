@@ -17,6 +17,17 @@ pub enum JobOutcome {
     Hash(HashResultDto),
     /// Boxed：Scan 报告远大于 Hash 结果（clippy::large_enum_variant）。
     Scan(Box<ScanReportDto>),
+    /// M2：Rename/Organizer 执行（含事务供 UI 展示 undo 能力）。
+    PlanExecuted {
+        report: Box<crate::ops_dto::ExecutionReportDto>,
+        transaction: Option<Box<crate::ops_dto::TransactionDto>>,
+    },
+    /// M2：Undo 结果计数。
+    Undo {
+        restored: f64,
+        conflicts: f64,
+        leaked_temps: f64,
+    },
 }
 
 #[derive(Debug)]
@@ -108,15 +119,80 @@ impl JobTracker {
             map.get(job_id)?.clone()
         };
         let guard = entry.state.lock().expect("job state");
-        let (state, progress_current, hash, scan, error) = match &*guard {
-            JobState::Running { progress_current } => {
-                ("running", Some(*progress_current as f64), None, None, None)
-            }
+        let (state, progress_current, hash, scan, plan, undo, error) = match &*guard {
+            JobState::Running { progress_current } => (
+                "running",
+                Some(*progress_current as f64),
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
             JobState::Done(outcome) => match &**outcome {
-                JobOutcome::Hash(hash) => ("completed", None, Some(hash.clone()), None, None),
-                JobOutcome::Scan(scan) => ("completed", None, None, Some((**scan).clone()), None),
+                JobOutcome::Hash(hash) => (
+                    "completed",
+                    None,
+                    Some(hash.clone()),
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                JobOutcome::Scan(scan) => (
+                    "completed",
+                    None,
+                    None,
+                    Some((**scan).clone()),
+                    None,
+                    None,
+                    None,
+                ),
+                JobOutcome::PlanExecuted {
+                    report,
+                    transaction,
+                } => (
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    Some(crate::ops_dto::PlanReportDto {
+                        operation_id: report.operation_id.clone(),
+                        items: report.items.clone(),
+                        executed: report.executed,
+                        failed: report.failed,
+                        skipped: report.skipped,
+                        undoable: report.undoable,
+                        duration_ms: report.duration_ms,
+                        transaction: transaction.as_deref().cloned(),
+                    }),
+                    None,
+                    None,
+                ),
+                JobOutcome::Undo {
+                    restored,
+                    conflicts,
+                    leaked_temps,
+                } => (
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    Some(crate::ops_dto::PlanReportDto {
+                        operation_id: String::new(),
+                        items: Vec::new(),
+                        executed: *restored,
+                        failed: *conflicts,
+                        skipped: *leaked_temps,
+                        undoable: false,
+                        duration_ms: 0.0,
+                        transaction: None,
+                    }),
+                    None,
+                    None,
+                ),
             },
-            JobState::Failed(err) => ("failed", None, None, None, Some(err.clone())),
+            JobState::Failed(err) => ("failed", None, None, None, None, None, Some(err.clone())),
         };
         Some(JobStatusDto {
             job_id: job_id.to_string(),
@@ -124,6 +200,8 @@ impl JobTracker {
             progress_current,
             hash,
             scan,
+            plan,
+            undo,
             error,
         })
     }

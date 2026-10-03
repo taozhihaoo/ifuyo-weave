@@ -337,6 +337,9 @@ pub struct JobStatusDto {
     pub progress_current: Option<f64>,
     pub hash: Option<HashResultDto>,
     pub scan: Option<ScanReportDto>,
+    /// M2：Rename/Organizer 执行（或 Undo 计数）结果。
+    pub plan: Option<super::ops_dto::PlanReportDto>,
+    pub undo: Option<super::ops_dto::UndoReportDto>,
     pub error: Option<super::commands::IpcError>,
 }
 

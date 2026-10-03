@@ -11,6 +11,9 @@ pub mod config;
 pub mod files_dto;
 pub mod jobs;
 pub mod logging;
+pub mod m2_commands;
+pub mod ops_dto;
+pub mod rename_service;
 pub mod state;
 pub mod tools;
 
@@ -30,6 +33,12 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         commands::get_job,
         commands::cancel_job,
         commands::list_tools,
+        m2_commands::build_rename_plan,
+        m2_commands::build_organizer_plan,
+        m2_commands::execute_plan,
+        m2_commands::undo_operation,
+        m2_commands::get_history,
+        m2_commands::get_operation,
     ])
 }
 

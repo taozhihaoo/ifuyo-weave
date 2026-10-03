@@ -6,6 +6,7 @@
 
 use crate::jobs::JobTracker;
 use crate::logging::LogGuard;
+use crate::rename_service::PlanCache;
 use weave_core::prelude::ToolRegistry;
 
 pub struct AppState {
@@ -13,6 +14,7 @@ pub struct AppState {
     _log_guard: LogGuard,
     pub jobs: JobTracker,
     pub tools: ToolRegistry,
+    pub plans: PlanCache,
 }
 
 impl AppState {
@@ -21,6 +23,7 @@ impl AppState {
             _log_guard: log_guard,
             jobs: JobTracker::new(),
             tools,
+            plans: PlanCache::new(),
         }
     }
 }
