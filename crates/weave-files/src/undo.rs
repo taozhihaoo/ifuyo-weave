@@ -174,6 +174,39 @@ fn undo_text_item(fs: &dyn Filesystem, item: &TransactionItem) -> UndoItemResult
         ),
     };
 
+    // 创建型写回（M5 Export 新文件）：无备份，撤销 = 删除已创建文件
+    //（仍受 §94 保护：用户改过 ⇒ stat 不符 ⇒ 冲突）。
+    if item.target_path.is_empty() {
+        let matches_recorded = match fs.stat(source) {
+            Ok(stat) => {
+                item.original_size == Some(stat.size)
+                    && item.original_modified.is_some()
+                    && stat.modified == item.original_modified
+            }
+            Err(_) => false,
+        };
+        if !matches_recorded {
+            return conflict(
+                "file was modified after creation; refusing to delete user edits".to_string(),
+            );
+        }
+        return match std::fs::remove_file(source) {
+            Ok(()) => UndoItemResult {
+                item_id: item.item_id.clone(),
+                status: UndoItemStatus::Restored,
+                reason: None,
+            },
+            Err(e) => UndoItemResult {
+                item_id: item.item_id.clone(),
+                status: UndoItemStatus::UndoConflict,
+                reason: Some(
+                    WeaveError::io("undo.textRestoreFailed", format!("delete failed: {e}"))
+                        .with_location("weave-files::undo"),
+                ),
+            },
+        };
+    }
+
     let Ok(backup_stat) = fs.stat(target) else {
         return UndoItemResult {
             item_id: item.item_id.clone(),
@@ -466,5 +499,86 @@ mod text_undo_tests {
             "绝不覆盖用户编辑（§94）"
         );
         assert!(backup.exists(), "备份保留");
+    }
+}
+
+#[cfg(test)]
+mod creation_undo_tests {
+    use super::*;
+    use crate::fs::StdFilesystem;
+    use std::time::SystemTime;
+    use weave_history::{OperationStatus, Reversibility, TransactionItem, TransactionItemStatus};
+    use weave_testkit::TempWorkspace;
+
+    fn creation_tx(source: &str, post_size: u64, post_mtime: SystemTime) -> OperationTransaction {
+        OperationTransaction {
+            operation_id: weave_core::id::OperationId::generate(),
+            kind: weave_core::prelude::OperationKind::TextTransform,
+            status: OperationStatus::Completed,
+            timestamp: SystemTime::UNIX_EPOCH,
+            reversible: Reversibility::Full,
+            items: vec![TransactionItem {
+                item_id: "item_0000".to_string(),
+                source_path: source.to_string(),
+                target_path: String::new(), // 创建型：无备份
+                status: TransactionItemStatus::Executed,
+                timestamp: Some(post_mtime),
+                original_size: Some(post_size),
+                original_modified: Some(post_mtime),
+                original_created: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn undo_created_file_removes_it_when_untouched() {
+        let ws = TempWorkspace::new("undo-created").expect("ws");
+        let created = ws.path().join("exported.jsonl");
+        std::fs::write(&created, "{\"a\":1}").expect("write");
+        let post = SystemTime::now();
+        {
+            let f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&created)
+                .expect("open");
+            f.set_modified(post).expect("mtime");
+        }
+        let tx = creation_tx(
+            created.to_string_lossy().as_ref(),
+            std::fs::metadata(&created).expect("stat").len(),
+            post,
+        );
+        let report = undo_transaction(
+            &StdFilesystem,
+            &tx,
+            &weave_core::prelude::CancellationToken::new(),
+            &mut |_| {},
+        );
+        assert_eq!(report.restored, 1, "{report:?}");
+        assert!(!created.exists(), "撤销 = 删除已创建文件");
+    }
+
+    #[test]
+    fn undo_created_file_conflicts_when_user_edited() {
+        let ws = TempWorkspace::new("undo-created-conflict").expect("ws");
+        let created = ws.path().join("exported.jsonl");
+        std::fs::write(&created, "user kept this").expect("write");
+        let tx = creation_tx(
+            created.to_string_lossy().as_ref(),
+            999, // 与实际不符
+            SystemTime::UNIX_EPOCH,
+        );
+        let report = undo_transaction(
+            &StdFilesystem,
+            &tx,
+            &weave_core::prelude::CancellationToken::new(),
+            &mut |_| {},
+        );
+        assert_eq!(report.conflicts, 1);
+        assert_eq!(
+            std::fs::read_to_string(&created).expect("read"),
+            "user kept this",
+            "绝不删除用户编辑后的文件"
+        );
     }
 }

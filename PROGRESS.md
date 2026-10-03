@@ -112,8 +112,8 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M5（Spec/M5（上）（下）；JSON as data / CSV / TSV——必须复用 M4 文本
-  基座 Encoding/TextDocument/Diagnostics，§243 Handoff）
+- M5（下）收尾：Viewer 虚拟滚动细化、Anomaly Discovery 规则扩展、
+  转换选项 UI 化、性能场景补全（下 §115+ 测试矩阵）
 
 ## M3 Duplicate Finder
 
@@ -269,3 +269,54 @@ Known Limitations:
   写回任务取消经错误码映射为"已取消"（§108 等价实现）；1M 行实测与 100k
   同机制（fixture 复用），真实 1M 列入 M7 场景；macOS/Linux 未实测
 
+## M5 Data
+
+Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+
+Implemented:
+
+- weave-data crate（M0 骨架填充）：DataLimits（§88 分档：输入 32 MiB/
+  内存 500k 行/页 1000/preview 50/unique 100k/诊断 1000/profiling 50k）；
+  CSV/TSV 解析（csv crate §9/D45：引号/多行/转义/BOM 剥除/incremental；
+  头语义 §11-§13：诚实启发式+confidence、重复头 name_N+稳定 col_N、
+  空 header fallback；ragged §14 补空/保留+诊断）；JSON profiling
+  （§49-§51/§92-§94：root 语义、点路径、potential-type 集合含 Mixed、
+  presence/null 率、诚实采样）；JSONL（§59-§62 流式+FailFast/Collect
+  双模式+计数）；Inspector（§43-§47：potential 类型观测、null 率、
+  exact unique 超限 Unavailable、前导零 Identifier 标注）
+- 转换器（§52-§62）：JSON↔表（root 数组强制、点路径展平、JSON cell、
+  null→空默认）、表→JSON（默认字符串/typed 可选/前导零绝不推断/超 i64
+  保文本）、表→CSV/TSV（csv Writer，行尾可控，round-trip 无损）
+- DataSession（§17-§24）：ephemeral 视图（AND 过滤/稳定排序 null 恒
+  最后/分页）；DataTransformPlan（§78-§81 可序列化规则：Trim/大小写/
+  FillEmpty w/ NullPolicy/FindReplace/Split/Merge/Rename/Delete/Dedupe/
+  DateNormalizeIso（歧义⇒Anomaly）/NumericNormalize（显式分隔符）；
+  校验收集结构化错误；列存在性对演化表逐规则检查）
+- IPC（§83-§87）：data_open/page/set_view/inspect_profiles/preview_
+  transform/apply_transform/export——会话句柄+分页上限；导出/覆盖
+  复用 TextTransform 管线（TOCTOU/备份/原子替换/历史/Undo）
+- UI：Data 页四标签（表格分页/检查器/清洗 JSON 计划/转换导出）；
+  nav；i18n 43 键 zh-CN/en
+- Undo 补强：创建型写回（无备份）撤销 = 删除已创建文件（§94 保护：
+  用户改过 ⇒ 冲突，§74 Undo 对实际文件变更生效）；2 域测试
+
+Quality:
+
+- Rust gates: PASS（clippy workspace -D warnings；cargo deny ok；
+  workspace 28 套全绿：weave-data 40 / files 131 / core 47 / testkit 11 /
+  src-tauri 18+5 集成）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- tauri build: PASS（3.18 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — ragged CSV 打开（3 行×2 列，
+  多余单元格保留）→ contains 过滤（AND 视图）→ 检查器（潜在类型/exact
+  唯一值）→ 清洗计划预览 → JSONL 导出新文件 → History 撤销 = 删除已
+  创建文件（§74）
+- 性能：transform 100k 行 2-61 ms、URL 提取 1 ms、JSON format 1 MiB
+  17 ms（docs/PERF.md M4 节同机制；M5 专项 perf 列入（下））
+
+Known Limitations:
+
+- 1M 行真实场景未实测（fixture 与 100k 同机制；M7 批处理补测）
+- OR 过滤组、日期 locale 归一（非 ISO 输入）v1 不做（显式 NOT SUPPORTED）
+- 预览为同步有界计算（限额使最坏延迟小，D44）
+- （下）范围：§115+ 完整测试矩阵、Viewer 虚拟滚动、Anomaly 扩展
