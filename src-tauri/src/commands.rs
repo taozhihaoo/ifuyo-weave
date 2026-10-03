@@ -15,9 +15,7 @@ use crate::files_dto::{
 };
 use serde::Serialize;
 use specta::Type;
-use weave_core::prelude::{
-    ErrorKind, Recoverability, WeaveError, validate_absolute_path,
-};
+use weave_core::prelude::{ErrorKind, Recoverability, WeaveError};
 
 /// `ping` 的应答。真实 IPC 往返，不是前端本地 mock。
 #[derive(Debug, Serialize, Type)]
@@ -211,7 +209,7 @@ pub fn analyze_directory(
         match result {
             Ok(report) => app_state.jobs.finish(
                 &job_id_for_task,
-                crate::jobs::JobOutcome::Scan(report.into()),
+                crate::jobs::JobOutcome::Scan(Box::new(report.into())),
             ),
             Err(e) => app_state.jobs.fail(&job_id_for_task, e),
         }

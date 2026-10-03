@@ -23,6 +23,7 @@
 | tauri-specta / specta / specta-typescript | IPC 类型生成 | MIT OR Apache-2.0 |
 | serde / serde_json | 序列化 | MIT OR Apache-2.0 |
 | tracing / tracing-subscriber / tracing-appender | 日志 | MIT |
+| sha2 (RustCrypto) | SHA-256 流式哈希 | MIT OR Apache-2.0 |
 | react / react-dom | UI | MIT |
 | zustand | 状态 | MIT |
 | vite / typescript / vitest / eslint 系 / prettier | 工具链 | MIT 系（详见审计） |

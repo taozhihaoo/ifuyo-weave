@@ -60,6 +60,12 @@ weave-app (src-tauri)
 | weave-search | 工具/命令搜索（M11） | 骨架 |
 | weave-app | Tauri 壳 + Application 层 + IPC 契约 | ✅ 已建立 |
 
+## File Core 边界（M1）
+
+一切文件系统访问经 `weave_files::fs::Filesystem`（lstat 语义、可注入故障）；
+一切路径先过 `weave_core::path`。扫描/哈希跑在 spawn_blocking 任务里，
+进度/取消经 JobTracker（IPC 管道，非 M7 引擎）。详见 docs/file-core.md。
+
 ## Tool Contract（charter #24）
 
 ```text

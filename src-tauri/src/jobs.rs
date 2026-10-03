@@ -15,13 +15,14 @@ use crate::files_dto::{HashResultDto, JobStatusDto, ScanReportDto};
 #[derive(Debug, Clone)]
 pub enum JobOutcome {
     Hash(HashResultDto),
-    Scan(ScanReportDto),
+    /// Boxed：Scan 报告远大于 Hash 结果（clippy::large_enum_variant）。
+    Scan(Box<ScanReportDto>),
 }
 
 #[derive(Debug)]
 pub enum JobState {
     Running { progress_current: u64 },
-    Done(JobOutcome),
+    Done(Box<JobOutcome>),
     Failed(IpcError),
 }
 
@@ -38,12 +39,12 @@ pub struct ProgressSink {
 
 impl ProgressSink {
     pub fn report(&self, progress: &Progress) {
-        if let Ok(mut guard) = self.state.lock() {
-            if matches!(&*guard, JobState::Running { .. }) {
-                *guard = JobState::Running {
-                    progress_current: progress.current,
-                };
-            }
+        if let Ok(mut guard) = self.state.lock()
+            && matches!(&*guard, JobState::Running { .. })
+        {
+            *guard = JobState::Running {
+                progress_current: progress.current,
+            };
         }
     }
 }
@@ -84,7 +85,7 @@ impl JobTracker {
 
     pub fn finish(&self, job_id: &JobId, outcome: JobOutcome) {
         if let Some(entry) = self.jobs.lock().expect("job map").get(&job_id.to_string()) {
-            *entry.state.lock().expect("job state") = JobState::Done(outcome);
+            *entry.state.lock().expect("job state") = JobState::Done(Box::new(outcome));
         }
     }
 
@@ -111,12 +112,10 @@ impl JobTracker {
             JobState::Running { progress_current } => {
                 ("running", Some(*progress_current as f64), None, None, None)
             }
-            JobState::Done(JobOutcome::Hash(hash)) => {
-                ("completed", None, Some(hash.clone()), None, None)
-            }
-            JobState::Done(JobOutcome::Scan(scan)) => {
-                ("completed", None, None, Some(scan.clone()), None)
-            }
+            JobState::Done(outcome) => match &**outcome {
+                JobOutcome::Hash(hash) => ("completed", None, Some(hash.clone()), None, None),
+                JobOutcome::Scan(scan) => ("completed", None, None, Some((**scan).clone()), None),
+            },
             JobState::Failed(err) => ("failed", None, None, None, Some(err.clone())),
         };
         Some(JobStatusDto {

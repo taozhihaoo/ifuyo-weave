@@ -9,8 +9,8 @@ use specta::Type;
 use weave_core::prelude::{HashAlgorithm, HashStatus, TextEncoding};
 use weave_core::prelude::{HashResult, ScanStatus};
 use weave_files::{
-    Classification, ClassificationEvidence, DirectoryScanReport, FileCategory, FileInspection,
-    FileLineItem, InspectionStatus, ScanErrorEntry,
+    Classification, ClassificationEvidence, DirectoryScanReport, FileInspection, FileLineItem,
+    InspectionStatus, ScanErrorEntry,
 };
 
 fn time_to_epoch_ms(time: Option<std::time::SystemTime>) -> Option<f64> {
@@ -272,20 +272,11 @@ pub fn scan_status_to_str(status: ScanStatus) -> String {
 }
 
 /// 扫描选项（IPC 侧）。数值用 f64 并在应用层校验边界（M1 §18.1）。
-#[derive(Debug, Clone, serde::Deserialize, Type)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanOptionsDto {
     pub max_depth: Option<f64>,
     pub max_entries: Option<f64>,
-}
-
-impl Default for ScanOptionsDto {
-    fn default() -> Self {
-        Self {
-            max_depth: None,
-            max_entries: None,
-        }
-    }
 }
 
 impl ScanOptionsDto {

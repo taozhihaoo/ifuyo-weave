@@ -87,10 +87,13 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
 
 ## 当前里程碑 / Current Milestone
 
-**M0 — Foundation**（进行中）：workspace、领域契约、Tauri 壳、类型化 IPC、设计 token、i18n 基线、CI、license 审计。进度见 [PROGRESS.md](PROGRESS.md)。
+- **M0 — Foundation**：COMPLETE
+- **M1 — File Core**（进行中）：weave-files（文件系统抽象 / 路径安全 / 流式 SHA-256 / File Inspector / Directory Analyzer）、IPC 命令与协作取消、Inspector/Analyzer UI。进度见 [PROGRESS.md](PROGRESS.md)，语义细节见 [docs/file-core.md](docs/file-core.md)。
 
 ## 已知限制 / Known Limitations
 
-- 所有工具（Rename / Text / Data / Image…）尚未实现——按 M1–M11 里程碑推进
+- 所有上层工具（Rename / Text / Data / Image…）尚未实现——按 M2–M11 里程碑推进
+- GB18030/GBK/Latin-1 编码检测未实现（charter #27 要求项，M4 补齐，已记录 DECISIONS D22）
+- Directory Analyzer 按扩展名分类，不做内容嗅探（事实优先，见 docs/file-core.md）
 - 应用图标为脚本生成的工程占位，非品牌资产（见 BRAND.md）
 - Windows 测试可执行文件依赖 build.rs 注入的 common-controls manifest（见 DECISIONS.md #12）
