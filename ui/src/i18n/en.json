@@ -1,5 +1,5 @@
 {
-  "app.milestone": "M1 File Core",
+  "app.milestone": "M3 Duplicate Finder",
   "open.file": "Open file…",
   "open.folder": "Open folder…",
   "app.language": "Language",
@@ -139,7 +139,7 @@
   "duplicates.stats": "{files} files scanned · {candidates} candidates · {groups} groups · {wasted} reclaimable",
   "duplicates.partial": "Partial result (scan cancelled)",
   "duplicates.group": "Group {id}",
-  "duplicates.groupFiles": "{count} files · {size} each",
+  "duplicates.groupFiles": "{count} files",
   "duplicates.wasted": "{size} reclaimable",
   "duplicates.selectHint": "At least one file per group is kept; all-but-first is preselected. Names/mtimes never affect detection; extension-only differences are shown as facts.",
   "duplicates.selected": "{count} files selected ({size})",
@@ -151,5 +151,7 @@
   "duplicates.confirmNo": "Cancel",
   "duplicates.result": "Recycled {recycled} · failed {failed} · skipped {skipped}",
   "duplicates.undo": "Undo recycle (restore from Recycle Bin)",
-  "duplicates.undoing": "Undoing…"
+  "duplicates.undoing": "Undoing…",
+  "duplicates.fileSizeEach": "{size} each",
+  "duplicates.execute": "Send to Recycle Bin"
 }

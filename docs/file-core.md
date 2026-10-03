@@ -100,3 +100,62 @@ LIFO 逆序 + 占位暂存：原位被同事务待撤销条目占据（swap/cycl
 `%APPDATA%/ifuyo/Weave/history`：entries.json（版本化 schema，容量 500，
 最新在前）+ transactions/{op}.json（InProgress→Completed 两阶段落盘）。
 原子写（temp+rename）；损坏 ⇒ 隔离 *.corrupt-* 并安全降级，绝不阻塞启动。
+
+## Duplicate Finder 语义（M3）
+
+### Exact Duplicate 的工程定义
+
+size 相同 **且** 完整 SHA-256 相同（M3 §2）。这是基于密码学哈希的工程判定，
+不宣称数学意义上的绝对证明；文件名 / mtime / 扩展名不参与判定
+（扩展名差异仅作事实展示，M3 §8）。
+
+### 三级管线
+
+```text
+recursive scan（复用 M1 symlink 不跟随 / 访问集防环策略）
+  → Filtering：按 size 分组，count >= 2 才成为候选（最便宜的一层）
+  → PartialHashing：SHA-256 over (head 4 KiB + tail 4 KiB)（优化层，非事实）
+  → FullHashing：复用 M1 streaming hash，前后一致性检查
+  → Grouping：GroupId = "grp_{full_hash 前 16 hex}"（内容派生，不依赖扫描顺序）
+```
+
+- **Partial hash 常量**：`PARTIAL_HASH_BYTES = 4 KiB`（单一集中定义，
+  理由记 DECISIONS D33）。文件 ≤ 8 KiB 时等价于全量；partial 不同的
+  候选**绝不**进入 full hash（它们不可能重复）；partial 相同**不视为**
+  重复——由 full hash 兜底。
+- **wasted_size** = (fileCount − 1) × fileSize：理论可回收空间，
+  不是删除承诺。
+- **展示排序**：组按 wasted DESC；组内文件按规范化路径升序（确定性，
+  不依赖 OS 枚举顺序）。
+
+### TOCTOU / Revalidate
+
+- 扫描中文件变化（hash 前后 size/mtime 不符）⇒ 计入 `changedDuringScan`
+  并排除出可靠结果（M3 §17）。
+- 执行回收前逐项 Revalidate：source 不存在 ⇒ `rename.sourceNotFound`；
+  size 与扫描快照不符 ⇒ `duplicates.changedSinceScan` 拒绝该条目
+  （M3 §18），绝不回收"看到的已经不是现在这个文件"的目标。
+
+### 回收站（唯一删除动作）
+
+- **绝不永久删除**：唯一动作是 Move to Recycle Bin（平台适配器隔离，
+  Shell API 只存在于 `recycle.rs`；M3 §22–§26）。失败就是失败
+  （`RecycleOutcome::Failed`），不假装删除。
+- **事务 target 记录平台事实**：`recycle-bin:{token}`（token 为平台回收
+  条目 id 的调试串；平台不可得时为空前缀）。Undo 以 token 精确匹配，
+  无 token 时以 original_path + 删除时间窗（±5s）匹配；匹配不到或不唯一
+  ⇒ 如实报告（Missing / UndoConflict），不猜路径、不覆盖（原位被占 ⇒
+  拒绝恢复，M3 §67）。
+- **选择模型**：每组至少保留一份（`duplicates.keepAtLeastOne`）；
+  选择必须属于该组且不重复（计划期校验，不产生半成品 Plan）。
+- **部分成功**：逐条回收、失败隔离；取消在条目间安全点生效——取消后
+  未处理的条目原样保留并以 NotExecuted 入事务（绝不"取消后仍回收"）。
+  Reversibility 按 recycled/failed/skipped 如实计算。
+
+### Scan / Plan 缓存
+
+扫描报告以 scan_id、Plan 以 operation_id 缓存于服务端内存（应用重启
+失效，结构化错误提示重扫/重建）；快照不过 IPC（同 M2 PlanCache 纪律）。
+
+已知限制：回收站恢复依赖 Windows 回收站可枚举（`trash` crate
+os_limited）；用户清空回收站后 Undo 如实报告 Missing。

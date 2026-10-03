@@ -87,11 +87,10 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
 
 ## 当前里程碑 / Current Milestone
 
-- **M0 — Foundation**：COMPLETE
-- **M0 — Foundation** / **M1 — File Core**：COMPLETE
-- **M2 — Rename / Organizer**（进行中）：批量重命名（9 类规则 / 模板 / 序号）、
-  四类碰撞检测、两阶段环安全执行、Organizer 规则整理、事务 + 持久化历史 +
-  LIFO Undo（swap 暂存算法）。进度见 [PROGRESS.md](PROGRESS.md)，
+- **M0 — Foundation** / **M1 — File Core** / **M2 — Rename / Organizer**：COMPLETE
+- **M3 — Duplicate Finder**（进行中）：精确重复检测（三级管线 + 部分哈希
+  候选缩减）、重复组选择（每组至少保留一份）、回收站执行（绝不永久删除）、
+  事务 + 历史 + 回收站还原 Undo。进度见 [PROGRESS.md](PROGRESS.md)，
   语义见 [docs/file-core.md](docs/file-core.md)。
 
 ## 已知限制 / Known Limitations

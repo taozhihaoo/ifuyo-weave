@@ -48,3 +48,57 @@
 - [x] 取消在条目间安全点即时生效（M1 已测 11ms）
 - [x] 内存：Plan 增量构建 + 事务逐条落盘，无全量内容缓存
 - 10k Plan 的 IPC DTO 序列化未单独测量（前端虚拟化列表 M11 复测）
+
+## M3 Duplicate Finder — 2026-10-03
+
+- 环境同上（release 构建，%TEMP% NTFS）；复现：`cargo run --release -p weave-files --example m3_perf [scale]`
+- 三级管线的诚实测量（M3 下 §103：不许只有形容词）：候选缩减率 =
+  1 − full_hashed / candidate_files
+
+### Scenario A — unique-size（size 唯一 ⇒ 不进候选）
+
+| files | scan | candidates | partial | full | groups |
+| --- | --- | --- | --- | --- | --- |
+| 1,000 | 33 ms | 0 | 0 | 0 | 0 |
+| 10,000 | 400 ms | 0 | 0 | 0 | 0 |
+| 50,000 | 2,164 ms | 0 | 0 | 0 | 0 |
+
+唯一 size 场景在 Filtering 阶段（最便宜的一层）即全部排除，
+不触碰任何文件内容——50k 扫描 2.2s，全部为目录枚举 + lstat。
+
+### Scenario B — 同 size 不同内容（10,000 × 64 KiB）
+
+| files | scan | candidates | partial | full | reduction | groups |
+| --- | --- | --- | --- | --- | --- | --- |
+| 10,000 | 976 ms | 10,000 | 10,000 | 0 | **100%** | 0 |
+
+全部进入候选；partial hash（头 4 KiB + 尾 4 KiB）区分出全部 10,000
+个不同文件 ⇒ full hash 次数 0。partial 层把 64 KiB/文件的读取压到
+8 KiB（12.5% I/O）。
+
+### Scenario C — 大量 exact duplicates（10 种内容 × 1,000）
+
+| files | scan | candidates | partial | full | groups | dup files | reclaimable |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 10,000 | 1,709 ms | 10,000 | 10,000 | 10,000 | 10（=10 种内容） | 10,000 | 81,838,080 B |
+
+真实重复场景 full hash 无法省略（最终事实层，M3 §3）；分组数与
+内容种数精确一致（断言在 example 内），GroupId 内容派生稳定。
+
+### Scenario D — large files（32 × 32 MiB，一半重复）
+
+| files | bytes | scan | full | groups | throughput |
+| --- | --- | --- | --- | --- | --- |
+| 32 | 1.00 GiB | 643 ms | 32 | 16 | **1.56 GiB/s** |
+
+流式 SHA-256（256 KiB chunk）+ 头/尾定位读：内存 O(chunk + 候选元数据)，
+与文件大小无关（M1 已断言 hash 内存常量；此处为整管线复核）。
+
+对照 M3 目标：
+
+- [x] 建立真实基线，证明算法没有明显浪费（A：0 内容读；B：partial 全裁剪；
+  C：分组精确；D：1.56 GiB/s 流式）
+- [x] 1 万文件扫描不阻塞 UI（后台任务，同 M1 管道）
+- [x] 大文件流式 + 有界内存（Scenario D）
+- 峰值内存：机制上界 = 256 KiB 哈希 chunk + 8 KiB partial 缓冲 + 候选元数据
+  （每文件 ~200 B 量级）；未引入进程级 RSS 测量（与 M1 口径一致，M11 复测）

@@ -1,5 +1,5 @@
 {
-  "app.milestone": "M1 File Core",
+  "app.milestone": "M3 Duplicate Finder",
   "open.file": "打开文件…",
   "open.folder": "打开文件夹…",
   "app.language": "语言",
@@ -139,7 +139,7 @@
   "duplicates.stats": "已扫描 {files} 个文件 · 候选 {candidates} · {groups} 组 · 潜在可回收 {wasted}",
   "duplicates.partial": "结果不完整（扫描被取消）",
   "duplicates.group": "组 {id}",
-  "duplicates.groupFiles": "{count} 个文件 · 单文件 {size}",
+  "duplicates.groupFiles": "{count} 个文件",
   "duplicates.wasted": "可回收 {size}",
   "duplicates.selectHint": "每组至少保留一份；已按「保留首个」预选。文件名/修改时间不参与判定，仅扩展名差异会如实展示。",
   "duplicates.selected": "已选 {count} 个文件（{size}）",
@@ -151,5 +151,7 @@
   "duplicates.confirmNo": "取消",
   "duplicates.result": "已回收 {recycled} · 失败 {failed} · 跳过 {skipped}",
   "duplicates.undo": "撤销回收（从回收站还原）",
-  "duplicates.undoing": "撤销中…"
+  "duplicates.undoing": "撤销中…",
+  "duplicates.fileSizeEach": "单文件 {size}",
+  "duplicates.execute": "执行回收"
 }

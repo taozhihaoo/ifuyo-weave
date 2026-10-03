@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- M3 Duplicate Finder：精确重复检测（size → partial hash → 全量 SHA-256
+  三级管线）、内容派生 GroupId、重复组选择模型（每组至少保留一份）、
+  回收站执行（trash crate；绝不永久删除）、扫描快照 TOCTOU 防护
+  （changedDuringScan / changedSinceScan）、事务 + 持久化历史 +
+  回收站还原 Undo、Duplicates UI（组视图/选择摘要/回收确认）、
+  性能基准（Scenario A–D，docs/PERF.md）。
 - M2 Rename / Organizer：批量重命名（Prefix/Suffix/Replace/Regex/Counter/Date/
   Case/Extension/Template）、Preview→Confirm→Execute 闭环、四类碰撞检测、
   两阶段环安全、Organizer 规则整理（first-match-wins + root 边界）、

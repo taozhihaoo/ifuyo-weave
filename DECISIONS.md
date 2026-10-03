@@ -218,3 +218,43 @@ Drop 入口不受影响（Tauri 运行时原生处理）。M2 排查方向：最
 `.{stem}.weave-undo-tmp{ext}` 并重定向该条目的还原起点为 tmp；后续轮次
 tmp→其 source。不变量：全部条目处理后 `leaked_temps == 0`（测试断言）。
 外部文件占据（不在事务内）⇒ UndoConflict 拒绝覆盖（M2 §49）。
+
+## D33 — Partial hash 常量与策略（M3 §4）
+
+`PARTIAL_HASH_BYTES = 4 KiB`，SHA-256 over (head N + tail N)，前缀
+"weave-partial-v1"。单一集中定义（pipeline.rs 常量），理由：头部特征
+（格式头/元数据差异）+ 尾部特征（追加差异）以 2N 字节 I/O 覆盖大部分
+真实差异；≤ 2N 的文件等价全量，无额外成本。明确局限：中部差异对
+partial 不可见——**设计内行为**，由 full hash 兜底；partial 相同绝不
+视为重复（M3 §3），partial 不同绝不进入 full hash（候选缩减的全部
+价值所在，Scenario B 实测 100% 裁剪）。无随机采样（M3 §4 硬边界：
+确定性、可重放、结果可解释）。
+
+## D34 — trash crate 依赖与回收站适配器隔离（M3 §22–§26）
+
+依赖 `trash` 5.2.9（MIT，无传递重依赖）：Windows 走 IFileOperation
+回收站 API（进程内调用，非 shell 进程——不违反 M3 §24 禁 shell）。
+平台适配器隔离：Shell/回收站 API 只出现在 `recycle.rs`，Domain
+（duplicates/*）只面向 `RecycleOutcome` 枚举（Success/Unsupported/
+Failed），不泄漏平台类型（M3 §94）。**默认动作 = Move to Recycle Bin，
+不存在永久删除路径**（硬边界，唯一删除动作）。
+
+## D35 — 回收 token 与 Undo 匹配语义（M3 §58–§60）
+
+事务 target 记 `recycle-bin:{token}`：token = 平台回收条目 id 的
+Debug 串（Windows 可枚举回收站拿到 original_path + id + 删除时间）。
+回收后反查 token（original_path 精确匹配 + 删除时间 ±5s 窗口，唯一才
+记录）；不可得时记空前缀，Undo 退化为 original_path + 时间窗匹配。
+匹配不到（回收站被清空）⇒ Missing；不唯一或原位被外部重建 ⇒
+UndoConflict，**不恢复、不覆盖**（M3 §67）。恢复用
+`trash::os_limited::restore_all` 批量执行，恢复后逐条验证原位存在，
+不轻信平台返回值。跨 token 串稳定性：同一 crate 版本内 Debug 格式
+确定，比较双方均为当次运行生成——不持久化解析 token。
+
+## D36 — ScanCache：扫描快照服务端缓存（M2 PlanCache 同源）
+
+scan_duplicates 的报告以 scan_id 缓存服务端内存；build_recycle_plan
+只收 scan_id + 选择——扫描快照（含每个文件的 size/mtime/hash）不过
+IPC，天然满足"Preview 与 Execute 同一快照"。内存态：重启后 scan_id
+失效 ⇒ `duplicates.scanUnknownOrExpired`（提示重扫）；大报告驻留
+内存的规模边界与 PlanCache 一致（会话级，M7 Job 持久化时统一评估）。

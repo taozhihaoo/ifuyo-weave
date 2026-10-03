@@ -24,6 +24,9 @@
 | serde / serde_json | 序列化 | MIT OR Apache-2.0 |
 | tracing / tracing-subscriber / tracing-appender | 日志 | MIT |
 | sha2 (RustCrypto) | SHA-256 流式哈希 | MIT OR Apache-2.0 |
+| trash | 回收站适配（Windows IFileOperation，MIT，M3/D34） | MIT |
+| regex | 重命名规则正则（M2/D28） | MIT OR Apache-2.0 |
+| chrono | 日期重命名规则（M2/D28） | MIT OR Apache-2.0 |
 | react / react-dom | UI | MIT |
 | zustand | 状态 | MIT |
 | vite / typescript / vitest / eslint 系 / prettier | 工具链 | MIT 系（详见审计） |

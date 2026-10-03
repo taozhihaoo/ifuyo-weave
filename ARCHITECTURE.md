@@ -85,6 +85,23 @@ weave-history: 事务 InProgress→Completed 两阶段落盘 + entries.json（�
   Undo（占位暂存）；崩溃遗留 InProgress 事务被 Undo 明确拒绝。
 - 语义全文：docs/file-core.md（M2 章节）。
 
+## M3 Duplicate Finder 边界
+
+```text
+m3_commands (IPC) → duplicates_service (编排 + ScanCache) → weave-files
+   ├── duplicates/pipeline.rs: 三级管线（size → partial → full SHA-256）
+   ├── duplicates/recycle_exec.rs: 逐项 Revalidate → 适配器回收 → 事务记账
+   ├── recycle.rs: 平台适配器（Shell API 唯一出现处；Move to Recycle Bin）
+   └── undo: undo_recycle_transaction（token/时间窗匹配恢复，不覆盖）
+weave-history: 复用 M2 事务/历史（kind = duplicateRecycle）
+```
+
+- **快照不过 IPC**：ScanCache（scan_id）/ PlanCache（operation_id）
+  服务端内存缓存，同 M2 纪律；重启即失效（结构化错误）。
+- **回收站是唯一删除动作**：domain 只见 `RecycleOutcome`；Undo 匹配
+  token，原位被占 ⇒ UndoConflict 不覆盖（M3 §67）。
+- 语义全文：docs/file-core.md（M3 章节）。
+
 ## Tool Contract（charter #24）
 
 ```text

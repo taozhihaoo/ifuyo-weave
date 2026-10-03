@@ -118,3 +118,62 @@ Status: COMPLETE（见 git 历史）
 ---
 
 （后续里程碑按 M2 → M3 → … 追加章节）
+
+## M3 Duplicate Finder
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-files duplicates：三级管线（recursive scan 复用 M1 策略 → size 分组
+  count>=2 → partial hash（head+tail 4 KiB，单一常量 PARTIAL_HASH_BYTES）→
+  full streaming SHA-256 前后一致性检查 → 分组）；GroupId = "grp_{hash16}"
+  内容派生；wasted_size=(n-1)*size；确定性排序（组 wasted DESC / 文件路径
+  case-insensitive 升序）；取消 ⇒ partial_result 明确标记；扩展名差异仅事实展示
+- 回收站适配器（recycle.rs）：trash 5.2（Windows IFileOperation，进程内调用）；
+  Shell API 唯一出现处；RecycleOutcome 三态（不假装删除）；回收后反查平台
+  token（original_path + ±5s 时间窗，唯一才记录）
+- build_recycle_plan：选择 → Plan（kind=DuplicateRecycle）；校验矩阵（组存在/
+  文件属于组/每组至少保留一份 keepAtLeastOne/不重复选择）；条目快照
+  size+modified 供 Revalidate；target 留空（目标由适配器决定）
+- execute_recycle_plan：逐项 Revalidate（sourceNotFound / changedSinceScan 拒绝）
+  → 适配器回收 → 事务记账（target=recycle-bin:{token}）；取消在条目间安全点
+  生效——取消后未处理条目 NotExecuted 且绝不被回收；失败隔离；Reversibility
+  如实计算
+- Undo：undo_recycle_transaction 从事务重建回执 → token/时间窗匹配回收站 →
+  restore_all 批量恢复 → 逐条原位校验；原位被占 ⇒ UndoConflict 不覆盖（§67）；
+  回收站被清空 ⇒ Missing 如实报告；NotExecuted/畸形 target ⇒ NotUndoable
+- IPC：scan_duplicates / build_recycle_plan / execute_recycle_plan 命令 +
+  ScanCache（scan_id 服务端缓存，快照不过 IPC）；JobOutcome::DuplicateScan /
+  RecycleExecuted；undo_operation 按 kind 分派（DuplicateRecycle → 回收站恢复）
+- UI：Duplicates 面板（目录输入 + min size、组视图逐文件勾选、保留首个预选、
+  选择摘要、回收计划 Preview、确认对话框「移入回收站（可撤销）」、结果 +
+  撤销按钮）；nav 第 4 项；i18n zh-CN/en（修复 M2 遗留的 App 面板双渲染）
+- 文档：docs/file-core.md M3 章节、docs/PERF.md（Scenario A–D）、
+  DECISIONS D33–D36、ARCHITECTURE M3 边界、README/CHANGELOG/
+  THIRD_PARTY 更新
+
+Quality:
+
+- Rust gates: PASS（clippy --workspace --all-targets -D warnings；workspace
+  测试全绿：core 47 / weave-files 117（新增 11：管线 9 + 计划校验矩阵 +
+  取消语义 + Revalidate + Undo 畸形/取消路径）/ testkit 11 / src-tauri 18）
+- Frontend gates: PASS（typecheck / lint / vitest 23）
+- tauri build: PASS（2.85 MiB NSIS）
+- Real UI smoke（§144–§146 闭环，CDP 驱动真实窗口）: PASS — 导航到重复文件页
+  → 填入真实目录（3 重复 + 1 独立文件）→ 扫描（1 组 3 文件，保留首个预选 2）
+  → 生成回收计划 → 确认对话框 → 真实回收站执行（a.txt 保留、b/c.txt 移入
+  回收站、unique.txt 不受影响）→ 撤销 → b/c.txt 从回收站真实还原
+- 性能（docs/PERF.md）：Scenario A 50k 唯一 size 扫描 2.16s（0 内容读）；
+  B 同 size 异内容 10k×64 KiB partial 裁剪 100%（full hash 0 次）；
+  C 10k 重复分组精确（10 组 = 10 种内容）；D 32×32 MiB 流式 1.56 GiB/s
+
+Known Limitations:
+
+- ScanCache/PlanCache 内存态：应用重启后需重扫/重建 Plan（结构化错误）
+- 回收站 Undo 依赖平台可枚举回收站；用户清空回收站后 Undo = Missing（如实）
+- token 为平台 id 的 Debug 串（不持久化解析，仅同会话比对）；
+  跨会话 Undo 退化为 original_path + 时间窗匹配
+- 逐条 recycle_paths 适配器调用为逐条 IFileOperation（Windows 批量上限
+  未压测；万级条目场景 M7 批处理引擎统一评估）
+

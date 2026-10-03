@@ -217,7 +217,7 @@ export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
           </strong>
           <span>
             {t("duplicates.groupFiles", { count: group.fileCount ?? 0 })} ·{" "}
-            {formatBytes(group.fileSize)}
+            {t("duplicates.fileSizeEach", { size: formatBytes(group.fileSize) })}
           </span>
           <span style={{ color: "var(--color-accent)" }}>
             {t("duplicates.wasted", { size: formatBytes(group.wastedSize) })}
