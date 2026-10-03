@@ -4,13 +4,23 @@
 //!   （M3 §23/§116）。默认动作 = Move to Recycle Bin，绝不永久删除（M3 §22/§57）。
 //! - 实现：`trash` crate 5.2（MIT；Windows 走 Shell 回收站 API，无 shell 进程，
 //!   M3 §24 禁 shell 不违反——是进程内 API 调用）。
-//! - **诚实表达能力**（M3 §58/§94）：Windows 可列出回收站条目（original_path
-//!   + 平台 id + 删除时间），Undo 以「original_path + 删除时间」匹配后恢复；
+//! - **诚实表达能力**（M3 §58/§94）：Windows 可列出回收站条目（original_path、
+//!   平台 id 与删除时间），Undo 以「original_path + 删除时间」匹配后恢复；
 //!   若匹配不到或不唯一 ⇒ 如实报告，不猜路径、不覆盖。
 //! - **Recycle Failure**：失败就是失败，不假装删除（M3 §25）。
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use weave_core::prelude::{CancellationToken, Progress, WeaveError};
+use weave_history::{OperationTransaction, TransactionItemStatus};
+
+use crate::undo::{UndoItemResult, UndoItemStatus, UndoReport};
+
+/// 事务 target 中回收站 token 的前缀；后缀为空表示平台未提供 token
+/// （Undo 时退化为 original_path + 时间窗匹配）。
+pub const RECYCLE_TARGET_PREFIX: &str = "recycle-bin:";
 
 /// 单次回收的回执：事务与 Undo 的平台事实来源（M3 §58）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +44,11 @@ pub enum RecycleOutcome {
 /// 批量回收：逐条执行并返回逐条结果（失败隔离，M3 §26）。
 pub fn recycle_paths(paths: &[PathBuf]) -> Vec<(PathBuf, RecycleOutcome)> {
     paths.iter().map(|p| (p.clone(), recycle_one(p))).collect()
+}
+
+/// 单条回收（逐项执行器用；失败隔离由调用方记账）。
+pub fn recycle_path(path: &Path) -> RecycleOutcome {
+    recycle_one(path)
 }
 
 fn recycle_one(path: &Path) -> RecycleOutcome {
@@ -94,7 +109,6 @@ pub fn restore_recycled(
     receipts: &[RecycleReceipt],
 ) -> Vec<(RecycleReceipt, crate::undo::UndoItemStatus, Option<String>)> {
     let mut results = Vec::with_capacity(receipts.len());
-    let mut to_restore: Vec<trash::TrashItem> = Vec::new();
     let mut staged: Vec<(RecycleReceipt, trash::TrashItem)> = Vec::new();
 
     // 1) 匹配回收站条目；原位被占的先记冲突
@@ -181,4 +195,154 @@ fn list_matching(receipt: &RecycleReceipt) -> Result<Option<trash::TrashItem>, t
         // 0 = 条目已被用户清空；>1 = 无法唯一匹配——都不猜测
         _ => Ok(None),
     }
+}
+
+/// Undo 入口（M3 §59–§60）：从事务重建回执 → 从回收站恢复 → 逐条校验。
+///
+/// - Executed 条目按 `recycle-bin:{token}` target 重建回执（token 空 ⇒
+///   original_path + 时间窗匹配）。
+/// - NotExecuted / NoOp：NotUndoable，绝不制造假恢复记录（M2 §50 同源纪律）。
+/// - 恢复是单次批量平台调用：取消仅在开始前生效（之后为一次性原子动作）。
+pub fn undo_recycle_transaction(
+    transaction: &OperationTransaction,
+    cancel: &CancellationToken,
+    report_progress: &mut dyn FnMut(Progress),
+) -> UndoReport {
+    let started = std::time::Instant::now();
+    let mut results: Vec<UndoItemResult> = Vec::new();
+    let (mut restored, mut conflicts, mut skipped) = (0u64, 0u64, 0u64);
+
+    if cancel.is_cancelled() {
+        for item in &transaction.items {
+            results.push(UndoItemResult {
+                item_id: item.item_id.clone(),
+                status: UndoItemStatus::NotUndoable,
+                reason: Some(
+                    WeaveError::cancelled(
+                        "undo.cancelledBeforeItem",
+                        "undo was cancelled before starting",
+                    )
+                    .with_location("weave-files::recycle"),
+                ),
+            });
+            skipped += 1;
+        }
+        return UndoReport {
+            operation_id: transaction.operation_id.clone(),
+            results,
+            restored,
+            conflicts,
+            skipped,
+            leaked_temps: 0,
+            duration_ms: started.elapsed().as_millis() as u64,
+        };
+    }
+
+    report_progress(Progress::running(
+        transaction.operation_id.clone(),
+        0,
+        Some(1),
+    ));
+
+    // 1) 从事务重建回执
+    let mut receipts: Vec<RecycleReceipt> = Vec::new();
+    let mut id_by_path: HashMap<PathBuf, String> = HashMap::new();
+    for item in &transaction.items {
+        if !matches!(item.status, TransactionItemStatus::Executed) {
+            skipped += 1;
+            results.push(UndoItemResult {
+                item_id: item.item_id.clone(),
+                status: UndoItemStatus::NotUndoable,
+                reason: None,
+            });
+            continue;
+        }
+        match receipt_from_tx_item(item) {
+            Some(receipt) => {
+                id_by_path.insert(receipt.original_path.clone(), item.item_id.clone());
+                receipts.push(receipt);
+            }
+            None => {
+                skipped += 1;
+                results.push(UndoItemResult {
+                    item_id: item.item_id.clone(),
+                    status: UndoItemStatus::NotUndoable,
+                    reason: Some(
+                        WeaveError::validation(
+                            "duplicates.recycleTargetMalformed",
+                            format!(
+                                "transaction target is not a recycle-bin token: {}",
+                                item.target_path
+                            ),
+                        )
+                        .with_location("weave-files::recycle"),
+                    ),
+                });
+            }
+        }
+    }
+
+    // 2) 批量恢复 + 逐条校验
+    report_progress(Progress::running(
+        transaction.operation_id.clone(),
+        1,
+        Some(1),
+    ));
+    for (receipt, status, reason) in restore_recycled(&receipts) {
+        let item_id = id_by_path
+            .get(&receipt.original_path)
+            .cloned()
+            .unwrap_or_else(|| receipt.original_path.to_string_lossy().into_owned());
+        let (status, reason) = match status {
+            UndoItemStatus::Missing => (
+                UndoItemStatus::Missing,
+                reason.map(|m| {
+                    WeaveError::io("duplicates.recycleEntryMissing", m)
+                        .with_location("weave-files::recycle")
+                }),
+            ),
+            other => (
+                other,
+                reason.map(|m| {
+                    WeaveError::conflict("duplicates.undoConflict", m)
+                        .with_location("weave-files::recycle")
+                }),
+            ),
+        };
+        match status {
+            UndoItemStatus::Restored => restored += 1,
+            UndoItemStatus::UndoConflict => conflicts += 1,
+            _ => skipped += 1,
+        }
+        results.push(UndoItemResult {
+            item_id,
+            status,
+            reason,
+        });
+    }
+
+    UndoReport {
+        operation_id: transaction.operation_id.clone(),
+        results,
+        restored,
+        conflicts,
+        skipped,
+        leaked_temps: 0,
+        duration_ms: started.elapsed().as_millis() as u64,
+    }
+}
+
+/// 从事务条目重建回执：target = `recycle-bin:{token}`（token 可为空）。
+fn receipt_from_tx_item(item: &weave_history::TransactionItem) -> Option<RecycleReceipt> {
+    let token_raw = item.target_path.strip_prefix(RECYCLE_TARGET_PREFIX)?;
+    let token = if token_raw.is_empty() {
+        None
+    } else {
+        Some(token_raw.to_string())
+    };
+    Some(RecycleReceipt {
+        original_path: PathBuf::from(&item.source_path),
+        token,
+        deleted_at: item.timestamp?,
+    })
 }

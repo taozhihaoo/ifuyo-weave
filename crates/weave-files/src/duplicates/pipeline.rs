@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
 use sha2::{Digest, Sha256};
-use weave_core::prelude::{CancellationToken, OperationId, Progress, WeaveError};
+use weave_core::prelude::{
+    CancellationToken, CollisionKind, OperationId, OperationKind, Plan, PlanItem, PlanItemStatus,
+    Progress, WeaveError,
+};
 
 use crate::fs::Filesystem;
 
@@ -433,5 +436,117 @@ pub fn scan_duplicates(
         errors: Vec::new(),
         partial_result: cancelled,
         groups,
+    })
+}
+
+/// 回收选择（M3 §52–§56 选择模型）：组内勾选要回收的文件，每组必须保留至少一个。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecycleSelection {
+    pub group_id: String,
+    /// 该组内要回收的文件路径（须为扫描结果中的成员）。
+    pub recycle_paths: Vec<String>,
+}
+
+/// 构建回收计划（M3 §61）：把用户选择映射为 Plan 事实快照。
+///
+/// - 校验：选择非空、组存在于扫描结果、文件属于该组、每组至少保留一个、
+///   路径不重复选择——全部在计划期失败，不产生半成品 Plan（M2 §13 同源纪律）。
+/// - 条目快照（size/modified）来自扫描结果，Execute 前 Revalidate（M3 §18）。
+/// - target_path 留空：目标由回收站适配器决定，计划不虚构目标路径（M3 §58）。
+pub fn build_recycle_plan(
+    scan: &DuplicateScanReport,
+    selections: &[RecycleSelection],
+) -> Result<Plan, WeaveError> {
+    const LOC: &str = "weave-files::duplicates";
+    if selections.is_empty() {
+        return Err(WeaveError::validation(
+            "duplicates.emptySelection",
+            "no duplicate files selected for recycle",
+        )
+        .with_location(LOC));
+    }
+
+    let mut items: Vec<PlanItem> = Vec::new();
+    for selection in selections {
+        let group = scan
+            .groups
+            .iter()
+            .find(|g| g.group_id == selection.group_id)
+            .ok_or_else(|| {
+                WeaveError::validation(
+                    "duplicates.groupNotFound",
+                    format!("group not in scan result: {}", selection.group_id),
+                )
+                .with_location(LOC)
+            })?;
+
+        if selection.recycle_paths.is_empty() {
+            return Err(WeaveError::validation(
+                "duplicates.emptySelection",
+                format!("no files selected in group {}", selection.group_id),
+            )
+            .with_location(LOC));
+        }
+        if selection.recycle_paths.len() >= group.files.len() {
+            return Err(WeaveError::validation(
+                "duplicates.keepAtLeastOne",
+                format!(
+                    "group {} has {} files; at least one must be kept",
+                    selection.group_id,
+                    group.files.len()
+                ),
+            )
+            .with_location(LOC));
+        }
+
+        // 确定性排序：所选路径 case-insensitive 升序（M2 §20 同源纪律）。
+        let mut chosen: Vec<&DuplicateFileEntry> = Vec::new();
+        for path in &selection.recycle_paths {
+            let entry = group
+                .files
+                .iter()
+                .find(|f| &f.path == path)
+                .ok_or_else(|| {
+                    WeaveError::validation(
+                        "duplicates.fileNotInGroup",
+                        format!("file not in group {}: {path}", selection.group_id),
+                    )
+                    .with_location(LOC)
+                })?;
+            if chosen.iter().any(|c| &c.path == path) {
+                return Err(WeaveError::validation(
+                    "duplicates.duplicateSelection",
+                    format!("file selected more than once: {path}"),
+                )
+                .with_location(LOC));
+            }
+            chosen.push(entry);
+        }
+        chosen.sort_by_key(|e| e.path.to_lowercase());
+
+        for entry in chosen {
+            items.push(PlanItem {
+                item_id: String::new(), // 统一在下面编号
+                source_path: entry.path.clone(),
+                target_path: String::new(),
+                status: PlanItemStatus::Ready,
+                collision: CollisionKind::None,
+                source_size: Some(entry.size),
+                source_modified: entry.modified,
+                warnings: Vec::new(),
+                errors: Vec::new(),
+            });
+        }
+    }
+
+    for (idx, item) in items.iter_mut().enumerate() {
+        item.item_id = format!("item_{idx:04}");
+    }
+
+    Ok(Plan {
+        operation_id: OperationId::generate(),
+        kind: OperationKind::DuplicateRecycle,
+        created_at: std::time::SystemTime::now(),
+        items,
     })
 }

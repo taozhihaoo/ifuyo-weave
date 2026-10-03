@@ -18,8 +18,12 @@ pub mod model;
 pub mod pipeline;
 pub mod recycle_exec;
 
+pub use recycle_exec::{RecycleExecution, execute_recycle_plan};
+
 pub use model::{DuplicateFileEntry, DuplicateGroup, DuplicateScanReport, ScanStage};
-pub use pipeline::{PARTIAL_HASH_BYTES, partial_hash, scan_duplicates};
+pub use pipeline::{
+    PARTIAL_HASH_BYTES, RecycleSelection, build_recycle_plan, partial_hash, scan_duplicates,
+};
 
 #[cfg(test)]
 mod tests;
