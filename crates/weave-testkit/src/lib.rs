@@ -12,6 +12,6 @@ pub mod random;
 pub mod temp_workspace;
 
 pub use fault::{Fault, FaultInjector};
-pub use fixtures::{standard_tree, TreeStats};
+pub use fixtures::{TreeStats, standard_tree};
 pub use random::DetRandom;
 pub use temp_workspace::TempWorkspace;

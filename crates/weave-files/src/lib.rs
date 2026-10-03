@@ -18,9 +18,14 @@ pub mod fs;
 pub mod hash;
 pub mod inspect;
 pub mod metadata;
+pub mod scan;
 
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
 pub use encoding::detect_encoding;
 pub use fs::Filesystem;
 pub use hash::{HASH_CHUNK_SIZE, hash_file};
 pub use metadata::FileStat;
+pub use scan::{
+    DEFAULT_MAX_DEPTH, DEFAULT_MAX_ENTRIES, DirectoryScanReport, FileLineItem, ScanErrorEntry,
+    ScanOptions, scan_directory,
+};

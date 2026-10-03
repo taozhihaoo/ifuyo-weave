@@ -34,7 +34,10 @@ pub fn standard_tree(ws: &TempWorkspace) -> io::Result<TreeStats> {
         "images/picture.bin",
         &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0],
     )?;
-    ws.file("archives/old.zip", "01234567890123456789012345678901234567890")?;
+    ws.file(
+        "archives/old.zip",
+        "0123456789012345678901234567890123456789",
+    )?;
     ws.dir("empty")?;
     ws.file("unicode/中文 文件.txt", "你好呀")?;
     ws.file("nested/e/f/g.txt", "0123456")?;
