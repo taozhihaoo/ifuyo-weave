@@ -38,6 +38,13 @@ Quality:
 - tauri build: PASS（NSIS 安装包产出 Weave_0.1.0_x64-setup.exe 2.35 MiB）
 - Runtime smoke: PASS — M1 二进制启动、日志按 charter 路径落盘、
   IPC 往返（app info 请求）真实打通
+- Real UI smoke（§47，CDP 驱动真实窗口 + dev dispatch 钩子）: PASS —
+  ① 文件：Inspector 渲染全部事实（17 B/文本/ASCII/时间戳），点击计算
+  SHA-256 → 摘要 `146b041f…d44a8` 出现且与 Python hashlib 独立计算逐字一致；
+  ② 目录（2000 文件）：扫描 50ms 完成，统计/分布条/Top-20 全部真实；
+  ③ WinSxS 长扫描：点击取消扫描 → 10.2s 安全点收尾，状态=已取消，
+  部分事实诚实呈现（80,993 文件 / 9.4 GB / 深度 10 / 权限错误聚合）。
+  每步均有窗口截图。
 - license audit: PASS（cargo deny + 前端审计）
 - 性能实测（release，docs/PERF.md）：scan 100/1k/10k = 2/40/235 ms；
   取消 11 ms 生效；100 MiB hash 66 ms（O(chunk) 内存）
@@ -49,8 +56,10 @@ Known Limitations:
 - GB18030/GBK/Latin-1 编码检测未实现（M4，DECISIONS D22）
 - 扫描分类仅按扩展名（内容嗅探只在单文件 Inspector 路径）
 - 取消延迟无量化门槛（M7 引擎统一）；任务进度为 400ms 轮询（M7 改推送）
-- 拖放交互的端到端人工点击未执行（jsdom 无法模拟 Tauri 桥；运行时冒烟验证
-  应用启动 + IPC 日志链路）
+- OS 输入层（拖拽手势、原生文件对话框）未经自动化验证：对话框在本机挂起
+  （P1/BLOCKED，DECISIONS D27——invoke 被接受但窗口永不出现，与前端代码无关；
+  JS 侧已可见化）；Drop 事件桥本身仍是人工验证项
+- Open File/Folder 按钮（§20）依赖上述对话框插件，本机不可用（同 D27）
 
 ## M0 Foundation
 

@@ -144,3 +144,24 @@ weave-core/weave-files 类型不加 specta 派生；src-tauri/files_dto.rs 建�
 （STATUS_ENTRYPOINT_NOT_FOUND）。tauri-build 只给 bin 嵌 manifest，
 故 build.rs 为 test 目标注入 `/MANIFEST:EMBED /MANIFESTINPUT`；
 src-tauri 单测统一放 tests/ 集成目标。
+
+## D25 — Open File/Folder 用官方 dialog 插件（M1 §20）
+
+@tauri-apps/plugin-dialog 2.8.1 + tauri-plugin-dialog 2，capability 追加
+dialog:default（用户显式发起的选择器，不构成静默权限扩大）。
+
+## D26 — dev-only 自动化冒烟钩子
+
+`window.__weaveDev.dispatch(path)` 仅在 `import.meta.env.DEV` 下挂载
+（生产构建常量折叠 + 死码消除）。它触发与 Drop 完全相同的
+dispatchPath 链路，使真实窗口的 UI 冒烟可自动化（CDP 驱动）；
+OS 输入层（拖拽手势/原生对话框）仍是人工验证项。
+
+## D27 — Open 按钮对话框在本机挂起（P1，BLOCKED）
+
+本机（Windows 11 26200 + WebView2 Edg/154）上 plugin-dialog 的
+`plugin:dialog|open` IPC 被接受但对话框窗口永不出现（UIAutomation 与
+EnumWindows 均无窗口、无 panic、invoke 永久 pending）。已确认与前端代码
+无关（原始 invoke 同样挂起）。JS 侧已补 catch 使任何对话框失败可见。
+Drop 入口不受影响（Tauri 运行时原生处理）。M2 排查方向：最小复现仓库
++ rfd/COM 线程模型；若确认为环境特异则关闭。

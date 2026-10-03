@@ -110,6 +110,15 @@ function App() {
   };
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      // Dev-only 自动化冒烟入口（DECISIONS D26）：触发与 Drop 完全相同的
+      // dispatchPath 链路（校验 → IPC → Rust → store → 渲染）。
+      // 生产构建中 import.meta.env.DEV 为常量 false，此分支被死码消除。
+      (window as { __weaveDev?: unknown }).__weaveDev = { dispatch: dispatchPath };
+    }
+  });
+
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
     // Drop → Path Validation → File/Directory 判定 → Inspector / Analyzer（M1 §21）。
@@ -176,13 +185,20 @@ function App() {
 
   const openViaDialog = async (directory: boolean): Promise<void> => {
     // M1 §20：Open File / Open Folder 与 Drop 同级的入口（dialog 为用户显式发起）。
-    const selected = await openDialog({
-      multiple: false,
-      directory,
-      title: directory ? t("open.folder") : t("open.file"),
-    });
-    if (typeof selected === "string" && selected) {
-      dispatchPath(selected);
+    try {
+      const selected = await openDialog({
+        multiple: false,
+        directory,
+        title: directory ? t("open.folder") : t("open.file"),
+      });
+      if (typeof selected === "string" && selected) {
+        dispatchPath(selected);
+      }
+    } catch (e) {
+      // 对话框失败必须可见（本机曾出现插件挂起——见 Known Limitations）。
+      useAppStore
+        .getState()
+        .setError(e instanceof Error ? { kind: "internal", code: "dialog.failed", message: e.message, location: null, recoverability: "retryable", suggestion: null } : (e as IpcError));
     }
   };
 
