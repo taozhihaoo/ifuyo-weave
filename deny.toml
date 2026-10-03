@@ -1,0 +1,34 @@
+# cargo-deny license policy (M0 §26).
+# 完整命令：cargo deny check licenses
+
+[graph]
+all-features = true
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+allow = [
+  "MIT",
+  "Apache-2.0",
+  # target-lexicon 等工具链邻接 crate 的标准表达
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Zlib",
+  # —— 相对 charter #40 优先清单的扩展，均为社区通行许可（M0 §26 授权扩展）——
+  # MPL-2.0: 弱 copyleft，文件级隔离，不传染链接方
+  "MPL-2.0",
+  # Unicode-3.0: Unicode 数据表（unicode-ident 等）
+  "Unicode-3.0",
+  "CC0-1.0",
+  # 注：OFL / CDLA / ISC / CC-BY / MIT-0 / Python-2.0 属前端依赖策略，
+  # 见 scripts/check-frontend-licenses.mjs 的白名单。
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
