@@ -13,7 +13,9 @@
 //! 一切路径先过 `weave_core::path` 校验。本 crate 只报告事实，不推测意图。
 
 pub mod fs;
+pub mod hash;
 pub mod metadata;
 
 pub use fs::Filesystem;
+pub use hash::{HASH_CHUNK_SIZE, hash_file};
 pub use metadata::FileStat;
