@@ -165,19 +165,33 @@ fn resolve_pairings(ops: &[Op], keys_a: &[String], keys_b: &[String]) -> Vec<Op>
         })
         .collect();
 
-    // 1) 全局 Moved：dels 顺序 × 未占用 inss 首个同键
+    // 1) 全局 Moved：键 → 未消费 ins 队列（HashMap，O(D + I + pairs)——
+    //    朴素双重循环在"全不同 100k"场景是 10^10 量级，§141 性能证据抓到）
+    let mut ins_queues: std::collections::HashMap<&str, Vec<usize>> =
+        std::collections::HashMap::new();
+    for (ii, &ins_idx) in ins_positions.iter().enumerate() {
+        ins_queues
+            .entry(keys_b[ins_b[&ins_idx]].as_str())
+            .or_default()
+            .push(ii);
+    }
     let mut ins_taken = vec![false; ins_positions.len()];
     let mut moved_at: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
     for &di in &del_positions {
         let a = del_a[&di];
-        for (ii, &ins_idx) in ins_positions.iter().enumerate() {
-            if !ins_taken[ii] && keys_a[a] == keys_b[ins_b[&ins_idx]] {
-                moved_at.insert(di, ins_idx);
-                ins_taken[ii] = true;
-                break;
+        if let Some(queue) = ins_queues.get_mut(keys_a[a].as_str()) {
+            while let Some(ii) = queue.first() {
+                if ins_taken[*ii] {
+                    queue.remove(0);
+                } else {
+                    ins_taken[*ii] = true;
+                    moved_at.insert(di, ins_positions[*ii]);
+                    break;
+                }
             }
         }
     }
+    let consumed_ins: std::collections::HashSet<usize> = moved_at.values().copied().collect();
 
     // 2) 逐相邻块 Changed：连续 Del/Ins 段内剩余项等长顺序配对
     let mut changed_at: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
@@ -194,9 +208,7 @@ fn resolve_pairings(ops: &[Op], keys_a: &[String], keys_b: &[String]) -> Vec<Op>
                 let inss: Vec<usize> = run
                     .iter()
                     .copied()
-                    .filter(|i| {
-                        matches!(ops[*i], Op::Ins { .. }) && !moved_at.values().any(|v| v == i)
-                    })
+                    .filter(|i| matches!(ops[*i], Op::Ins { .. }) && !consumed_ins.contains(i))
                     .collect();
                 let paired = dels.len().min(inss.len());
                 for k in 0..paired {
@@ -214,14 +226,15 @@ fn resolve_pairings(ops: &[Op], keys_a: &[String], keys_b: &[String]) -> Vec<Op>
     let inss: Vec<usize> = run
         .iter()
         .copied()
-        .filter(|i| matches!(ops[*i], Op::Ins { .. }) && !moved_at.values().any(|v| v == i))
+        .filter(|i| matches!(ops[*i], Op::Ins { .. }) && !consumed_ins.contains(i))
         .collect();
     let paired = dels.len().min(inss.len());
     for k in 0..paired {
         changed_at.insert(dels[k], inss[k]);
     }
 
-    // 3) 重写 op 流
+    // 3) 重写 op 流（消费集 HashSet 化：逐条 .values().any 是 O(n²) 热点）
+    let changed_ins: std::collections::HashSet<usize> = changed_at.values().copied().collect();
     let mut out = Vec::with_capacity(ops.len());
     for (i, op) in ops.iter().enumerate() {
         match op {
@@ -241,9 +254,7 @@ fn resolve_pairings(ops: &[Op], keys_a: &[String], keys_b: &[String]) -> Vec<Op>
                 }
             }
             Op::Ins { .. } => {
-                let consumed =
-                    moved_at.values().any(|v| *v == i) || changed_at.values().any(|v| *v == i);
-                if !consumed {
+                if !consumed_ins.contains(&i) && !changed_ins.contains(&i) {
                     out.push(*op);
                 }
             }

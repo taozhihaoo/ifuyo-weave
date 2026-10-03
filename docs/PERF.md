@@ -102,3 +102,63 @@
 - [x] 大文件流式 + 有界内存（Scenario D）
 - 峰值内存：机制上界 = 256 KiB 哈希 chunk + 8 KiB partial 缓冲 + 候选元数据
   （每文件 ~200 B 量级）；未引入进程级 RSS 测量（与 M1 口径一致，M11 复测）
+
+## M4 Text — 2026-10-04
+
+- 环境同上（release 构建，%TEMP%/内存数据）；复现：`cargo run --release -p weave-text --example m4_perf`
+- 内存模型（§137）：Transformer/Extractor/Formatter O(输入)；Compare 窗口
+  表 ≈ 16 MiB 上界；输入受 TextLimits 分档限额（§104），超出结构化拒绝
+
+### Transformer（§138：10k / 100k / 1M lines）
+
+| 操作 | 10k lines | 100k lines |
+| --- | --- | --- |
+| trimLines | 1 ms | 11 ms |
+| deduplicate | 1 ms | 17 ms |
+| sort（稳定，忽略大小写） | 3 ms | 61 ms |
+| find/replace（literal） | 0 ms | 2 ms |
+
+1M lines：与 100k 同机制线性外推（scale 参数实测与 100k 重合——fixture
+生成器在 ≥100k 时复用 100k 行数；真实 1M 列入 M7 批处理场景补测）。
+
+### Extractor（URL）
+
+| lines | elapsed | matches |
+| --- | --- | --- |
+| 10,000 | 0 ms | 2 |
+| 100,000 | 1 ms | 2 |
+
+Rust regex 线性时间（§140 design property：**引擎保证**，非"所有 regex 都
+安全"的宣称）；结果受 max_extract_matches=10k 上限（§185）。
+
+### Compare（§141）
+
+| A / B | elapsed | hunks | degraded |
+| --- | --- | --- | --- |
+| 10k identical | 2 ms | 0 | false |
+| 10k fully-different | **7 ms** | 1 | true |
+| 100k identical | 35 ms | 0 | false |
+| 100k fully-different | **102 ms** | 1 | true |
+
+- identical 走前/后缀裁剪 O(n) 直通；fully-different 超出 2000² LCS 窗口
+  ⇒ 诚实降级（单块替换 + degraded 标注，D42）
+- **性能修复（性能证据驱动）**：Moved 配对原为 O(D×I) 双重循环 + 逐条
+  values().any 消费检查——100k 全不同实测 169.6 s；HashMap 队列 + 消费
+  HashSet 化后 **102 ms（1663×）**。该项属 §226 级风险（大 diff 冻结），
+  已由分档限额 + 修复双重消除
+- 峰值内存：窗口表 16 MiB 上界 + O(输入) 键向量；未做进程级 RSS 测量
+
+### Formatter（JSON format，parser 驱动）
+
+| input | elapsed |
+| --- | --- |
+| 1,016,671 B（30k 对象数组） | **17 ms** |
+
+format 限额 1 MiB（TextLimits 最紧档）⇒ 同步预览最坏延迟有界（§106 决策：
+限额使阻塞可证地 < 100 ms 量级；D44）。
+
+对照 M4 目标：
+
+- [x] 建立真实基线，证明算法没有明显浪费（§138–§141 全部有数字）
+- [x] Regex 安全 = 引擎线性性质（§140 如实表述）
+- [x] Compare 超限显式拒绝 + 降级标注（§141）
