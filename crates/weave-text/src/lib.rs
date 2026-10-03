@@ -12,6 +12,7 @@ pub mod diagnostics;
 pub mod encoding;
 pub mod model;
 pub mod offset;
+pub mod transform;
 
 pub use detection::{detect_format, detect_format_by_extension};
 pub use diagnostics::{Severity, TextDiagnostic};
@@ -21,3 +22,7 @@ pub use model::{
     count_line_endings, detect_line_ending,
 };
 pub use offset::{LineIndex, TextRange};
+
+pub use transform::{
+    BlankPolicy, CaseForm, KeepPolicy, PadMode, TransformKind, TransformResult, apply_transform,
+};

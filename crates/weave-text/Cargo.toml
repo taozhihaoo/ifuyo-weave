@@ -8,6 +8,7 @@ description = "Text formatting, comparison, transformation and extraction tools 
 [dependencies]
 weave-core = { path = "../weave-core" }
 encoding_rs = { workspace = true }
+regex = "1"
 serde_json = { workspace = true }
 
 [lints]
