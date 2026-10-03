@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use weave_core::prelude::{CancellationToken, OperationId, Progress, WeaveError};
+use weave_core::prelude::{CancellationToken, OperationId, OperationKind, Progress, WeaveError};
 use weave_history::{OperationTransaction, TransactionItem, TransactionItemStatus};
 
 use crate::fs::Filesystem;
@@ -118,7 +118,14 @@ pub fn undo_transaction(
                 }
             }
             TransactionItemStatus::Executed => {
-                undo_executed_item(fs, item, &mut current, &transaction.items)
+                if transaction.kind == OperationKind::TextTransform {
+                    // M4 §94：文本覆盖写的原位**必然**被占（写回即覆盖）——
+                    // 专用还原：校验当前 stat == 事务记录的写后状态（用户
+                    // 未再改动）⇒ 备份 rename 覆盖原位；否则 UndoConflict。
+                    undo_text_item(fs, item)
+                } else {
+                    undo_executed_item(fs, item, &mut current, &transaction.items)
+                }
             }
         };
         match result.status {
@@ -148,6 +155,71 @@ pub fn undo_transaction(
         skipped,
         leaked_temps,
         duration_ms: started.elapsed().as_millis() as u64,
+    }
+}
+
+/// 文本覆盖写的还原（M4 §94）：
+/// 1) 备份（事务 target）必须存在；
+/// 2) 原位当前 stat 必须 == 事务记录的**写后**状态——不符即用户已改动，
+///    UndoConflict 拒绝覆盖（不猜测、不吞掉用户编辑）；
+/// 3) rename 备份 → 原位（原子替换，备份随之消失）。
+fn undo_text_item(fs: &dyn Filesystem, item: &TransactionItem) -> UndoItemResult {
+    let target = Path::new(&item.target_path);
+    let source = Path::new(&item.source_path);
+    let conflict = |reason: String| UndoItemResult {
+        item_id: item.item_id.clone(),
+        status: UndoItemStatus::UndoConflict,
+        reason: Some(
+            WeaveError::conflict("undo.textConflict", reason).with_location("weave-files::undo"),
+        ),
+    };
+
+    let Ok(backup_stat) = fs.stat(target) else {
+        return UndoItemResult {
+            item_id: item.item_id.clone(),
+            status: UndoItemStatus::Missing,
+            reason: Some(
+                WeaveError::io("undo.backupMissing", "text backup is missing")
+                    .with_location("weave-files::undo"),
+            ),
+        };
+    };
+    if backup_stat.kind == weave_core::prelude::FileKind::Other {
+        return conflict("text backup is not a restorable file".to_string());
+    }
+
+    // §94：写回之后用户又改过 ⇒ 拒绝覆盖
+    match fs.stat(source) {
+        Ok(stat) => {
+            let matches_recorded = item.original_size == Some(stat.size)
+                && item.original_modified.is_some()
+                && stat.modified == item.original_modified;
+            if !matches_recorded {
+                return conflict(
+                    "file was modified after the text operation; refusing to overwrite user edits"
+                        .to_string(),
+                );
+            }
+        }
+        Err(_) => {
+            // 原位消失（被删除）⇒ 仍可还原（把备份放回原位）
+        }
+    }
+
+    if let Err(e) = fs.rename(target, source) {
+        return UndoItemResult {
+            item_id: item.item_id.clone(),
+            status: UndoItemStatus::UndoConflict,
+            reason: Some(
+                WeaveError::io("undo.textRestoreFailed", format!("restore failed: {e}"))
+                    .with_location("weave-files::undo"),
+            ),
+        };
+    }
+    UndoItemResult {
+        item_id: item.item_id.clone(),
+        status: UndoItemStatus::Restored,
+        reason: None,
     }
 }
 
@@ -294,5 +366,105 @@ fn temp_for(source: &Path) -> PathBuf {
             return candidate;
         }
         n += 1;
+    }
+}
+
+#[cfg(test)]
+mod text_undo_tests {
+    use super::*;
+    use crate::fs::StdFilesystem;
+    use std::time::{Duration, SystemTime};
+    use weave_history::{OperationStatus, Reversibility, TransactionItem, TransactionItemStatus};
+    use weave_testkit::TempWorkspace;
+
+    fn text_tx(
+        source: &str,
+        backup: &str,
+        post_size: u64,
+        post_mtime: SystemTime,
+    ) -> OperationTransaction {
+        OperationTransaction {
+            operation_id: weave_core::id::OperationId::generate(),
+            kind: weave_core::prelude::OperationKind::TextTransform,
+            status: OperationStatus::Completed,
+            timestamp: SystemTime::UNIX_EPOCH,
+            reversible: Reversibility::Full,
+            items: vec![TransactionItem {
+                item_id: "item_0000".to_string(),
+                source_path: source.to_string(),
+                target_path: backup.to_string(),
+                status: TransactionItemStatus::Executed,
+                timestamp: Some(post_mtime),
+                original_size: Some(post_size),
+                original_modified: Some(post_mtime),
+                original_created: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn undo_text_restores_backup_when_untouched() {
+        let ws = TempWorkspace::new("undo-text-ok").expect("ws");
+        let original = ws.path().join("doc.txt");
+        std::fs::write(&original, "new content").expect("write");
+        let backup = ws.path().join(".doc.txt.weave-text-bak-1");
+        std::fs::write(&backup, "old content").expect("write");
+        let post = SystemTime::now();
+        {
+            let f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&original)
+                .expect("open");
+            f.set_modified(post).expect("mtime");
+        }
+
+        let tx = text_tx(
+            original.to_string_lossy().as_ref(),
+            backup.to_string_lossy().as_ref(),
+            std::fs::metadata(&original).expect("stat").len(),
+            post,
+        );
+        let report = undo_transaction(
+            &StdFilesystem,
+            &tx,
+            &weave_core::prelude::CancellationToken::new(),
+            &mut |_| {},
+        );
+        assert_eq!(report.restored, 1, "{report:?}");
+        assert_eq!(
+            std::fs::read_to_string(&original).expect("read"),
+            "old content"
+        );
+        assert!(!backup.exists(), "备份随 rename 消费");
+    }
+
+    #[test]
+    fn undo_text_conflicts_when_user_edited_after_write() {
+        let ws = TempWorkspace::new("undo-text-conflict").expect("ws");
+        let original = ws.path().join("doc.txt");
+        std::fs::write(&original, "user edited!").expect("write");
+        let backup = ws.path().join(".doc.txt.weave-text-bak-2");
+        std::fs::write(&backup, "old content").expect("write");
+        let post = SystemTime::now() - Duration::from_secs(3600);
+
+        let tx = text_tx(
+            original.to_string_lossy().as_ref(),
+            backup.to_string_lossy().as_ref(),
+            99, // 与实际不符 ⇒ 用户改过
+            post,
+        );
+        let report = undo_transaction(
+            &StdFilesystem,
+            &tx,
+            &weave_core::prelude::CancellationToken::new(),
+            &mut |_| {},
+        );
+        assert_eq!(report.conflicts, 1, "{report:?}");
+        assert_eq!(
+            std::fs::read_to_string(&original).expect("read"),
+            "user edited!",
+            "绝不覆盖用户编辑（§94）"
+        );
+        assert!(backup.exists(), "备份保留");
     }
 }

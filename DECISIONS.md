@@ -278,3 +278,92 @@ IPC，天然满足"Preview 与 Execute 同一快照"。内存态：重启后 sca
 - **结果排序**：组按 wasted_size DESC（展示策略）；组内文件按规范化
   路径 case-insensitive 升序；GroupId = "grp_{hash16}" 内容派生——
   三者共同保证结果确定性（不依赖 OS 枚举顺序，有 r1/r2 测试）。
+
+## D38 — M4 编码解码级联与 Offset 契约（§15/§16/§18）
+
+- **解码级联**（weave-text::encoding）：BOM 命中按 BOM 严格解码（截断/非法
+  surrogate ⇒ 明确错误，不静默丢字节）→ 无 BOM 时 UTF-8 严格 → GB18030 严格
+  → Latin-1（字节→U+00xx 无损兜底，必须如实标注）。全程**零 U+FFFD**：
+  encoding_rs 的 had_errors 不通过即降级/报错。GB 编码族保守归类 Gb18030
+  （超集），GBK 仅在用户显式指定时使用；UI 提供编码手动覆盖。
+- **依赖**：encoding_rs 0.8（Mozilla 维护、Firefox 同源、MIT/Apache-2.0、
+  无传递重依赖）。
+- **Offset 契约（§18 高风险边界）**：域内 = byte offset；IPC 额外携带
+  line（1-based）+ column（**UTF-16 code units**，与 JS string index 对齐，
+  消解边界风险）；UI 禁止把 byte offset 当 str 索引。测试覆盖 ASCII/é/汉字/
+  emoji（surrogate 对）/组合字符/CR-only。
+- **BOM/换行策略（§16/§17）**：Preserve 默认——BOM 按文档事实回写；行级
+  操作按行携带各自原始结尾（split_inclusive），Mixed 是事实不是错误；
+  无换行文档写出基线 LF；final newline 的有无是事实，操作不静默增删。
+
+## D39 — 文本写回：备份 + 原子替换 + 复用 M2 Undo（§89–§95）
+
+- 写回 = Plan（TextTransform）→ 任务内 Revalidate（加载快照 size ⇒ 外部
+  改动 `text.fileChangedSincePreview` 拒绝，§90）→ 复制备份
+  （`.{name}.weave-text-bak-{op}`）→ `weave-files::atomic_write`
+  （temp+flush+rename，§91/§92，共享基础设施——文本工具不自造 write，§10）。
+- **事务 target = 备份路径、original_size/modified = 写后状态**：M2 undo 的
+  占用检查由此天然实现 §94——"写回后用户又改过 ⇒ stat 不符 ⇒ UndoConflict
+  拒绝覆盖"。Undo 按 kind 分派：TextTransform 专用还原（备份存在 + 原位
+  stat 匹配 ⇒ rename 覆盖原位；原位消失 ⇒ 仍可还原），其余走 M2 Move 语义。
+  这是 §115 意义上的最小通用改进（M2 占位检查对"覆盖写"失效是 P0），
+  不存在平行的 TextUndoRecord（§93）。
+- 文本输入上限 2 MiB（集中常量 MAX_TEXT_BYTES，下 §104 前置）；加载侧
+  NUL 前 8 KiB ⇒ `text.binaryDetected`（§103 二进制守卫）。
+
+## D40 — Transformer/Extract 语义定案（§72–§83 / §58–§70）
+
+- Trim：line/doc 两义分开；Dedupe：Keep First/Last（Last 取最后出现位置、
+  顺序保持）+ 空行参与/保留两档；Sort：稳定排序（同键保输入相对序）、
+  键 = 原文/小写（无自然排序——a10 < a2 是定义行为）、空行首/尾/保位；
+  Title = 空白分词首字母大写、Sentence = 每行首字母大写（简单模式，§78
+  允许并如实声明）；行号 pad 按末号位数补零。
+- Find/Replace：literal 或 regex（Rust regex 线性引擎，§68 ReDoS 安全）；
+  替换语法 contract = **Rust regex replacement（$1/${name}）**，UI 如实
+  标注（§82 单一契约）；空 pattern 拒绝；match count 必须展示（§80）。
+- Extract（D41 预告位并入）：practical email（非 RFC 完整）；路径启发式
+  （盘符/UNC/unix 绝对/显式相对 + 词边界守卫，裸 word/word 不算，尾部
+  `,;)]}` 裁剪而 `.` 属版本号语义保留）；Number 不含 hex/octal/binary，
+  currency 符号不并入匹配（$5 如实提取 5）；IPv4 octet 实校验、IPv6 用
+  std::net 真解析器；JSON 平衡扫描（字符串/转义状态机）+ serde_json 终验、
+  只报最外层；Markdown link 跳过围栏与行内代码；用户 Regex 零长度匹配跳过。
+
+## D41 — Extractor 边界（§58–§70 补充）
+
+见 D40 内嵌条目；补充：JSON 提取的候选由平衡扫描给出、**合法性由
+serde_json 终验**（平衡 ≠ 合法）；Markdown autolink `<url>` v1 不提取
+（如实降级为仅 `[text](url)`）。
+
+## D42 — Compare 算法与限制（§47–§55）
+
+公共前缀/后缀键裁剪 → 余量 ≤ 2000×2000 完整 LCS DP → 超窗**诚实降级**：
+单块替换 + `degraded: true` 标注（绝不假装最优、绝不冻结）。Moved =
+全 diff 范围同键配对（引擎匹配事实，重复行按次数配对）；Changed = 相邻
+Del/Ins 段等长顺序配对。比较键不含行尾换行（CRLF vs LF 非差异）；
+Whitespace Ignore 三档 None/Trailing/All；Case Ignore = Unicode 小写折叠。
+限额：4 MiB / 100k 行，超限 `compare.tooLarge` 显式错误（§55）。
+
+## D43 — Formatter 能力矩阵与依赖（§24–§46）
+
+- JSON：serde_json **preserve_order**（Format 保持键序，仅空白变化；
+  特性影响全局 serde_json——历史存储用 struct 序列化，无 Map 迭代依赖，
+  已核实）。Sort = 递归对象键；数组绝不排序（§27）。Normalize ≡ Sort+Format
+  规范序列化（§28 明确定义）。
+- XML：quick-xml 真事件流；Format 保序重排缩进（文本/CDATA/注释/PI 原样）；
+  Minify 仅去元素间纯空白；**Sort Unsupported**（§30 子元素顺序语义）。
+- YAML：yaml-rust2 真解析；Validate 带 marker；Sort 重序列化**丢注释/
+  锚点展开** ⇒ Warning 如实告知；Format/Minify/Normalize Unsupported
+  （§31/§46 注释不可丢）。
+- SQL：词法 tokenizer（字符串/引号标识符/注释保真 + byte 区间）；
+  Validate = 词法结构 + 括号平衡（§36"基本 validation"，非完整语法——
+  如实声明）；Format = 主句关键字布局；Minify = 去注释+空白压缩；
+  Sort Unsupported。方言：保守 ANSI 通用子集，不宣称特定方言。
+- JavaScript：Format/Validate Unsupported（无真 parser；§37/§39 禁止
+  regex 冒充）；Minify = §38 明示的安全子集（字符串/模板原样、注释删除）；
+  已知限制：regex 字面量含 `//` 可能被误判行注释（如实记录）。
+- CSS：Format/Minify（字符串/url()/注释感知）；Sort/Normalize Unsupported
+  （层叠语义）；Validate Unsupported（§42/§46 无完整语法校验）。
+- Markdown：Normalize（标题空行/空行折叠/final newline；围栏内容不可侵犯
+  §43；不改列表标记/链接/raw HTML）；Sort = H1/H2 顶层 section 按标题文本
+  （§45 opt-in）；Format/Minify/Validate Unsupported（§46）。
+- 默认缩进 2 空格 + final newline（§25，统一全局）。

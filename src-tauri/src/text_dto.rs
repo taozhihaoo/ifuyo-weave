@@ -37,7 +37,11 @@ impl FormatOutcomeDto {
     pub fn from_outcome(o: weave_text::format::FormatOutcome) -> Self {
         Self {
             content: o.content,
-            diagnostics: o.diagnostics.iter().map(TextDiagnosticDto::from_diag).collect(),
+            diagnostics: o
+                .diagnostics
+                .iter()
+                .map(TextDiagnosticDto::from_diag)
+                .collect(),
             changed: o.changed,
         }
     }
@@ -141,7 +145,7 @@ impl TransformOpDto {
                     return Err(crate::text_service::err_bare(
                         "text.invalidOption",
                         format!("unknown blank policy '{other}'"),
-                    ))
+                    ));
                 }
             })
         }
@@ -153,7 +157,7 @@ impl TransformOpDto {
                     return Err(crate::text_service::err_bare(
                         "text.invalidOption",
                         format!("unknown keep policy '{other}'"),
-                    ))
+                    ));
                 }
             })
         }
@@ -192,7 +196,7 @@ impl TransformOpDto {
                         return Err(crate::text_service::err_bare(
                             "text.invalidOption",
                             format!("unknown case form '{other}'"),
-                        ))
+                        ));
                     }
                 },
             },
@@ -212,7 +216,7 @@ impl TransformOpDto {
                         return Err(crate::text_service::err_bare(
                             "text.invalidOption",
                             format!("unknown pad mode '{other}'"),
-                        ))
+                        ));
                     }
                 },
             },

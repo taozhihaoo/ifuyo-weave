@@ -135,13 +135,16 @@ fn parse_encoding(name: &str) -> Result<weave_core::prelude::TextEncoding, IpcEr
         "gb18030" => TextEncoding::Gb18030,
         "gbk" => TextEncoding::Gbk,
         "latin1" => TextEncoding::Latin1,
-        other => return Err(err("text.unknownEncoding", format!("unknown encoding '{other}'"))),
+        other => {
+            return Err(err(
+                "text.unknownEncoding",
+                format!("unknown encoding '{other}'"),
+            ));
+        }
     })
 }
 
-pub fn encoding_to_str(
-    encoding: weave_core::prelude::TextEncoding,
-) -> &'static str {
+pub fn encoding_to_str(encoding: weave_core::prelude::TextEncoding) -> &'static str {
     use weave_core::prelude::TextEncoding;
     match encoding {
         TextEncoding::Utf8 => "utf8",
@@ -174,7 +177,12 @@ fn parse_format(name: &str) -> Result<TextFormat, IpcError> {
         "javascript" => TextFormat::JavaScript,
         "css" => TextFormat::Css,
         "markdown" => TextFormat::Markdown,
-        other => return Err(err("text.unknownFormat", format!("unknown format '{other}'"))),
+        other => {
+            return Err(err(
+                "text.unknownFormat",
+                format!("unknown format '{other}'"),
+            ));
+        }
     })
 }
 
@@ -200,16 +208,19 @@ pub fn format_text(
     Ok(crate::text_dto::FormatOutcomeDto::from_outcome(outcome))
 }
 
-fn parse_operation(
-    name: &str,
-) -> Result<weave_text::format::FormatOperation, IpcError> {
+fn parse_operation(name: &str) -> Result<weave_text::format::FormatOperation, IpcError> {
     Ok(match name {
         "validate" => weave_text::format::FormatOperation::Validate,
         "format" => weave_text::format::FormatOperation::Format,
         "minify" => weave_text::format::FormatOperation::Minify,
         "sort" => weave_text::format::FormatOperation::Sort,
         "normalize" => weave_text::format::FormatOperation::Normalize,
-        other => return Err(err("text.unknownOperation", format!("unknown operation '{other}'"))),
+        other => {
+            return Err(err(
+                "text.unknownOperation",
+                format!("unknown operation '{other}'"),
+            ));
+        }
     })
 }
 
@@ -222,8 +233,12 @@ pub fn transform_text(
         return Err(err("text.tooLarge", "input exceeds the text size limit"));
     }
     let kind = op.into_domain()?;
-    let result = weave_text::apply_transform(content, &kind)
-        .map_err(|e| err("text.transformInvalid", format!("{}: {}", e.code, e.message)))?;
+    let result = weave_text::apply_transform(content, &kind).map_err(|e| {
+        err(
+            "text.transformInvalid",
+            format!("{}: {}", e.code, e.message),
+        )
+    })?;
     Ok(crate::text_dto::TransformResultDto::from_result(result))
 }
 
@@ -265,7 +280,12 @@ fn parse_extract_kind(name: &str) -> Result<weave_text::ExtractKind, IpcError> {
         "ipv6" => ExtractKind::Ipv6,
         "json" => ExtractKind::Json,
         "markdownLink" => ExtractKind::MarkdownLink,
-        other => return Err(err("text.unknownExtractor", format!("unknown extractor '{other}'"))),
+        other => {
+            return Err(err(
+                "text.unknownExtractor",
+                format!("unknown extractor '{other}'"),
+            ));
+        }
     })
 }
 
@@ -289,9 +309,7 @@ pub fn compare_text(
     };
     match weave_text::compare_texts(a, b, &options, &weave_text::CompareLimits::default()) {
         Ok(report) => Ok(crate::text_dto::DiffReportDto::from_report(report)),
-        Err(weave_text::CompareError::TooLarge { code, message }) => {
-            Err(err(code, message))
-        }
+        Err(weave_text::CompareError::TooLarge { code, message }) => Err(err(code, message)),
     }
 }
 
@@ -350,7 +368,12 @@ fn parse_bom(name: &str) -> Result<weave_text::Bom, IpcError> {
         "utf16Le" => weave_text::Bom::Utf16Le,
         "utf16Be" => weave_text::Bom::Utf16Be,
         "none" => weave_text::Bom::None,
-        other => return Err(err("text.unknownBom", format!("unknown BOM policy '{other}'"))),
+        other => {
+            return Err(err(
+                "text.unknownBom",
+                format!("unknown BOM policy '{other}'"),
+            ));
+        }
     })
 }
 
@@ -369,24 +392,25 @@ pub fn run_text_write_job(
     entry: TextWriteEntry,
     cancel: &CancellationToken,
     on_progress: &mut dyn FnMut(Progress),
-) -> Result<(TextWriteReport, weave_history::OperationTransaction), (TextWriteReport, WeaveError)>
-{
+) -> Result<(TextWriteReport, weave_history::OperationTransaction), (TextWriteReport, WeaveError)> {
     let started = std::time::Instant::now();
     let _ = on_progress;
     let item = plan
         .items
         .first()
         .ok_or_else(|| WeaveError::validation("text.emptyPlan", "text write plan has no items"))
-        .map_err(|e| (
-            TextWriteReport {
-                operation_id: plan.operation_id.clone(),
-                bytes_written: 0,
-                backup: None,
-                failed: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-            },
-            e,
-        ))?;
+        .map_err(|e| {
+            (
+                TextWriteReport {
+                    operation_id: plan.operation_id.clone(),
+                    bytes_written: 0,
+                    backup: None,
+                    failed: true,
+                    duration_ms: started.elapsed().as_millis() as u64,
+                },
+                e,
+            )
+        })?;
 
     // §90 TOCTOU Revalidate：外部改动 ⇒ 拒绝写回
     let current = std::fs::metadata(&entry.path);
@@ -434,11 +458,8 @@ pub fn run_text_write_job(
                     failed: true,
                     duration_ms: started.elapsed().as_millis() as u64,
                 },
-                WeaveError::io(
-                    "text.backupFailed",
-                    format!("cannot back up original: {e}"),
-                )
-                .with_location("text_service::run_text_write_job"),
+                WeaveError::io("text.backupFailed", format!("cannot back up original: {e}"))
+                    .with_location("text_service::run_text_write_job"),
             )
         })?;
         Some(backup)

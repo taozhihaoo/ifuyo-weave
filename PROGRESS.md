@@ -112,7 +112,8 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M4（Spec/ 提示词；GB18030 等编码检测按 D22 在 M4 补齐）
+- M4（下）收尾：大文本策略/取消与进度/错误 UX 细化、测试矩阵补全
+  （下 §115–§136）
 
 ## M3 Duplicate Finder
 
@@ -195,4 +196,67 @@ Known Limitations:
 - 「最近根」为会话态；组列表无虚拟化（基准未证明瓶颈，M11 Polish 复测）
 - macOS / Linux 运行时未验证（CI 为 windows-latest；路径大小写 P0 已修，
   回收行为按平台适配器隔离，跨平台回收语义未实测——如实标注）
+
+## M4 Text
+
+Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+
+Implemented:
+
+- weave-text crate（M0 骨架填充）：TextDocument 统一模型（source/content/
+  encoding/bom/line_ending/format/path/byte_size/ends_newline）；
+  编码解码级联（BOM 严格 → UTF-8 严格 → GB18030 严格 → Latin-1 无损兜底，
+  全程零 U+FFFD——D22 欠账 GB18030/GBK/Latin-1 在本里程碑补齐）；
+  Offset 契约（byte 域内 / line + UTF-16 列 at IPC，§18 高风险边界）；
+  TextRange/LineIndex；结构化 Diagnostics；保守格式检测（扩展名 + 有界
+  嗅探，Unknown 即要求手选）
+- Formatter 七格式能力矩阵（§46 诚实原则）：JSON（真解析、preserve_order
+  键序保持、递归键排序绝不排序数组）、XML（quick-xml 事件流、well-formed
+  校验、结构保持格式化）、YAML（yaml-rust2 真解析、Sort 带"丢注释"警告）、
+  SQL（词法级、字符串/引号标识符/注释保真）、JS（Minify 安全子集；
+  Format/Validate 诚实 Unsupported）、CSS、Markdown（围栏不可侵犯）；
+  Sort/Normalize 等不可靠能力一律 Unsupported + 原因
+- Compare：前/后缀裁剪 + 有界 LCS（2000²）+ 超窗诚实降级（degraded 标注）；
+  Changed 等长配对 + Moved 全局同键配对；Whitespace 三档 + Unicode 折叠；
+  TooLarge 显式限额；Unified 输出
+- Extractor 八类 + 用户 Regex（Rust regex 线性引擎 ReDoS 安全）：统一
+  ExtractMatch（byte + line + UTF-16 列），source order + 确定性次序，
+  出现次数/唯一值双视图；JSON 平衡扫描 + 语法终验；IPv4/IPv6 实校验
+- Transformer 九操作（纯函数、确定性、行结尾随行携带）；Find/Replace
+  带匹配计数；Rust regex $1 替换契约
+- 安全写回（复用 M2 全套基建，§93/§114）：Plan(TextTransform) → 任务内
+  TOCTOU Revalidate（§90）→ 备份 → weave-files::atomic_write（§91/§92
+  共享写设施）→ 事务/历史；Undo 按 kind 分派——TextTransform 校验写后
+  状态实现 §94（用户改动拒覆盖）；无平行 TextUndoRecord
+- IPC：7 命令（load/format/transform/extract/compare/build_text_write_plan/
+  execute_text_plan）+ TextWriteCache + JobOutcome::TextExecuted；
+  2 MiB 输入上限 + NUL 二进制守卫
+- UI：Text 页四工具面板（格式化/变换/提取/比较），Preview 截断 20k 字符
+  （仅显示，Apply 基于完整内容 §85），写回确认对话框，复制/复制全部；
+  i18n 60 键 zh-CN/en
+
+Quality:
+
+- Rust gates: PASS（clippy --workspace --all-targets -D warnings；cargo deny
+  licenses ok；weave-files 129 / weave-text 64 / core 47 / testkit 11 /
+  src-tauri 18 全绿）
+- Frontend gates: PASS（typecheck / lint / vitest 23）
+- tauri build: PASS（3.17 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — 加载真实 JSON 文件（ascii 13B）
+  → Format 预览（键序保持 + 2 空格）→ 写回确认 → 磁盘 pretty 化（键序不变）
+  → History 撤销 → 磁盘还原为原紧凑内容
+- smoke 抓到并修复 P0：M2 undo 占位检查对"覆盖写"恒冲突（原位必然被占）
+  ⇒ TextTransform 专用还原 + §94 测试×2（weave-files undo_text_tests）
+
+Known Limitations:
+
+- YAML Sort/重序列化丢注释与锚点展开（Warning 如实告知；D43）
+- JS Format/Validate 需真 parser（v1 Unsupported）；JS Minify 的 regex
+  字面量含 `//` 可能误判（D43 记录）
+- SQL Validate 为词法级 + 括号平衡（非完整语法）；Compare 超窗口降级
+  （degraded 标注）
+- Open Folder/File 对话框 D27 挂起沿袭；Text 文件入口 = 路径输入
+- macOS/Linux 运行时未验证（CI windows-latest）
+- （下）范围未做：大文本流式策略细化、任务取消进度展示、错误 UX 文案
+  分层、§115–§136 全测试矩阵——列入"下一步"
 

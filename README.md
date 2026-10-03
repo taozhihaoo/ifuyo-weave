@@ -88,10 +88,24 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
 ## 当前里程碑 / Current Milestone
 
 - **M0 — Foundation** / **M1 — File Core** / **M2 — Rename / Organizer**：COMPLETE
-- **M3 — Duplicate Finder**（进行中）：精确重复检测（三级管线 + 部分哈希
-  候选缩减）、重复组选择（每组至少保留一份）、回收站执行（绝不永久删除）、
-  事务 + 历史 + 回收站还原 Undo。进度见 [PROGRESS.md](PROGRESS.md)，
-  语义见 [docs/file-core.md](docs/file-core.md)。
+- **M0 — Foundation** / **M1 — File Core** / **M2 — Rename / Organizer** /
+  **M3 — Duplicate Finder**：COMPLETE
+- **M4 — Text**（进行中）：格式化（JSON/XML/YAML/SQL/JS/CSS/Markdown，
+  能力矩阵诚实标注）、比较（确定性 diff）、提取（8 类 + 正则）、变换
+  （9 操作）、安全写回（快照 TOCTOU + 备份 + 原子替换 + 历史/撤销）。
+  进度见 [PROGRESS.md](PROGRESS.md)。
+
+## Text Tools 使用流程 / M4 Flow
+
+```text
+粘贴文本 / 按路径加载文件
+  → Format（Validate/Format/Minify/Sort/Normalize，按格式能力）
+  → Transform（Trim/去重/排序/前后缀/大小写/行号/查找替换）
+  → Extract（URL/Email/路径/数字/IPv4/IPv6/JSON/MD 链接/正则）
+  → Compare（A vs B，Side-by-side 统计 + Unified）
+  → Preview（预览无副作用；大文本截断仅影响显示）
+  → 写回（显式确认 + 快照校验 + 备份 + 原子替换 + 历史/撤销）或复制/导出
+```
 
 ## Duplicate Finder 使用流程 / M3 Flow
 

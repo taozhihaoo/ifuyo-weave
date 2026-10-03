@@ -102,6 +102,22 @@ weave-history: 复用 M2 事务/历史（kind = duplicateRecycle）
   token，原位被占 ⇒ UndoConflict 不覆盖（M3 §67）。
 - 语义全文：docs/file-core.md（M3 章节）。
 
+## M4 Text 边界
+
+```text
+m4_commands (IPC) → text_service (编排 + TextWriteCache) → weave-text
+   ├── encoding: 解码级联（BOM/UTF-8/GB18030/Latin-1，零 U+FFFD）
+   ├── model/offset/diagnostics/detection: TextDocument/UTF-16 列契约
+   ├── format/*: 七格式能力矩阵（诚实 Unsupported，§46）
+   ├── transform / extract / compare: 纯函数域引擎
+   └── （写回）weave-files::atomic_write + M2 Plan/Transaction/History/Undo
+```
+
+- **Offset 契约**：域内 byte；IPC = byte + line + UTF-16 列（§18）。
+- **写回**：快照 TOCTOU（§90）→ 备份 → 原子替换；Undo 按 kind 分派
+  （TextTransform 备份还原 + §94 用户改动拒覆盖），无平行 undo 系统。
+- 语义与边界：DECISIONS D38–D43。
+
 ## Tool Contract（charter #24）
 
 ```text

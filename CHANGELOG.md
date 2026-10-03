@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- M4 Text：TextDocument/编码级联（GB18030/GBK/Latin-1，charter #27 补齐）/
+  UTF-16 列 offset 契约；Formatter 七格式能力矩阵（JSON/XML/YAML/SQL/JS/
+  CSS/Markdown，Unsupported 如实标注）；确定性 Compare（LCS 有界窗口 +
+  诚实降级 + Moved 配对 + Unified）；Extractor 八类 + 用户正则（ReDoS
+  安全引擎）；Transformer 九操作；安全写回（TOCTOU 快照 + 备份 + 原子
+  替换 + 历史/撤销，§94 用户改动拒覆盖）；Text UI 四工具面板。
 - M3 Duplicate Finder：精确重复检测（size → partial hash → 全量 SHA-256
   三级管线）、内容派生 GroupId、重复组选择模型（每组至少保留一份）、
   回收站执行（trash crate；绝不永久删除）、扫描快照 TOCTOU 防护

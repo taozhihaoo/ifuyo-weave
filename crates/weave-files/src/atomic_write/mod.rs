@@ -16,17 +16,14 @@ pub fn atomic_write(
     path: &std::path::Path,
     bytes: &[u8],
 ) -> Result<(), WeaveError> {
-    let parent = path.parent().ok_or_else(|| {
-        WeaveError::validation("atomic.noParent", "path has no parent directory")
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| WeaveError::validation("atomic.noParent", "path has no parent directory"))?;
     let file_name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "file".to_string());
-    let temp = parent.join(format!(
-        ".{file_name}.weave-tmp-{}",
-        std::process::id()
-    ));
+    let temp = parent.join(format!(".{file_name}.weave-tmp-{}", std::process::id()));
     // 清理上次残留的同名 temp
     let _ = std::fs::remove_file(&temp);
     {

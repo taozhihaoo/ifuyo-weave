@@ -5,10 +5,10 @@
 //! 由后续里程碑按需加入。
 
 use crate::duplicates_service::ScanCache;
-use crate::text_service::TextWriteCache;
 use crate::jobs::JobTracker;
 use crate::logging::LogGuard;
 use crate::rename_service::PlanCache;
+use crate::text_service::TextWriteCache;
 use weave_core::prelude::ToolRegistry;
 
 pub struct AppState {
