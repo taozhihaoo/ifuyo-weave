@@ -63,3 +63,40 @@ symlink/junction 计入 other_entries，永不跟随。
 - GB18030/GBK/Latin-1 编码检测未实现（M4）
 - 扫描分类不做内容嗅探（扩展名错误的大文件会归 Unknown——符合事实优先）
 - 取消延迟无硬指标（M7 引擎统一）
+
+## Rename / Organizer 语义（M2）
+
+### Plan
+Preview 与 Execute 共用同一结构化 Plan（operationId/kind/items）。Plan 是
+快照：Execute 前逐项 Revalidate（source 存在 + size/mtime 匹配），变化 ⇒
+`rename.sourceChanged` 安全失败，不智能纠正。
+
+### 规则管线（顺序固定）
+规则按用户列表顺序逐条应用（前条输出=后条输入）；模板（若提供）最后
+重组完整最终名并无条件消费扩展名。Counter 整体替换 base；Date 整体替换
+base；Prefix/Suffix/Replace/Regex 仅作用于 base（扩展名保护，§17）。
+排序：完整路径 case-insensitive ASC（§20），序号基于该顺序。
+
+### 碰撞（四类）
+- ExistingTarget：目标已在盘上 ⇒ Conflict（默认 No Overwrite）
+- InternalTarget：批内多条目同目标 ⇒ 全部 Conflict
+- CaseOnly：仅大小写不同 ⇒ Ready（两阶段执行）
+- Cycle：target 是批内另一条目的 source（该条目非 NoOp）⇒ Ready（两阶段）
+- source==target ⇒ NoOp
+
+### 执行
+- 直通条目：Revalidate → rename → verify
+- 两阶段：先全部让位到 `.weave-tmp-{op}-{n}` 唯一临时名，再落到最终名
+- 取消在条目间安全点生效；取消后剩余项 outcome=Cancelled/NotExecuted
+- 事务按**实际应用顺序**记录（含 temp 步），支撑 LIFO Undo
+
+### Undo
+LIFO 逆序 + 占位暂存：原位被同事务待撤销条目占据（swap/cycle）时，
+占据者先暂存到 `.weave-undo-tmp` 并重定向其还原起点。安全检查：
+目标缺失/外部修改（size+mtime）⇒ Missing/UndoConflict，绝不覆盖。
+`leaked_temps` 不变量：全部条目处理后暂存必须清零。
+
+### History
+`%APPDATA%/ifuyo/Weave/history`：entries.json（版本化 schema，容量 500，
+最新在前）+ transactions/{op}.json（InProgress→Completed 两阶段落盘）。
+原子写（temp+rename）；损坏 ⇒ 隔离 *.corrupt-* 并安全降级，绝不阻塞启动。

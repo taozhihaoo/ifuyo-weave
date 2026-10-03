@@ -26,3 +26,25 @@
 
 1 GB+ 文件：未单独测量（同机制线性外推；M3 Duplicate Finder 引入真实大文件
 语料时补测）。前端逐帧渲染开销未在本表（Electron/WebView 层，M11 Polish 复测）。
+
+## M2 Rename / Organizer — 2026-10-04
+
+- 环境同上（release 构建，%TEMP% NTFS）；fixture：1000 文件/目录平铺
+- 方法：Plan 构建 / 执行 / Undo 分别计时；执行含事务记录
+
+| 场景 | 结果 | 备注 |
+| --- | --- | --- |
+| plan 100 files | **5 ms** | |
+| rename 100 + tx | **23 ms**（执行）/ undo **21 ms**（100/100 restored） | |
+| plan 1,000 files | **34 ms** | |
+| rename 1,000 + tx | **234 ms**（执行）/ undo **224 ms**（1000/1000 restored） | ~4.3k renames/s |
+| plan 10,000 files | **509 ms** | |
+| rename 10,000 + tx | **2,532 ms**（执行）/ undo **2,416 ms**（10000/10000 restored, 0 conflicts） | ~4k renames/s；逐条事务持久化在先 |
+| rename 100 MiB file | **<1 ms** | rename 为元数据操作，O(1) 与内容无关 |
+
+对照 charter #68：
+
+- [x] 1 万文件批处理不阻塞 UI（后台任务；2.5s 全程可取消）
+- [x] 取消在条目间安全点即时生效（M1 已测 11ms）
+- [x] 内存：Plan 增量构建 + 事务逐条落盘，无全量内容缓存
+- 10k Plan 的 IPC DTO 序列化未单独测量（前端虚拟化列表 M11 复测）

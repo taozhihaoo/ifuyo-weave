@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- M2 Rename / Organizer：批量重命名（Prefix/Suffix/Replace/Regex/Counter/Date/
+  Case/Extension/Template）、Preview→Confirm→Execute 闭环、四类碰撞检测、
+  两阶段环安全、Organizer 规则整理（first-match-wins + root 边界）、
+  事务 + 持久化历史 + LIFO Undo（swap 暂存）、Open File/Folder 入口。
+
+### Added
 - M1 File Core：weave-files（Filesystem 抽象 + 故障注入、流式 SHA-256、
   有界类型分类与编码检测、File Inspector、Directory Analyzer 增量统计）、
   IPC 命令（inspect/hash/analyze + 任务进度与协作取消）、Inspector/Analyzer UI、
