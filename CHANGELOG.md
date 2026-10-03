@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- M5 Data：CSV/TSV/JSON/JSONL 解析（csv crate + 观测 schema profiling +
+  诚实采样标注）、CSV Studio（分页表格/过滤/排序）、Data Cleaner（有序
+  规则计划：Trim/大小写/填充/去重/拆分/合并/日期与数值归一，Preview-first）、
+  四向转换（嵌套展平/JSON cell/typed 可选/重复表头可见化）、Data
+  Inspector（潜在类型/空值率/精确唯一值——超限 Unavailable）、导出走
+  M4 安全管线（原子写+历史+撤销）。
 - M4 Text：TextDocument/编码级联（GB18030/GBK/Latin-1，charter #27 补齐）/
   UTF-16 列 offset 契约；Formatter 七格式能力矩阵（JSON/XML/YAML/SQL/JS/
   CSS/Markdown，Unsupported 如实标注）；确定性 Compare（LCS 有界窗口 +

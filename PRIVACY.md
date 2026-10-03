@@ -45,6 +45,7 @@ Weave 的隐私边界（charter #19 / M0 §14）。这既是文档也是验收�
 | 网络能力：无（capabilities 未授予任何网络权限，trash 适配器无网络调用） | ✅ | src-tauri/capabilities/default.json |
 | M4：文本全部本机解码/格式化/比较；正则在本进程执行（无 remote hash/远程格式化 API）；历史只记路径与计数不存内容 | ✅ | weave-text / text_service |
 | M4：Regex 引擎 = Rust regex（进程内线性时间），无外部服务 | ✅ | crates/weave-text |
+| M5：数据集全本机解析/清洗/转换；会话 ephemeral 不落盘；历史仅记操作事实不记内容 | ✅ | weave-data / data_service |
 
 ## 验收（随里程碑复核）
 

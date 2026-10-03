@@ -367,3 +367,44 @@ Whitespace Ignore 三档 None/Trailing/All；Case Ignore = Unicode 小写折叠�
   §43；不改列表标记/链接/raw HTML）；Sort = H1/H2 顶层 section 按标题文本
   （§45 opt-in）；Format/Minify/Validate Unsupported（§46）。
 - 默认缩进 2 空格 + final newline（§25，统一全局）。
+
+## D45 — csv crate 选型（M5 §9）
+
+CSV/TSV 解析采用 `csv` 1.4（BurntSushi，MIT/Apache-2.0，§9 指名候选）：
+位置感知错误、引号/多行/转义语义经大规模验证。TSV 复用同一 parser
+（delimiter='	'，§10）。`flexible(true)` 开启后 ragged 由 M5 语义处理
+（§14 补空/保留+诊断），`UnequalLengths` 一旦出现即未知错位 ⇒ Stop。
+incremental `BufRead`（§89）——无 read-all-then-parse。
+
+## D46 — M5 转换语义定案（§51–§62）
+
+- JSON→表：root 必须为对象数组（对象/原始 ⇒ `data.jsonRootObject` /
+  `data.jsonRootNotRecords` 结构化拒绝，不静默包装）；嵌套按点路径展平
+  （`$.profile.age` 同源 §94）；数组 = JSON cell（§54 不展开）；缺失 = 空、
+  null = 空（§31 可配置，v1 默认空串）。
+- 表→JSON：默认全字符串（§55）；Typed 模式推断 Integer/Decimal/Boolean/
+  Null——**前导零绝不推断**（§57），超 i64/u64 整数保留文本（§7 精度
+  优先），Decimal 经 f64（可能精度损失——仅 typed 模式、preview 可见）。
+- 重复 header：解析层 name_2/name_3 可见后缀 + col_N 稳定身份（§58）。
+- JSONL：BufRead 逐行流式（§59）；FailFast / CollectErrors 双模式，
+  valid/invalid/empty 计数 + 行号诊断（§62）；空行跳过并计数。
+- 类型观测：ISO 日期（yyyy-mm-dd）唯一无歧义识别；dd/mm vs mm/dd 不猜
+  （§38）；大写 Decimal 科学计数法识别；前导零 ⇒ String + Identifier-like
+  标注（§6/§57）。
+
+## D47 — DataSession 视图语义（§15–§24）
+
+过滤 = AND 组合的非破坏视图（§20/§21；OR 组 v1 不做——UI 不假装）；
+排序 = 稳定（相等行保原相对顺序，§22）+ null/empty 恒最后（两个方向
+一致，§23/D47 显式决策）；分页由视图切片（§85，页上限 1000 行）；
+行身份 row_N 跟随数据移动（§15）。会话 ephemeral/上限 8 个（§17/§18
+——不是数据库、无持久化、无索引引擎）。
+
+## D48 — M5 限额与导出安全（§69/§88/§104 同源）
+
+DataLimits：输入 32 MiB / 内存 500k 行 / 每页 1000 行 / preview 采样
+50 行 / exact unique 基数 100k（超 ⇒ Unavailable + 原因，§47）/ JSON
+深度 128 / 诊断 1000 条。Export（§69/§71）：只写**新文件**（目标存在
+⇒ `data.destinationExists` 拒绝；覆盖源文件须走 M4 TextTransform 管线
+——TOCTOU/备份/原子替换/历史/Undo 全套复用，§72-§75）； ridden via
+TextTransform Plan ⇒ 历史记录与撤销零成本复用（§93/§114 反向同源）。

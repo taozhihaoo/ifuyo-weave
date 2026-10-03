@@ -118,6 +118,22 @@ m4_commands (IPC) → text_service (编排 + TextWriteCache) → weave-text
   （TextTransform 备份还原 + §94 用户改动拒覆盖），无平行 undo 系统。
 - 语义与边界：DECISIONS D38–D43。
 
+## M5 Data 边界
+
+```text
+data_service (IPC) → weave-data → weave-text / weave-files(atomic_write)
+   ├── csv_parse: csv crate 事件解析 + 头语义/ragged/诊断（D45）
+   ├── json_doc/jsonl: 观测 schema profiling + 流式 JSONL（D46）
+   ├── inspect/convert: potential 类型/唯一值 + 四向转换（D46）
+   ├── session: 非破坏视图 filter/sort/paging（D47）
+   └── transform: DataTransformPlan 有序清洗规则（D46/§79-§81）
+AppState: DataSessions（ephemeral ≤8；§18 不是数据库）
+```
+
+- **复用 M4**：解码级联/诊断/TextLimits 同源纪律/atomic_write/
+  TextTransform 导出管线（§243：无第二套文本 I/O）。
+- **导出只写新文件**：目标存在 ⇒ 拒绝；覆盖源走 M4 管线（§72）。
+
 ## Tool Contract（charter #24）
 
 ```text

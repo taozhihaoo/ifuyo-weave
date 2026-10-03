@@ -95,6 +95,15 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
   （9 操作）、安全写回（快照 TOCTOU + 备份 + 原子替换 + 历史/撤销）。
   进度见 [PROGRESS.md](PROGRESS.md)。
 
+## 数据工具 / Data Tools（M5）
+
+- **CSV Studio**：CSV/TSV 打开、分页表格、过滤/排序（后端执行）、
+  检查器（潜在类型/空值率/精确唯一值——超限如实 Unavailable）
+- **Data Cleaner**：Trim/大小写/填充空值/去重行/日期与数值归一——
+  有序 JSON 规则计划，Preview-first，应用仅改会话
+- **Converter**：JSON ↔ CSV ↔ TSV ↔ JSONL（嵌套展平/JSON cell、
+  typed 可选、重复表头可见化）
+
 ## 文本工具 / Text Tools（M4）
 
 - **Formatter**：JSON / XML / YAML / SQL / JavaScript / CSS / Markdown——
