@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use weave_data::{
     CsvDialect, DataLimits, DataSession, FilterOperator, FilterRule, SortSpec, parse_csv,
-    parse_jsonl, table_to_delimited, table_to_json
+    parse_jsonl, table_to_delimited, table_to_json,
 };
 
 fn parse(src: &str, dialect: &CsvDialect) -> weave_data::CsvParseOutput {

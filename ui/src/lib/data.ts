@@ -95,6 +95,7 @@ export function dataExport(
   includeHeader: boolean,
   typed: boolean,
   lineEnding: "lf" | "crlf",
+  scope: "all" | "view" = "all",
 ): Promise<string> {
   return commands
     .dataExport(sessionId, {
@@ -103,6 +104,7 @@ export function dataExport(
       includeHeader,
       typed,
       lineEnding,
+      scope,
     })
     .then((r) => {
       if (r.status === "ok") return r.data.operationId;

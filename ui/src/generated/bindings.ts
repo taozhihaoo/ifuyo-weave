@@ -138,6 +138,11 @@ export type DataExportOptionsDto = {
 	/**  typed: 仅 json/jsonl 生效（§56）。 */
 	typed: boolean,
 	lineEnding: string,
+	/**
+	 *  §176/§179 导出范围：all = 底表全行；view = 当前过滤/排序视图。
+	 *  UI 必须展示 "N of M rows"（防用户误以为导出了全量）。
+	 */
+	scope: string,
 };
 
 export type DataPageDto = {

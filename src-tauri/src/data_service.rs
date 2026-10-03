@@ -606,6 +606,9 @@ pub struct DataExportOptionsDto {
     /// typed: 仅 json/jsonl 生效（§56）。
     pub typed: bool,
     pub line_ending: String,
+    /// §176/§179 导出范围：all = 底表全行；view = 当前过滤/排序视图。
+    /// UI 必须展示 "N of M rows"（防用户误以为导出了全量）。
+    pub scope: String,
 }
 
 #[tauri::command]
@@ -617,6 +620,8 @@ pub fn data_export(
 ) -> Result<PlanDto, IpcError> {
     let state = app.state::<crate::state::AppState>();
     let mut serialized: Vec<u8> = Vec::new();
+    let mut exported_rows: u64 = 0;
+    let mut total_rows: u64 = 0;
     state.data_sessions.with(&session_id, |s| {
         let mode = if options.typed {
             TypedMode::InferTypes
@@ -628,13 +633,30 @@ pub fn data_export(
             "cr" => weave_data::LineEnding::Cr,
             _ => weave_data::LineEnding::Lf,
         };
+        // §176/§179：scope = view 时仅导出当前过滤/排序视图的行（保持视图
+        // 排序——导出即所见）；scope = all 导出底表全行。
+        let view_rows: Vec<Vec<String>> = if options.scope == "view" {
+            s.view
+                .indices
+                .iter()
+                .filter_map(|&i| s.table.rows.get(i).cloned())
+                .collect()
+        } else {
+            s.table.rows.clone()
+        };
+        exported_rows = view_rows.len() as u64;
+        total_rows = s.table.row_count() as u64;
+        let scoped = weave_data::DataTable {
+            columns: s.table.columns.clone(),
+            rows: view_rows,
+        };
         let text = match options.format.as_str() {
-            "tsv" => table_to_delimited(&s.table, '\t', '"', options.include_header, le),
-            "json" => Ok(
-                serde_json::to_string_pretty(&table_to_json(&s.table, mode)).unwrap_or_default()
-            ),
-            "jsonl" => Ok(table_to_jsonl(&s.table, mode)),
-            _ => table_to_delimited(&s.table, ',', '"', options.include_header, le),
+            "tsv" => table_to_delimited(&scoped, '\t', '"', options.include_header, le),
+            "json" => {
+                Ok(serde_json::to_string_pretty(&table_to_json(&scoped, mode)).unwrap_or_default())
+            }
+            "jsonl" => Ok(table_to_jsonl(&scoped, mode)),
+            _ => table_to_delimited(&scoped, ',', '"', options.include_header, le),
         };
         if let Ok(t) = text {
             serialized = t.into_bytes();
@@ -648,7 +670,8 @@ pub fn data_export(
     }
     weave_core::prelude::validate_absolute_path(&options.destination)?;
 
-    // §70/§71：Export 写新文件。目标已存在 ⇒ 拒绝（防静默覆盖）。
+    // §70/§71/§176：Export 写新文件（scope 决定 all|view 行集）。
+    // 目标已存在 ⇒ 拒绝（防静默覆盖）。
     if std::fs::metadata(&options.destination).is_ok() {
         return Err(err(
             "data.destinationExists",

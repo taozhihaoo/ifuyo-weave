@@ -73,6 +73,10 @@ export function DataPanel({ onOperationDone }: { onOperationDone: () => void }) 
   // convert
   const [destPath, setDestPath] = useState("");
   const [exportFormat, setExportFormat] = useState<"csv" | "tsv" | "json" | "jsonl">("csv");
+  // §176/§179：导出范围显式化——all = 底表全行；view = 当前过滤/排序视图
+  const [exportScope, setExportScope] = useState<"all" | "view">("all");
+
+  const pageTotal = (): number => page?.totalRows ?? 0;
 
   const fail = (e: unknown): void => {
     setError(e instanceof Error ? e.message : String(e));
@@ -184,7 +188,7 @@ export function DataPanel({ onOperationDone }: { onOperationDone: () => void }) 
     if (!page) return;
     setBusy(true);
     setError(null);
-    dataExport(page.sessionId, destPath, exportFormat, true, false, "lf")
+    dataExport(page.sessionId, destPath, exportFormat, true, false, "lf", exportScope)
       .then((operationId) => {
         setStatus(t("data.exporting"));
         return pollExport(operationId).then(() => {
@@ -488,6 +492,31 @@ export function DataPanel({ onOperationDone }: { onOperationDone: () => void }) 
 
           {tab === "convert" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}>
+              <div style={rowStyle}>
+                <span style={{ fontSize: "var(--typography-size-sm)" }}>
+                  {t("data.exportScopeLabel", {
+                    selected:
+                      exportScope === "view" ? (page.totalRows ?? 0) : pageTotal(),
+                    total: pageTotal(),
+                  })}
+                </span>
+              </div>
+              <div style={rowStyle}>
+                <span style={{ fontSize: "var(--typography-size-sm)" }}>
+                  {t("data.exportScope")}
+                </span>
+                {(["all", "view"] as const).map((sc) => (
+                  <label key={sc} style={{ fontSize: "var(--typography-size-sm)" }}>
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={exportScope === sc}
+                      onChange={() => setExportScope(sc)}
+                    />
+                    {t(sc === "all" ? "data.scope.all" : "data.scope.view")}
+                  </label>
+                ))}
+              </div>
               <div style={rowStyle}>
                 <select
                   aria-label={t("data.exportFormat")}
