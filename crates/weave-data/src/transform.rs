@@ -4,6 +4,8 @@
 //! 全部纯逻辑（§81）：输入表 + 计划 ⇒ 输出表 + 诊断；文件写入在应用层。
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 
 use crate::diagnostics::{Basis, DataDiagnostic, DataSeverity};
 use crate::table::DataTable;
@@ -11,6 +13,7 @@ use crate::table::DataTable;
 /// 空值定义（§30/§31：哪些表示计入"空"——绝不默认把 "NULL"/"N/A"/"0"
 /// 与空串混同）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct NullPolicy {
     pub empty_string: bool,
@@ -43,6 +46,7 @@ impl NullPolicy {
 
 /// 清洗规则（§0.3/§28–§37/§40/§32–§34）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum DataTransformRule {
     /// Trim（§32）：left/right/both。
@@ -102,6 +106,7 @@ pub enum DataTransformRule {
 
 /// 清洗计划（§78）：有序 + 确定性 + 可序列化（面向 M10 复用设计）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DataTransformPlan {
     pub rules: Vec<DataTransformRule>,

@@ -8,6 +8,7 @@
 pub mod app_info;
 pub mod commands;
 pub mod config;
+pub mod data_service;
 pub mod duplicates_service;
 pub mod files_dto;
 pub mod jobs;
@@ -54,6 +55,13 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         m4_commands::compare_text,
         m4_commands::build_text_write_plan,
         m4_commands::execute_text_plan,
+        data_service::data_open,
+        data_service::data_page,
+        data_service::data_set_view,
+        data_service::data_inspect_profiles,
+        data_service::data_preview_transform,
+        data_service::data_apply_transform,
+        data_service::data_export,
     ])
 }
 

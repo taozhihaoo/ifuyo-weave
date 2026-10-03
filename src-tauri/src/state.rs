@@ -4,6 +4,7 @@
 //! Tool Registry（统一工具发现）。settings / history / operation manager
 //! 由后续里程碑按需加入。
 
+use crate::data_service::DataSessions;
 use crate::duplicates_service::ScanCache;
 use crate::jobs::JobTracker;
 use crate::logging::LogGuard;
@@ -21,6 +22,8 @@ pub struct AppState {
     pub scans: ScanCache,
     /// M4：文本写回内容缓存（operation_id 为键）。
     pub text_writes: TextWriteCache,
+    /// M5：数据会话（ephemeral，§17）。
+    pub data_sessions: DataSessions,
 }
 
 impl AppState {
@@ -32,6 +35,7 @@ impl AppState {
             plans: PlanCache::new(),
             scans: ScanCache::new(),
             text_writes: TextWriteCache::new(),
+            data_sessions: DataSessions::new(),
         }
     }
 }

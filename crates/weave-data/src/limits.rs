@@ -37,3 +37,22 @@ impl Default for DataLimits {
         }
     }
 }
+
+impl DataLimits {
+    /// 限额检查：超出 ⇒ (message, code)。
+    pub fn check(&self, tool: &'static str, bytes: u64) -> Result<(), (String, &'static str)> {
+        let max = match tool {
+            "document" => self.max_input_bytes,
+            "format" => self.max_input_bytes / 2,
+            _ => self.max_input_bytes,
+        };
+        if bytes > max {
+            Err((
+                format!("input exceeds the {tool} size limit ({max} bytes)"),
+                "text.tooLarge",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}

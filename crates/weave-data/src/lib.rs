@@ -10,6 +10,7 @@
 
 pub mod convert;
 pub mod csv_parse;
+pub use csv;
 pub mod diagnostics;
 pub mod inspect;
 pub mod json_doc;
@@ -23,7 +24,7 @@ pub use convert::{
     FlattenStrategy, TypedMode, json_records_to_table, table_to_delimited, table_to_json,
     table_to_jsonl,
 };
-pub use csv_parse::{CsvDialect, HeaderDecision, parse_csv};
+pub use csv_parse::{CsvDialect, HeaderDecision, detect_header, parse_csv};
 pub use diagnostics::{DataDiagnostic, DataSeverity};
 pub use json_doc::{JsonProfile, JsonRootKind, JsonSchemaPath, profile_json};
 pub use jsonl::{JsonlErrorMode, JsonlReport, parse_jsonl};
@@ -77,3 +78,5 @@ pub struct DataDocument {
     /// 原始字节大小（加载事实）。
     pub source_bytes: u64,
 }
+
+pub use inspect::{UniqueStat, profile_table};

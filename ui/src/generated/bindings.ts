@@ -68,6 +68,17 @@ export const commands = {
 	buildTextWritePlan: (path: string, content: string, encoding: string, bom: string, snapshotSize: number | null, snapshotModifiedMs: number | null, mustNotExist: boolean | null) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_text_write_plan", { path, content, encoding, bom, snapshotSize, snapshotModifiedMs, mustNotExist })),
 	/**  执行写回（任务内 Revalidate → 备份 → 原子写 → 事务/历史）。 */
 	executeTextPlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_text_plan", { operationId })),
+	dataOpen: (path: string, hasHeader: string | null) => typedError<DataPageDto, IpcError>(__TAURI_INVOKE("data_open", { path, hasHeader })),
+	dataPage: (sessionId: string, offset: number | null) => typedError<DataPageDto, IpcError>(__TAURI_INVOKE("data_page", { sessionId, offset })),
+	dataSetView: (sessionId: string, filters: FilterRuleDto[], sort: {
+	columnId: string,
+	descending: boolean,
+	ignoreCase: boolean,
+} | null, offset: number | null) => typedError<DataPageDto, IpcError>(__TAURI_INVOKE("data_set_view", { sessionId, filters, sort, offset })),
+	dataInspectProfiles: (sessionId: string) => typedError<ColumnProfileDto[], IpcError>(__TAURI_INVOKE("data_inspect_profiles", { sessionId })),
+	dataPreviewTransform: (sessionId: string, plan: DataTransformPlan) => typedError<TransformPreviewDto, IpcError>(__TAURI_INVOKE("data_preview_transform", { sessionId, plan })),
+	dataApplyTransform: (sessionId: string, plan: DataTransformPlan) => typedError<DataPageDto, IpcError>(__TAURI_INVOKE("data_apply_transform", { sessionId, plan })),
+	dataExport: (sessionId: string, options: DataExportOptionsDto) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("data_export", { sessionId, options })),
 };
 
 /* Types */
@@ -92,6 +103,96 @@ export type ClassificationDto = {
 	evidence: string,
 	mime: string | null,
 };
+
+export type ColumnProfileDto = {
+	columnId: string,
+	name: string,
+	potentialTypes: string[],
+	nullCount: number | null,
+	totalRows: number | null,
+	/**  exact:N/E 或 unavailable:<reason>（§47 如实）。 */
+	unique: string,
+	uniqueRate: number | null,
+	nullRate: number | null,
+	leadingZeroNumeric: boolean,
+};
+
+export type DataColumnDto = {
+	id: string,
+	name: string,
+};
+
+export type DataDiagnosticDto = {
+	code: string,
+	severity: string,
+	message: string,
+	row: number | null,
+	column: number | null,
+};
+
+export type DataExportOptionsDto = {
+	destination: string,
+	/**  csv | tsv | json | jsonl */
+	format: string,
+	includeHeader: boolean,
+	/**  typed: 仅 json/jsonl 生效（§56）。 */
+	typed: boolean,
+	lineEnding: string,
+};
+
+export type DataPageDto = {
+	sessionId: string,
+	format: string,
+	encoding: string,
+	columns: DataColumnDto[],
+	rows: string[][],
+	rowIds: string[],
+	totalRows: number | null,
+	offset: number | null,
+	diagnostics: DataDiagnosticDto[],
+};
+
+/**  清洗计划（§78）：有序 + 确定性 + 可序列化（面向 M10 复用设计）。 */
+export type DataTransformPlan = {
+	rules: DataTransformRule[],
+};
+
+/**  清洗规则（§0.3/§28–§37/§40/§32–§34）。 */
+export type DataTransformRule = 
+/**  Trim（§32）：left/right/both。 */
+{ type: "trim"; column_id: string; side: string } | 
+/**  大小写归一（§33：lower/upper/title——确定性简单变换，D40 同源）。 */
+{ type: "caseNormalize"; column_id: string; form: string } | 
+/**  Fill Empty（§30）：按 NullPolicy 判空后填充。 */
+{ type: "fillEmpty"; column_id: string; value: string; null_policy?: NullPolicy | null } | 
+/**
+ *  Find / Replace（§34：literal exact ± case；regex 复用 M4 线性引擎
+ *  纪律——escape + 限额）。
+ */
+{ type: "findReplace"; column_id: string; find: string; replace_with: string; regex: boolean; case_sensitive: boolean } | 
+/**
+ *  Column Split（§28）：delimiter + max splits + 新列名；缺 delimiter
+ *  ⇒ 原列保留、新列留空（§28 显式策略）。
+ */
+{ type: "splitColumn"; column_id: string; delimiter: string; max_splits: number; new_names: string[] } | 
+/**  Column Merge（§29）：多列 → 新列；源列默认保留（§29 明示）。 */
+{ type: "mergeColumns"; column_ids: string[]; separator: string; new_name: string } | 
+/**  Column Delete（§26：破坏性——Preview first）。 */
+{ type: "deleteColumn"; column_id: string } | 
+/**  Column Rename（§25：只改显示名）。 */
+{ type: "renameColumn"; column_id: string; new_name: string } | 
+/**  Deduplicate Rows（§35/§36）：列集（空 = 全列）+ Keep First/Last。 */
+{ type: "deduplicateRows"; column_ids: string[]; keep: string } | 
+/**
+ *  Date Normalization（§39）：仅无歧义 yyyy/mm/dd → ISO；歧义 ⇒
+ *  逐格 Anomaly 不猜测（§38）。
+ */
+{ type: "dateNormalizeIso"; column_id: string } | 
+/**
+ *  Numeric Normalization（§40：显式 decimal/thousands 分隔符，§40 禁
+ *  全局逗号替换）。
+ */
+{ type: "numericNormalize"; column_id: string; decimal_separator: string; thousands_separator: string | null };
 
 export type DiffHunkDto = {
 	aStart: number | null,
@@ -217,6 +318,13 @@ export type FileTypeCountDto = {
 	count: number | null,
 };
 
+export type FilterRuleDto = {
+	columnId: string,
+	operator: string,
+	value: string,
+	caseSensitive: boolean,
+};
+
 export type FormatOutcomeDto = {
 	content: string | null,
 	diagnostics: TextDiagnosticDto[],
@@ -277,6 +385,17 @@ export type JobStatusDto = {
 	/**  M3：重复扫描报告。 */
 	duplicateScan: DuplicateScanReportDto | null,
 	error: IpcError | null,
+};
+
+/**
+ *  空值定义（§30/§31：哪些表示计入"空"——绝不默认把 "NULL"/"N/A"/"0"
+ *  与空串混同）。
+ */
+export type NullPolicy = {
+	emptyString: boolean,
+	whitespaceOnly: boolean,
+	/**  显式配置的 null-like token（如 "NULL"、"N/A"）。 */
+	tokens: string[],
 };
 
 export type OrganizerConditionDto = { type: "any" } | { type: "extensionIn"; extensions: string[] } | { type: "nameContains"; text: string } | { type: "namePattern"; pattern: string } | { type: "sizeLargerThan"; bytes: number | null } | { type: "sizeSmallerThan"; bytes: number | null } | { type: "modifiedBefore"; epoch_ms: number | null } | { type: "modifiedAfter"; epoch_ms: number | null };
@@ -370,6 +489,12 @@ export type ScanReportDto = {
 	limitedReason: string | null,
 };
 
+export type SortSpecDto = {
+	columnId: string,
+	descending: boolean,
+	ignoreCase: boolean,
+};
+
 export type TextDiagnosticDto = {
 	code: string,
 	severity: string,
@@ -413,6 +538,16 @@ export type TransactionItemDto = {
 
 /**  变换操作（tagged enum，与 Rust TransformKind 一一对应）。 */
 export type TransformOpDto = { type: "trimLines" } | { type: "trimDocument" } | { type: "deduplicateLines"; keep: string; blank: string } | { type: "sortLines"; descending: boolean; caseSensitive: boolean; blank: string } | { type: "addPrefix"; text: string; skipBlank: boolean } | { type: "addSuffix"; text: string; skipBlank: boolean } | { type: "caseConvert"; form: string } | { type: "numberLines"; start: number | null; step: number | null; separator: string; pad: string } | { type: "findReplace"; find: string; replacement: string; regex: boolean; caseInsensitive: boolean; firstOnly: boolean };
+
+export type TransformPreviewDto = {
+	ok: boolean,
+	columns: DataColumnDto[],
+	/**  Preview 采样（§77：最多 preview_rows 行，明确为 sample）。 */
+	sampleRows: string[][],
+	rowsChanged: number | null,
+	totalRows: number | null,
+	diagnostics: DataDiagnosticDto[],
+};
 
 export type TransformResultDto = {
 	content: string,

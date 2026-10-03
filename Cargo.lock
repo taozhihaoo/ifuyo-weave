@@ -4217,6 +4217,7 @@ dependencies = [
 name = "weave-app"
 version = "0.1.0"
 dependencies = [
+ "csv",
  "encoding_rs",
  "serde",
  "serde_json",
@@ -4230,6 +4231,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "weave-core",
+ "weave-data",
  "weave-files",
  "weave-history",
  "weave-testkit",
@@ -4256,6 +4258,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "specta",
  "weave-core",
  "weave-text",
 ]

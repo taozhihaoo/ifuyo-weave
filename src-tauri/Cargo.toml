@@ -20,6 +20,8 @@ tauri-build = { version = "2", features = [] }
 weave-core = { path = "../crates/weave-core" }
 weave-files = { path = "../crates/weave-files" }
 weave-text = { path = "../crates/weave-text" }
+weave-data = { path = "../crates/weave-data", features = ["specta"] }
+csv = "1.4"
 encoding_rs = { workspace = true }
 weave-history = { path = "../crates/weave-history" }
 tauri = { version = "2", features = [] }
