@@ -6,6 +6,7 @@ import type { IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
 import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
 import { TextPanel } from "../features/text/TextPanel";
+import { DataPanel } from "../features/data/DataPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
 import { RenamePanel } from "../features/ops/RenamePanel";
@@ -42,7 +43,7 @@ function App() {
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
   const [view, setView] = useState<
-    "tools" | "rename" | "organizer" | "duplicates" | "text" | "history"
+    "tools" | "rename" | "organizer" | "duplicates" | "text" | "data" | "history"
   >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
@@ -286,21 +287,23 @@ function App() {
         aria-label={t("app.nav")}
         style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
       >
-        {(["tools", "rename", "organizer", "duplicates", "text", "history"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            aria-current={view === v ? "page" : undefined}
-            style={{
-              ...buttonStyle,
-              background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
-              borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
-            }}
-          >
-            {t(`nav.${v}`)}
-          </button>
-        ))}
+        {(["tools", "rename", "organizer", "duplicates", "text", "data", "history"] as const).map(
+          (v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-current={view === v ? "page" : undefined}
+              style={{
+                ...buttonStyle,
+                background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
+                borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+              }}
+            >
+              {t(`nav.${v}`)}
+            </button>
+          ),
+        )}
       </nav>
 
       <section
@@ -390,6 +393,10 @@ function App() {
             useAppStore.getState().setRecentRoots([...new Set(roots)].slice(0, 5))
           }
         />
+      ) : null}
+
+      {view === "data" ? (
+        <DataPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "history" ? (
