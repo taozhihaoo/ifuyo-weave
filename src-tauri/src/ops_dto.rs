@@ -443,3 +443,22 @@ impl ExecutionReportDto {
         }
     }
 }
+
+// ─── M3：Duplicates 选择与回收 ───
+
+/// 组内回收选择（M3 §52–§56）。
+#[derive(Debug, Clone, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RecycleSelectionDto {
+    pub group_id: String,
+    pub recycle_paths: Vec<String>,
+}
+
+impl RecycleSelectionDto {
+    pub fn into_domain(self) -> weave_files::RecycleSelection {
+        weave_files::RecycleSelection {
+            group_id: self.group_id,
+            recycle_paths: self.recycle_paths,
+        }
+    }
+}

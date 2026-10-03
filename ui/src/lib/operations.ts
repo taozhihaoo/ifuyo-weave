@@ -1,4 +1,11 @@
-import type { IpcError, JobStatusDto, PlanDto, PlanItemDto } from "../generated/bindings";
+import type {
+  DuplicateScanReportDto,
+  IpcError,
+  JobStatusDto,
+  PlanDto,
+  PlanItemDto,
+  RecycleSelectionDto,
+} from "../generated/bindings";
 import { commands } from "../generated/bindings";
 import { pollJob } from "../lib/jobs";
 
@@ -112,7 +119,38 @@ export function undoOperation(operationId: string): Promise<string> {
   });
 }
 
-export type { JobStatusDto, PlanDto, PlanItemDto, IpcError };
+/** M3：重复扫描任务；返回 job id 供轮询（结果在 status.duplicateScan）。 */
+export function scanDuplicates(roots: string[], minSize: number | null): Promise<string> {
+  return commands.scanDuplicates(roots, minSize).then((r) => {
+    if (r.status === "ok") return r.data.jobId;
+    throw new IpcCommandError(r.error);
+  });
+}
+
+/** M3：从扫描结果构建回收计划（Preview，无副作用；scan_id 服务端缓存衔接）。 */
+export function buildRecyclePlan(
+  scanId: string,
+  selections: RecycleSelectionDto[],
+): Promise<{ status: "ok"; data: PlanDto } | { status: "error"; error: IpcError }> {
+  return commands.buildRecyclePlan(scanId, selections);
+}
+
+/** M3：执行已确认的回收计划；返回 job id 供轮询（结果在 status.plan）。 */
+export function executeRecyclePlan(operationId: string): Promise<string> {
+  return commands.executeRecyclePlan(operationId).then((r) => {
+    if (r.status === "ok") return r.data.jobId;
+    throw new IpcCommandError(r.error);
+  });
+}
+
+export type {
+  DuplicateScanReportDto,
+  JobStatusDto,
+  PlanDto,
+  PlanItemDto,
+  RecycleSelectionDto,
+  IpcError,
+};
 
 /** 轮询直到终态；返回停止函数。 */
 export function pollUntilDone(

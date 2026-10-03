@@ -4,6 +4,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listCommands, runCommand } from "../commands/registry";
 import type { IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
+import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
 import { RenamePanel } from "../features/ops/RenamePanel";
@@ -39,7 +40,9 @@ function App() {
     hashStatus,
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
-  const [view, setView] = useState<"tools" | "rename" | "organizer" | "history">("tools");
+  const [view, setView] = useState<"tools" | "rename" | "organizer" | "duplicates" | "history">(
+    "tools",
+  );
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const hashPollStop = useRef<(() => void) | null>(null);
   const scanPollStop = useRef<(() => void) | null>(null);
@@ -201,20 +204,18 @@ function App() {
       }
     } catch (e) {
       // 对话框失败必须可见（本机曾出现插件挂起——见 Known Limitations）。
-      useAppStore
-        .getState()
-        .setError(
-          e instanceof Error
-            ? {
-                kind: "internal",
-                code: "dialog.failed",
-                message: e.message,
-                location: null,
-                recoverability: "retryable",
-                suggestion: null,
-              }
-            : (e as IpcError),
-        );
+      useAppStore.getState().setError(
+        e instanceof Error
+          ? {
+              kind: "internal",
+              code: "dialog.failed",
+              message: e.message,
+              location: null,
+              recoverability: "retryable",
+              suggestion: null,
+            }
+          : (e as IpcError),
+      );
     }
   };
 
@@ -271,7 +272,7 @@ function App() {
         aria-label={t("app.nav")}
         style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
       >
-        {(["tools", "rename", "organizer", "history"] as const).map((v) => (
+        {(["tools", "rename", "organizer", "duplicates", "history"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -357,6 +358,10 @@ function App() {
         <OrganizerPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
+      {view === "duplicates" ? (
+        <DuplicatesPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
       {view === "history" ? (
         <HistoryPanel
           locale={locale}
@@ -379,22 +384,6 @@ function App() {
         >
           {t("drop.hint")}
         </section>
-      ) : null}
-
-      {view === "rename" ? (
-        <RenamePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
-      ) : null}
-
-      {view === "organizer" ? (
-        <OrganizerPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
-      ) : null}
-
-      {view === "history" ? (
-        <HistoryPanel
-          locale={locale}
-          refreshSignal={historyRefresh}
-          onUndoDone={() => setHistoryRefresh((n) => n + 1)}
-        />
       ) : null}
 
       {view === "tools" && inspectError ? (

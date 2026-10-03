@@ -327,6 +327,111 @@ pub struct JobHandleDto {
     pub job_id: String,
 }
 
+/// 重复组内单个文件条目（M3 §33）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateFileEntryDto {
+    pub file_id: String,
+    pub path: String,
+    pub size: f64,
+    pub modified_ms: Option<f64>,
+    pub full_hash: String,
+}
+
+/// 精确重复组（M3 §12）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateGroupDto {
+    pub group_id: String,
+    pub file_count: f64,
+    pub file_size: f64,
+    pub wasted_size: f64,
+    pub files: Vec<DuplicateFileEntryDto>,
+}
+
+/// 重复扫描报告（M3 §29 字段全集；数值 f64（D4）、时间 epoch-ms）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateScanReportDto {
+    pub scan_id: String,
+    pub roots: Vec<String>,
+    pub status: String,
+    pub stage: String,
+    pub duration_ms: f64,
+    pub files_scanned: f64,
+    pub directories_scanned: f64,
+    pub other_entries: f64,
+    pub candidate_files: f64,
+    pub partial_hashed: f64,
+    pub full_hashed: f64,
+    pub duplicate_groups: f64,
+    pub duplicate_files: f64,
+    pub potential_reclaimable_size: f64,
+    pub skipped: f64,
+    pub failed: f64,
+    pub changed_during_scan: f64,
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
+    pub partial_result: bool,
+    pub groups: Vec<DuplicateGroupDto>,
+}
+
+impl DuplicateScanReportDto {
+    pub fn from_report(r: &weave_files::DuplicateScanReport) -> Self {
+        Self {
+            scan_id: r.scan_id.to_string(),
+            roots: r.roots.clone(),
+            status: scan_status_to_str(r.status).to_string(),
+            stage: match r.stage {
+                weave_files::duplicates::ScanStage::Scanning => "scanning",
+                weave_files::duplicates::ScanStage::Filtering => "filtering",
+                weave_files::duplicates::ScanStage::PartialHashing => "partialHashing",
+                weave_files::duplicates::ScanStage::FullHashing => "fullHashing",
+                weave_files::duplicates::ScanStage::Grouping => "grouping",
+                weave_files::duplicates::ScanStage::Completed => "completed",
+            }
+            .to_string(),
+            duration_ms: u64_to_num(r.duration_ms),
+            files_scanned: u64_to_num(r.files_scanned),
+            directories_scanned: u64_to_num(r.directories_scanned),
+            other_entries: u64_to_num(r.other_entries),
+            candidate_files: u64_to_num(r.candidate_files),
+            partial_hashed: u64_to_num(r.partial_hashed),
+            full_hashed: u64_to_num(r.full_hashed),
+            duplicate_groups: u64_to_num(r.duplicate_groups),
+            duplicate_files: u64_to_num(r.duplicate_files),
+            potential_reclaimable_size: u64_to_num(r.potential_reclaimable_size),
+            skipped: u64_to_num(r.skipped),
+            failed: u64_to_num(r.failed),
+            changed_during_scan: u64_to_num(r.changed_during_scan),
+            warnings: r.warnings.clone(),
+            errors: r.errors.clone(),
+            partial_result: r.partial_result,
+            groups: r
+                .groups
+                .iter()
+                .map(|g| DuplicateGroupDto {
+                    group_id: g.group_id.clone(),
+                    file_count: u64_to_num(g.file_count),
+                    file_size: u64_to_num(g.file_size),
+                    wasted_size: u64_to_num(g.wasted_size),
+                    files: g
+                        .files
+                        .iter()
+                        .map(|f| DuplicateFileEntryDto {
+                            file_id: f.file_id.clone(),
+                            path: f.path.clone(),
+                            size: u64_to_num(f.size),
+                            modified_ms: time_to_epoch_ms(f.modified),
+                            full_hash: f.full_hash.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct JobStatusDto {
@@ -340,6 +445,8 @@ pub struct JobStatusDto {
     /// M2：Rename/Organizer 执行（或 Undo 计数）结果。
     pub plan: Option<super::ops_dto::PlanReportDto>,
     pub undo: Option<super::ops_dto::UndoReportDto>,
+    /// M3：重复扫描报告。
+    pub duplicate_scan: Option<DuplicateScanReportDto>,
     pub error: Option<super::commands::IpcError>,
 }
 

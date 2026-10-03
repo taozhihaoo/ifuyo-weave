@@ -210,7 +210,7 @@ pub fn persist_in_progress(history_dir: &std::path::Path, plan: &Plan) -> Result
     store.save_transaction(&tx)
 }
 
-/// Undo：校验事务 → 执行 → 结果。
+/// Undo：校验事务 → 分派（DuplicateRecycle 走回收站恢复，其余走 rename undo）。
 pub fn undo_operation_service(
     history_dir: &std::path::Path,
     operation_id: &OperationId,
@@ -232,8 +232,7 @@ pub fn undo_operation_service(
         )
         .with_location("rename_service::undo"));
     }
-    Ok(weave_files::undo_transaction(
-        std_fs(),
+    Ok(crate::duplicates_service::undo_dispatch(
         &tx,
         cancel,
         on_progress,

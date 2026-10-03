@@ -174,7 +174,7 @@ describe("M1 file core panels", () => {
       hash: null,
       scan: null,
       plan: null,
-      undo: null,
+      undo: null, duplicateScan: null,
       error: null,
     });
     render(<App />);
@@ -190,7 +190,7 @@ describe("M1 file core panels", () => {
       progressCurrent: null,
       hash: null,
       plan: null,
-      undo: null,
+      undo: null, duplicateScan: null,
       scan: {
         scanId: "op_test",
         root: "C:" + BS_CONST + "w",
@@ -238,7 +238,7 @@ describe("M1 file core panels", () => {
       progressCurrent: null,
       hash: null,
       plan: null,
-      undo: null,
+      undo: null, duplicateScan: null,
       scan: {
         scanId: "op_c",
         root: "C:" + BS_CONST + "w",

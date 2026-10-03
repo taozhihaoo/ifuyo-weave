@@ -39,6 +39,21 @@ export const commands = {
 	getHistory: (limit: number | null) => typedError<HistoryEntryDto[], IpcError>(__TAURI_INVOKE("get_history", { limit })),
 	/**  读取某操作的事务详情（Undo 前检查）。 */
 	getOperation: (operationId: string) => typedError<TransactionDto, IpcError>(__TAURI_INVOKE("get_operation", { operationId })),
+	/**
+	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
+	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
+	 */
+	scanDuplicates: (roots: string[], minSize: number | null) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("scan_duplicates", { roots, minSize })),
+	/**
+	 *  从扫描结果构建回收计划（每组保留至少一份；快照来自扫描，M3 §61）。
+	 *  Plan 进服务端缓存，execute 只收 operation_id。
+	 */
+	buildRecyclePlan: (scanId: string, selections: RecycleSelectionDto[]) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_recycle_plan", { scanId, selections })),
+	/**
+	 *  执行已确认的回收计划（任务内 Revalidate + 回收站适配器；
+	 *  事务/历史落盘，undo 经既有 undo_operation 命令）。
+	 */
+	executeRecyclePlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_recycle_plan", { operationId })),
 };
 
 /* Types */
@@ -62,6 +77,49 @@ export type ClassificationDto = {
 	category: string,
 	evidence: string,
 	mime: string | null,
+};
+
+/**  重复组内单个文件条目（M3 §33）。 */
+export type DuplicateFileEntryDto = {
+	fileId: string,
+	path: string,
+	size: number | null,
+	modifiedMs: number | null,
+	fullHash: string,
+};
+
+/**  精确重复组（M3 §12）。 */
+export type DuplicateGroupDto = {
+	groupId: string,
+	fileCount: number | null,
+	fileSize: number | null,
+	wastedSize: number | null,
+	files: DuplicateFileEntryDto[],
+};
+
+/**  重复扫描报告（M3 §29 字段全集；数值 f64（D4）、时间 epoch-ms）。 */
+export type DuplicateScanReportDto = {
+	scanId: string,
+	roots: string[],
+	status: string,
+	stage: string,
+	durationMs: number | null,
+	filesScanned: number | null,
+	directoriesScanned: number | null,
+	otherEntries: number | null,
+	candidateFiles: number | null,
+	partialHashed: number | null,
+	fullHashed: number | null,
+	duplicateGroups: number | null,
+	duplicateFiles: number | null,
+	potentialReclaimableSize: number | null,
+	skipped: number | null,
+	failed: number | null,
+	changedDuringScan: number | null,
+	warnings: string[],
+	errors: string[],
+	partialResult: boolean,
+	groups: DuplicateGroupDto[],
 };
 
 export type FileInspectionDto = {
@@ -145,6 +203,8 @@ export type JobStatusDto = {
 	/**  M2：Rename/Organizer 执行（或 Undo 计数）结果。 */
 	plan: PlanReportDto | null,
 	undo: UndoReportDto | null,
+	/**  M3：重复扫描报告。 */
+	duplicateScan: DuplicateScanReportDto | null,
 	error: IpcError | null,
 };
 
@@ -190,6 +250,12 @@ export type PlanReportDto = {
 /**  `ping` 的应答。真实 IPC 往返，不是前端本地 mock。 */
 export type Pong = {
 	message: string,
+};
+
+/**  组内回收选择（M3 §52–§56）。 */
+export type RecycleSelectionDto = {
+	groupId: string,
+	recyclePaths: string[],
 };
 
 export type RenameRuleDto = { type: "prefix"; text: string } | { type: "suffix"; text: string } | { type: "replace"; find: string; replace_with: string } | { type: "regexReplace"; pattern: string; replacement: string } | { type: "counter"; start: number | null; step: number | null; width: number | null } | { type: "date"; field: string; format: string } | { type: "case"; form: string } | { type: "extension"; new_extension: string } | { type: "template"; template: string };

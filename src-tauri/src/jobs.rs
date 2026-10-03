@@ -28,6 +28,10 @@ pub enum JobOutcome {
         conflicts: f64,
         leaked_temps: f64,
     },
+    /// M3：重复扫描报告（Boxed：报告远大于计数）。
+    DuplicateScan(Box<crate::files_dto::DuplicateScanReportDto>),
+    /// M3：回收执行（复用 PlanReportDto：executed = recycled）。
+    RecycleExecuted(Box<crate::ops_dto::PlanReportDto>),
 }
 
 #[derive(Debug)]
@@ -119,10 +123,12 @@ impl JobTracker {
             map.get(job_id)?.clone()
         };
         let guard = entry.state.lock().expect("job state");
-        let (state, progress_current, hash, scan, plan, undo, error) = match &*guard {
+        let (state, progress_current, hash, scan, plan, undo, duplicate_scan, error) = match &*guard
+        {
             JobState::Running { progress_current } => (
                 "running",
                 Some(*progress_current as f64),
+                None,
                 None,
                 None,
                 None,
@@ -138,12 +144,34 @@ impl JobTracker {
                     None,
                     None,
                     None,
+                    None,
                 ),
                 JobOutcome::Scan(scan) => (
                     "completed",
                     None,
                     None,
                     Some((**scan).clone()),
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                JobOutcome::DuplicateScan(report) => (
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some((**report).clone()),
+                    None,
+                ),
+                JobOutcome::RecycleExecuted(report) => (
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    Some((**report).clone()),
                     None,
                     None,
                     None,
@@ -168,6 +196,7 @@ impl JobTracker {
                     }),
                     None,
                     None,
+                    None,
                 ),
                 JobOutcome::Undo {
                     restored,
@@ -190,9 +219,19 @@ impl JobTracker {
                     }),
                     None,
                     None,
+                    None,
                 ),
             },
-            JobState::Failed(err) => ("failed", None, None, None, None, None, Some(err.clone())),
+            JobState::Failed(err) => (
+                "failed",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(err.clone()),
+            ),
         };
         Some(JobStatusDto {
             job_id: job_id.to_string(),
@@ -202,6 +241,7 @@ impl JobTracker {
             scan,
             plan,
             undo,
+            duplicate_scan,
             error,
         })
     }

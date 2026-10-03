@@ -27,6 +27,10 @@ pub mod scan;
 pub mod undo;
 
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
+pub use duplicates::{
+    DuplicateScanReport, RecycleExecution, RecycleSelection, build_recycle_plan,
+    execute_recycle_plan, scan_duplicates,
+};
 pub use encoding::detect_encoding;
 pub use execute::{ExecutionReport, execute_plan};
 pub use fs::Filesystem;

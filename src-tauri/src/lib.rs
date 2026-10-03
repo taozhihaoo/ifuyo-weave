@@ -8,10 +8,12 @@
 pub mod app_info;
 pub mod commands;
 pub mod config;
+pub mod duplicates_service;
 pub mod files_dto;
 pub mod jobs;
 pub mod logging;
 pub mod m2_commands;
+pub mod m3_commands;
 pub mod ops_dto;
 pub mod rename_service;
 pub mod state;
@@ -39,6 +41,9 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         m2_commands::undo_operation,
         m2_commands::get_history,
         m2_commands::get_operation,
+        m3_commands::scan_duplicates,
+        m3_commands::build_recycle_plan,
+        m3_commands::execute_recycle_plan,
     ])
 }
 

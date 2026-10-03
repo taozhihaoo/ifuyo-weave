@@ -4,6 +4,7 @@
 //! Tool Registry（统一工具发现）。settings / history / operation manager
 //! 由后续里程碑按需加入。
 
+use crate::duplicates_service::ScanCache;
 use crate::jobs::JobTracker;
 use crate::logging::LogGuard;
 use crate::rename_service::PlanCache;
@@ -15,6 +16,8 @@ pub struct AppState {
     pub jobs: JobTracker,
     pub tools: ToolRegistry,
     pub plans: PlanCache,
+    /// M3：重复扫描结果缓存（scan_id 为键，build_recycle_plan 的衔接点）。
+    pub scans: ScanCache,
 }
 
 impl AppState {
@@ -24,6 +27,7 @@ impl AppState {
             jobs: JobTracker::new(),
             tools,
             plans: PlanCache::new(),
+            scans: ScanCache::new(),
         }
     }
 }
