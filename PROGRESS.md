@@ -61,9 +61,51 @@ Known Limitations:
   JS 侧已可见化）；Drop 事件桥本身仍是人工验证项
 - Open File/Folder 按钮（§20）依赖上述对话框插件，本机不可用（同 D27）
 
+## M2 Rename / Organizer
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-core：OperationKind/PlanItemStatus/CollisionKind/ItemOutcome/Plan/PlanItem
+  （charter #10 结构化 Plan；Preview 与 Execute 共用）
+- weave-files：rename 规则引擎（Prefix/Suffix/Replace/Regex/Counter/Date/Case/
+  Extension/Template + 模板最后重组，未知占位符=Plan Error）、Plan 构建器
+  （确定性排序 + 四类碰撞 + 环判定排除 NoOp）、两阶段执行器（TOCTOU
+  Revalidate/逐项失败隔离/取消安全点/事务按实际顺序）、organizer（六类条件 +
+  first-match-wins + root 边界 + 目标目录创建）、undo（LIFO + swap 占位暂存）
+- weave-history：事务（InProgress/Completed 两阶段落盘）+ HistoryEntry、
+  版本化 JSON 存储（原子写/损坏隔离/容量 500）、Undo 拒绝外部变更
+- IPC：build_rename_plan/build_organizer_plan/execute_plan/undo_operation/
+  get_history/get_operation；Plan 服务端缓存（§11 同一 Plan）
+- UI：导航页签 + Rename 面板（规则块/模板/预览表/两步确认）+ Organizer 面板
+  + History 面板（Undo 按钮）；i18n 57 新键
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；workspace 24 套全绿，新增 rename/
+  organize/execute/history 测试：golden、碰撞矩阵、环两阶段+undo、case-only、
+  TOCTOU 三连、取消中段、权限部分成功、跨卷拒绝、损坏历史隔离）
+- Frontend gates: PASS（typecheck/lint/test 23）
+- tauri build: PASS（2.77 MiB NSIS）
+- Real UI smoke（§99，CDP 驱动真实窗口）: PASS — 输入 4 路径 → 模板
+  vacation-{counter}.{ext} → 预览（3 就绪 + 1 NoOp→Ready…实际 4 Ready）→
+  两步确认执行 → 真实磁盘 4 文件重命名成功 → History 显示 "Rename 4 files" →
+  点击撤销 → 真实磁盘 4 文件全部还原
+- 性能（docs/PERF.md）：rename 10k = 2.5s 执行 + 0.5s plan，undo 10k =
+  2.4s（0 conflicts）；100 MiB rename <1ms（元数据操作）
+
+Known Limitations:
+
+- Plan 缓存为内存态：应用重启后需重新 Preview（事务本身已落盘，crash 后
+  InProgress 事务被 Undo 明确拒绝并提示恢复）
+- 跨卷 Move 明确拒绝（D30）；Organizer 非递归
+- 统一规则列表无法表达逐条目不同规则 ⇒ uniform 规则下真环仅 case-only 场景，
+  执行器对真环的支持由手工 Plan 测试覆盖
+
 ## M0 Foundation
 
-Status: COMPLETE（见 git 历史 a47a336 之前的 M0 收口记录）
+Status: COMPLETE（见 git 历史）
 
 ## M2 待办（下一步）
 
