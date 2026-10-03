@@ -15,12 +15,23 @@ export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
 
-/** 翻译：locale 缺 key 时回退 en，再缺则原样返回 key（禁止散落文案，charter #34）。 */
-export function translate(locale: Locale, key: string): string {
-  return resources[locale][key] ?? resources.en[key] ?? key;
+/** 翻译：locale 缺 key 时回退 en，再缺则原样返回 key（禁止散落文案，charter #34）。
+ * params 支持 {name} 形式的占位符插值。 */
+export function translate(
+  locale: Locale,
+  key: string,
+  params?: Record<string, string | number>,
+): string {
+  const raw = resources[locale][key] ?? resources.en[key] ?? key;
+  if (!params) {
+    return raw;
+  }
+  return raw.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match,
+  );
 }
 
-export function useT(): (key: string) => string {
+export function useT(): (key: string, params?: Record<string, string | number>) => string {
   const locale = useAppStore((state) => state.locale);
-  return (key: string) => translate(locale, key);
+  return (key, params) => translate(locale, key, params);
 }

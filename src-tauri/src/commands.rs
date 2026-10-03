@@ -16,7 +16,7 @@ use crate::files_dto::{
 use serde::Serialize;
 use specta::Type;
 use weave_core::prelude::{
-    ErrorKind, PathValidation, Recoverability, WeaveError, validate_absolute_path,
+    ErrorKind, Recoverability, WeaveError, validate_absolute_path,
 };
 
 /// `ping` 的应答。真实 IPC 往返，不是前端本地 mock。
@@ -35,21 +35,6 @@ pub struct AppInfo {
     pub site: String,
     pub version: String,
     pub environment: String,
-}
-
-/// `inspect_path` 的结果。这是 M0 架构探针，不是正式 File Inspector 工具（M0 §38）。
-#[derive(Debug, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct PathProbe {
-    pub requested: String,
-    pub normalized: String,
-    pub exists: bool,
-    pub kind: String,
-    pub name: Option<String>,
-    pub extension: Option<String>,
-    /// IPC 边界用 f64（JSON number 的实际类型，≤2^53 无损）；领域层保持 u64。
-    /// specta-typescript 0.0.12 禁止导出 u64 且无配置项，见 DECISIONS.md。
-    pub size_bytes: Option<f64>,
 }
 
 /// 统一错误在 IPC 边界的 DTO。weave-core 不依赖 specta；
@@ -122,57 +107,6 @@ pub fn get_app_info(app: tauri::AppHandle) -> Result<AppInfo, IpcError> {
         site: brand.site,
         version,
         environment: environment_name().to_string(),
-    })
-}
-
-/// 最小路径探针：validate → metadata → typed result。
-/// 拒绝相对路径、穿越、保留名等一切不安全输入。
-#[tauri::command]
-#[specta::specta]
-pub fn inspect_path(raw_path: String) -> Result<PathProbe, IpcError> {
-    let validation: PathValidation = validate_absolute_path(&raw_path)?;
-    let target = std::path::PathBuf::from(&validation.normalized);
-
-    let metadata = std::fs::metadata(&target).map_err(|e| {
-        let code = match e.kind() {
-            std::io::ErrorKind::NotFound => "path.notFound",
-            std::io::ErrorKind::PermissionDenied => "path.permissionDenied",
-            _ => "path.statFailed",
-        };
-        let error = match e.kind() {
-            std::io::ErrorKind::PermissionDenied => WeaveError::permission(
-                code,
-                format!("cannot stat '{}': {e}", validation.normalized),
-            ),
-            _ => WeaveError::io(
-                code,
-                format!("cannot stat '{}': {e}", validation.normalized),
-            ),
-        };
-        error
-            .with_location("inspect_path")
-            .with_recoverability(Recoverability::UserActionRequired)
-    })?;
-
-    let name = target.file_name().map(|n| n.to_string_lossy().into_owned());
-    let extension = target.extension().map(|e| e.to_string_lossy().into_owned());
-    let kind = if metadata.is_dir() {
-        "directory"
-    } else if metadata.is_file() {
-        "file"
-    } else {
-        "other"
-    };
-
-    tracing::info!(normalized = %validation.normalized, kind, "path inspected");
-    Ok(PathProbe {
-        requested: raw_path,
-        normalized: validation.normalized,
-        exists: true,
-        kind: kind.to_string(),
-        name,
-        extension,
-        size_bytes: metadata.is_file().then_some(metadata.len() as f64),
     })
 }
 

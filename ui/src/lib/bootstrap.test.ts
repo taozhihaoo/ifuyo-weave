@@ -19,8 +19,6 @@ beforeEach(() => {
     appInfo: null,
     ipcStatus: "connecting",
     lastError: null,
-    probe: null,
-    probeError: null,
   });
 });
 

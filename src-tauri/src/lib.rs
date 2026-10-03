@@ -22,7 +22,6 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         commands::ping,
         commands::get_app_info,
-        commands::inspect_path,
         commands::get_app_config,
         commands::set_app_config,
         commands::inspect_file,

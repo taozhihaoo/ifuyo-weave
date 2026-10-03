@@ -10,11 +10,6 @@ export const commands = {
 	ping: () => __TAURI_INVOKE<Pong>("ping"),
 	/**  品牌与应用信息。version 取自真实应用包信息（brand.json versionSource = package）。 */
 	getAppInfo: () => typedError<AppInfo, IpcError>(__TAURI_INVOKE("get_app_info")),
-	/**
-	 *  最小路径探针：validate → metadata → typed result。
-	 *  拒绝相对路径、穿越、保留名等一切不安全输入。
-	 */
-	inspectPath: (rawPath: string) => typedError<PathProbe, IpcError>(__TAURI_INVOKE("inspect_path", { rawPath })),
 	/**  读取应用配置（不存在时返回默认值）。 */
 	getAppConfig: () => typedError<AppConfig, IpcError>(__TAURI_INVOKE("get_app_config")),
 	/**  校验并保存应用配置。 */
@@ -125,21 +120,6 @@ export type JobStatusDto = {
 	hash: HashResultDto | null,
 	scan: ScanReportDto | null,
 	error: IpcError | null,
-};
-
-/**  `inspect_path` 的结果。这是 M0 架构探针，不是正式 File Inspector 工具（M0 §38）。 */
-export type PathProbe = {
-	requested: string,
-	normalized: string,
-	exists: boolean,
-	kind: string,
-	name: string | null,
-	extension: string | null,
-	/**
-	 *  IPC 边界用 f64（JSON number 的实际类型，≤2^53 无损）；领域层保持 u64。
-	 *  specta-typescript 0.0.12 禁止导出 u64 且无配置项，见 DECISIONS.md。
-	 */
-	sizeBytes: number | null,
 };
 
 /**  `ping` 的应答。真实 IPC 往返，不是前端本地 mock。 */
