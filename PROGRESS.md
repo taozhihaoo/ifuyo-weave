@@ -110,14 +110,9 @@ Known Limitations:
 
 Status: COMPLETE（见 git 历史）
 
-## M2 待办（下一步）
+## 下一步 / Next
 
-- Rename / Organizer：OperationTransaction 字段级落地、两阶段重命名、
-  Preview/Collision/Undo/History（Spec/M2 提示词及其补丁条款）
-
----
-
-（后续里程碑按 M2 → M3 → … 追加章节）
+- M4（Spec/ 提示词；GB18030 等编码检测按 D22 在 M4 补齐）
 
 ## M3 Duplicate Finder
 
@@ -155,9 +150,28 @@ Implemented:
 
 Quality:
 
-- Rust gates: PASS（clippy --workspace --all-targets -D warnings；workspace
-  测试全绿：core 47 / weave-files 117（新增 11：管线 9 + 计划校验矩阵 +
-  取消语义 + Revalidate + Undo 畸形/取消路径）/ testkit 11 / src-tauri 18）
+- Rust gates: PASS（clippy --workspace --all-targets -D warnings；cargo deny
+  licenses ok；workspace 24 套全绿：core 47 / weave-files 126 / testkit 11 /
+  src-tauri 18）
+
+（下）补强轮（2026-10-04，提交 de02dfe/7189ee9/ff7674f/10ce6c8）：
+
+- §91 fault 注入矩阵：RecycleAdapter trait 缝隙（§94 平台隔离边界）+
+  不可用/逐条失败/中段取消（适配器可证未被再调用）/Undo 冲突与 Missing
+- §92 集成闭环（spec 定义的"最关键测试组"）：真实 fs 扫描→分组→选择→
+  计划→真实回收站→磁盘验证→HistoryStore 落盘→重开→Undo→内容级还原
+  验证；Unicode（中/日文件名/emoji/括号）+ 嵌套目录；§138 变异不变量
+- §146 真实故障：scan 与 execute 之间删除 source ⇒ sourceNotFound 结构化
+  失败，其余照常回收+还原
+- §88/95/96/137：大小写不污染内容身份、100 文件组不变量、唯一 size 永不
+  进 full hash
+- **P0 修复**：DuplicateFileEntry.path 曾泄漏小写 normalized 路径——
+  Windows 靠大小写不敏感侥幸工作，Linux 上回收/还原会失配；现条目携带
+  原始路径，normalized 仅限内部去重/排序
+- §106/108 入口 UX：Duplicates 页复用全局 Drop 填 roots + 会话内最近根
+  chips（charter #37 不入全局配置）；App.test 里程碑断言改资源驱动
+- §112/129/130/132/134 文档：file-core 崩溃语义、PRIVACY M3 审计表、
+  README 真实使用流程、DECISIONS D37（硬链接/无哈希缓存/顺序管线/排序）
 - Frontend gates: PASS（typecheck / lint / vitest 23）
 - tauri build: PASS（2.85 MiB NSIS）
 - Real UI smoke（§144–§146 闭环，CDP 驱动真实窗口）: PASS — 导航到重复文件页
@@ -176,4 +190,9 @@ Known Limitations:
   跨会话 Undo 退化为 original_path + 时间窗匹配
 - 逐条 recycle_paths 适配器调用为逐条 IFileOperation（Windows 批量上限
   未压测；万级条目场景 M7 批处理引擎统一评估）
+- Open Folder 对话框 D27 挂起（沿袭 P1 BLOCKED）；Duplicates 入口为
+  Drop + 粘贴路径 + 会话最近根（§106 已按现有入口能力适配）
+- 「最近根」为会话态；组列表无虚拟化（基准未证明瓶颈，M11 Polish 复测）
+- macOS / Linux 运行时未验证（CI 为 windows-latest；路径大小写 P0 已修，
+  回收行为按平台适配器隔离，跨平台回收语义未实测——如实标注）
 
