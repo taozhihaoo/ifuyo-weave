@@ -12,6 +12,7 @@ pub mod detection;
 pub mod diagnostics;
 pub mod encoding;
 pub mod extract;
+pub mod format;
 pub mod model;
 pub mod offset;
 pub mod transform;
@@ -35,3 +36,5 @@ pub use compare::{
     CompareError, CompareLimits, CompareOptions, DiffHunk, DiffLine, DiffReport, DiffStats,
     LineChange, WhitespaceMode, compare_texts, unified_diff,
 };
+
+pub use format::{FormatOperation, FormatOptions, FormatOutcome, run_formatter};
