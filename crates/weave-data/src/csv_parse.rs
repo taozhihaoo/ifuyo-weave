@@ -126,6 +126,21 @@ pub fn parse_csv(
     dialect: &CsvDialect,
     limits: &crate::limits::DataLimits,
 ) -> Result<CsvParseOutput, WeaveError> {
+    parse_csv_cancellable(
+        reader,
+        dialect,
+        limits,
+        &weave_core::prelude::CancellationToken::new(),
+    )
+}
+
+/// 可取消版本（§119：大 CSV 扫描必须真取消——每 4096 条检查一次 token）。
+pub fn parse_csv_cancellable(
+    reader: impl Read,
+    dialect: &CsvDialect,
+    limits: &crate::limits::DataLimits,
+    cancel: &weave_core::prelude::CancellationToken,
+) -> Result<CsvParseOutput, WeaveError> {
     let mut builder = csv::ReaderBuilder::new();
     builder
         .delimiter(dialect.delimiter as u8)
@@ -156,7 +171,30 @@ pub fn parse_csv(
     loop {
         match rdr.read_record(&mut record) {
             Ok(true) => {
+                // §119：协作取消（每条记录检查一次；csv crate 单条读取本身
+                // 受 max_cell_bytes 约束有界）
+                if cancel.is_cancelled() {
+                    return Err(WeaveError::cancelled(
+                        "data.cancelled",
+                        format!("csv scan cancelled after {data_rows} data rows"),
+                    )
+                    .with_location("weave-data::parse_csv"));
+                }
                 let cells: Vec<String> = record.iter().map(|c| c.to_string()).collect();
+                // §116 Huge Field：单单元格超限 ⇒ 结构化错误（不静默截断）
+                for cell in &cells {
+                    if cell.len() > limits.max_cell_bytes {
+                        return Err(WeaveError::validation(
+                            "data.cellTooLarge",
+                            format!(
+                                "cell exceeds max cell size ({} bytes > {})",
+                                cell.len(),
+                                limits.max_cell_bytes
+                            ),
+                        )
+                        .with_location("weave-data::parse_csv"));
+                    }
+                }
                 width = width.max(cells.len());
                 if headers.is_none() {
                     if dialect.has_header {
@@ -172,6 +210,18 @@ pub fn parse_csv(
                         format!(
                             "dataset exceeds max rows in memory ({})",
                             limits.max_rows_in_memory
+                        ),
+                    )
+                    .with_location("weave-data::parse_csv"));
+                }
+                // §117 Huge Columns：列数超限 ⇒ Stop（fail safely）
+                if cells.len() > limits.max_columns {
+                    return Err(WeaveError::validation(
+                        "data.tooManyColumns",
+                        format!(
+                            "record has {} columns, exceeding max {}",
+                            cells.len(),
+                            limits.max_columns
                         ),
                     )
                     .with_location("weave-data::parse_csv"));

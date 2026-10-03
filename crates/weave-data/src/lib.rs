@@ -24,7 +24,7 @@ pub use convert::{
     FlattenStrategy, TypedMode, json_records_to_table, table_to_delimited, table_to_json,
     table_to_jsonl,
 };
-pub use csv_parse::{CsvDialect, HeaderDecision, detect_header, parse_csv};
+pub use csv_parse::{CsvDialect, CsvParseOutput, HeaderDecision, detect_header, parse_csv};
 pub use diagnostics::{DataDiagnostic, DataSeverity};
 pub use json_doc::{JsonProfile, JsonRootKind, JsonSchemaPath, profile_json};
 pub use jsonl::{JsonlErrorMode, JsonlReport, parse_jsonl};

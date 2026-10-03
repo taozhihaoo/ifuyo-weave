@@ -1,6 +1,5 @@
-//! 统一限额（M5 上 §88 Memory Budget / §166 同源纪律，与 M4 TextLimits
-//! 分档同思路）：每个核心操作的资源上限集中在此，数值基于本仓库测试
-//! 校准（m5_perf），不随意拍数字。
+//! 统一限额（M5 下 §88/§116/§117 Memory Budget）：每个核心操作的资源
+//! 上限集中在此，数值基于本仓库测试校准（m5_perf），不随意拍数字。
 
 /// 数据操作分档限额。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +20,10 @@ pub struct DataLimits {
     pub max_diagnostics: usize,
     /// Profiling 采样行数（§48）。
     pub profile_sample_rows: usize,
+    /// 最大列数（§117 Huge Columns）。
+    pub max_columns: usize,
+    /// 单单元格字节上限（§116 Huge Field；超出 ⇒ 结构化诊断，截断展示）。
+    pub max_cell_bytes: usize,
 }
 
 impl Default for DataLimits {
@@ -34,6 +37,8 @@ impl Default for DataLimits {
             max_json_depth: 128,
             max_diagnostics: 1_000,
             profile_sample_rows: 50_000,
+            max_columns: 4_096,
+            max_cell_bytes: 8 * 1024 * 1024,
         }
     }
 }
@@ -54,5 +59,18 @@ impl DataLimits {
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn huge_field_and_column_limits_exist() {
+        // §116/§117：Max Cell Length / Max Columns 显式存在
+        let limits = DataLimits::default();
+        assert!(limits.max_cell_bytes > 0);
+        assert!(limits.max_columns > 0);
     }
 }
