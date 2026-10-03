@@ -13,7 +13,7 @@
 pub mod fault;
 pub mod std_fs;
 
-pub use fault::FaultFilesystem;
+pub use fault::{FaultFilesystem, FsFault};
 pub use std_fs::StdFilesystem;
 
 use std::io;

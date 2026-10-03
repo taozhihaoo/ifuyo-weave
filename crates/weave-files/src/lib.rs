@@ -16,6 +16,7 @@ pub mod classify;
 pub mod encoding;
 pub mod fs;
 pub mod hash;
+pub mod inspect;
 pub mod metadata;
 
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
