@@ -4143,6 +4143,12 @@ dependencies = [
 [[package]]
 name = "weave-history"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "weave-core",
+ "weave-testkit",
+]
 
 [[package]]
 name = "weave-media"

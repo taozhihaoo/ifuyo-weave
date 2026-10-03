@@ -3,9 +3,15 @@ name = "weave-history"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Operation history and persistence (M2+, shared)."
+description = "Operation history: transactions, entries, versioned local persistence with atomic writes and corruption quarantine."
 
 [dependencies]
+weave-core = { path = "../weave-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+weave-testkit = { path = "../weave-testkit" }
 
 [lints]
 workspace = true

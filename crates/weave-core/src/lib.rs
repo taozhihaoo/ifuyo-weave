@@ -16,6 +16,7 @@ pub mod cancellation;
 pub mod error;
 pub mod facts;
 pub mod id;
+pub mod operation;
 pub mod path;
 pub mod preview;
 pub mod progress;
@@ -31,6 +32,9 @@ pub mod prelude {
         FileKind, HashAlgorithm, HashResult, HashStatus, ScanStatus, TextEncoding,
     };
     pub use crate::id::{InputKind, JobId, OperationId, ToolCategory, ToolId};
+    pub use crate::operation::{
+        CollisionKind, ItemOutcome, OperationKind, Plan, PlanItem, PlanItemStatus,
+    };
     pub use crate::path::{PathValidation, validate_absolute_path, validate_path};
     pub use crate::preview::{Preview, PreviewItem};
     pub use crate::progress::{OperationStatus, Progress};

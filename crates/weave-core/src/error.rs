@@ -33,7 +33,7 @@ pub enum Recoverability {
 }
 
 /// Weave 统一结构化错误。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeaveError {
     pub kind: ErrorKind,
