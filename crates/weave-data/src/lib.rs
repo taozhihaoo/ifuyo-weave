@@ -15,7 +15,9 @@ pub mod inspect;
 pub mod json_doc;
 pub mod jsonl;
 pub mod limits;
+pub mod session;
 pub mod table;
+pub mod transform;
 
 pub use convert::{
     FlattenStrategy, TypedMode, json_records_to_table, table_to_delimited, table_to_json,
@@ -26,7 +28,9 @@ pub use diagnostics::{DataDiagnostic, DataSeverity};
 pub use json_doc::{JsonProfile, JsonRootKind, JsonSchemaPath, profile_json};
 pub use jsonl::{JsonlErrorMode, JsonlReport, parse_jsonl};
 pub use limits::DataLimits;
+pub use session::{DataSession, DataView, FilterOperator, FilterRule, SortSpec};
 pub use table::{ColumnDefinition, DataTable};
+pub use transform::{DataTransformPlan, DataTransformRule, NullPolicy, apply_plan, validate_plan};
 pub use weave_text::model::LineEnding;
 
 /// 数据格式（§0.2：CSV 与 TSV 在模型层面显式区分，不靠扩展名）。
