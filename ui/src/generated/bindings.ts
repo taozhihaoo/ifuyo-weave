@@ -54,6 +54,20 @@ export const commands = {
 	 *  事务/历史落盘，undo 经既有 undo_operation 命令）。
 	 */
 	executeRecyclePlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_recycle_plan", { operationId })),
+	/**  加载文本文档（解码级联 + 二进制守卫 + 尺寸上限）。 */
+	loadTextDocument: (path: string, encoding: string | null) => typedError<TextDocumentDto, IpcError>(__TAURI_INVOKE("load_text_document", { path, encoding })),
+	/**  Format/Validate/Minify/Sort/Normalize 预览（纯函数，§86）。 */
+	formatText: (format: string, operation: string, content: string, indentSpaces: number | null, finalNewline: boolean | null) => typedError<FormatOutcomeDto, IpcError>(__TAURI_INVOKE("format_text", { format, operation, content, indentSpaces, finalNewline })),
+	/**  Transformer 预览（纯函数）。 */
+	transformText: (content: string, operation: TransformOpDto) => typedError<TransformResultDto, IpcError>(__TAURI_INVOKE("transform_text", { content, operation })),
+	/**  Extractor（含用户 Regex）。 */
+	extractText: (content: string, kind: string, regex: string | null, uniqueValues: boolean | null) => typedError<ExtractMatchDto[], IpcError>(__TAURI_INVOKE("extract_text", { content, kind, regex, uniqueValues })),
+	/**  Compare（Side-by-side 模型 + Unified 输出）。 */
+	compareText: (a: string, b: string, whitespace: string | null, ignoreCase: boolean | null) => typedError<DiffReportDto, IpcError>(__TAURI_INVOKE("compare_text", { a, b, whitespace, ignoreCase })),
+	/**  构建写回计划（内容进服务端缓存；快照随 PlanItem，§90）。 */
+	buildTextWritePlan: (path: string, content: string, encoding: string, bom: string, snapshotSize: number | null, snapshotModifiedMs: number | null) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_text_write_plan", { path, content, encoding, bom, snapshotSize, snapshotModifiedMs })),
+	/**  执行写回（任务内 Revalidate → 备份 → 原子写 → 事务/历史）。 */
+	executeTextPlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_text_plan", { operationId })),
 };
 
 /* Types */
@@ -77,6 +91,38 @@ export type ClassificationDto = {
 	category: string,
 	evidence: string,
 	mime: string | null,
+};
+
+export type DiffHunkDto = {
+	aStart: number | null,
+	aLen: number | null,
+	bStart: number | null,
+	bLen: number | null,
+	lines: DiffLineDto[],
+};
+
+export type DiffLineDto = {
+	change: string,
+	aLine: number | null,
+	bLine: number | null,
+	aText: string,
+	bText: string,
+};
+
+export type DiffReportDto = {
+	hunks: DiffHunkDto[],
+	stats: DiffStatsDto,
+	identical: boolean,
+	degraded: boolean,
+	unified: string,
+};
+
+export type DiffStatsDto = {
+	added: number | null,
+	removed: number | null,
+	changed: number | null,
+	moved: number | null,
+	equal: number | null,
 };
 
 /**  重复组内单个文件条目（M3 §33）。 */
@@ -122,6 +168,17 @@ export type DuplicateScanReportDto = {
 	groups: DuplicateGroupDto[],
 };
 
+export type ExtractMatchDto = {
+	kind: string,
+	value: string,
+	rawValue: string,
+	start: number | null,
+	end: number | null,
+	line: number | null,
+	column: number | null,
+	label: string | null,
+};
+
 export type FileInspectionDto = {
 	status: string,
 	requested: string,
@@ -150,6 +207,12 @@ export type FileLineItemDto = {
 export type FileTypeCountDto = {
 	label: string,
 	count: number | null,
+};
+
+export type FormatOutcomeDto = {
+	content: string | null,
+	diagnostics: TextDiagnosticDto[],
+	changed: boolean,
 };
 
 export type HashResultDto = {
@@ -299,6 +362,27 @@ export type ScanReportDto = {
 	limitedReason: string | null,
 };
 
+export type TextDiagnosticDto = {
+	code: string,
+	severity: string,
+	message: string,
+	rangeStart: number | null,
+	rangeEnd: number | null,
+	line: number | null,
+	column: number | null,
+};
+
+export type TextDocumentDto = {
+	path: string,
+	content: string,
+	encoding: string,
+	bom: string,
+	format: string,
+	byteSize: number | null,
+	modifiedMs: number | null,
+	endsWithNewline: boolean,
+};
+
 export type ToolDescriptorDto = {
 	id: string,
 	category: string,
@@ -317,6 +401,15 @@ export type TransactionItemDto = {
 	sourcePath: string,
 	targetPath: string,
 	status: string,
+};
+
+/**  变换操作（tagged enum，与 Rust TransformKind 一一对应）。 */
+export type TransformOpDto = { type: "trimLines" } | { type: "trimDocument" } | { type: "deduplicateLines"; keep: string; blank: string } | { type: "sortLines"; descending: boolean; case_sensitive: boolean; blank: string } | { type: "addPrefix"; text: string; skip_blank: boolean } | { type: "addSuffix"; text: string; skip_blank: boolean } | { type: "caseConvert"; form: string } | { type: "numberLines"; start: number | null; step: number | null; separator: string; pad: string } | { type: "findReplace"; find: string; replacement: string; regex: boolean; case_insensitive: boolean; first_only: boolean };
+
+export type TransformResultDto = {
+	content: string,
+	matchCount: number | null,
+	removedLines: number | null,
 };
 
 export type UndoReportDto = {

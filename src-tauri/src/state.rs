@@ -5,6 +5,7 @@
 //! 由后续里程碑按需加入。
 
 use crate::duplicates_service::ScanCache;
+use crate::text_service::TextWriteCache;
 use crate::jobs::JobTracker;
 use crate::logging::LogGuard;
 use crate::rename_service::PlanCache;
@@ -18,6 +19,8 @@ pub struct AppState {
     pub plans: PlanCache,
     /// M3：重复扫描结果缓存（scan_id 为键，build_recycle_plan 的衔接点）。
     pub scans: ScanCache,
+    /// M4：文本写回内容缓存（operation_id 为键）。
+    pub text_writes: TextWriteCache,
 }
 
 impl AppState {
@@ -28,6 +31,7 @@ impl AppState {
             tools,
             plans: PlanCache::new(),
             scans: ScanCache::new(),
+            text_writes: TextWriteCache::new(),
         }
     }
 }

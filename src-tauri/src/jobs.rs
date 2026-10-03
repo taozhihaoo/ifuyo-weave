@@ -32,6 +32,8 @@ pub enum JobOutcome {
     DuplicateScan(Box<crate::files_dto::DuplicateScanReportDto>),
     /// M3：回收执行（复用 PlanReportDto：executed = recycled）。
     RecycleExecuted(Box<crate::ops_dto::PlanReportDto>),
+    /// M4：文本写回（复用 PlanReportDto：executed = 1）。
+    TextExecuted(Box<crate::ops_dto::PlanReportDto>),
 }
 
 #[derive(Debug)]
@@ -164,6 +166,16 @@ impl JobTracker {
                     None,
                     None,
                     Some((**report).clone()),
+                    None,
+                ),
+                JobOutcome::TextExecuted(report) => (
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    Some((**report).clone()),
+                    None,
+                    None,
                     None,
                 ),
                 JobOutcome::RecycleExecuted(report) => (

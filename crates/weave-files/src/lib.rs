@@ -12,6 +12,7 @@
 //! 一切文件系统访问经过 [`fs::Filesystem`] 抽象（可测试、可故障注入），
 //! 一切路径先过 `weave_core::path` 校验。本 crate 只报告事实，不推测意图。
 
+pub mod atomic_write;
 pub mod classify;
 pub mod duplicates;
 pub mod encoding;
@@ -26,6 +27,7 @@ pub mod rename;
 pub mod scan;
 pub mod undo;
 
+pub use atomic_write::atomic_write;
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
 pub use duplicates::{
     DuplicateScanReport, RecycleExecution, RecycleSelection, build_recycle_plan,

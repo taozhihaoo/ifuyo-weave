@@ -14,9 +14,12 @@ pub mod jobs;
 pub mod logging;
 pub mod m2_commands;
 pub mod m3_commands;
+pub mod m4_commands;
 pub mod ops_dto;
 pub mod rename_service;
 pub mod state;
+pub mod text_dto;
+pub mod text_service;
 pub mod tools;
 
 use tauri::Manager;
@@ -44,6 +47,13 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
+        m4_commands::load_text_document,
+        m4_commands::format_text,
+        m4_commands::transform_text,
+        m4_commands::extract_text,
+        m4_commands::compare_text,
+        m4_commands::build_text_write_plan,
+        m4_commands::execute_text_plan,
     ])
 }
 

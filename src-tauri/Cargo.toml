@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 weave-core = { path = "../crates/weave-core" }
 weave-files = { path = "../crates/weave-files" }
+weave-text = { path = "../crates/weave-text" }
 weave-history = { path = "../crates/weave-history" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
