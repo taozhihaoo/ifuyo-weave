@@ -17,6 +17,8 @@ pub enum OperationKind {
     Move,
     /// M3：重复文件回收（Move to Recycle Bin）。
     DuplicateRecycle,
+    /// M4：文本工具安全写回（Formatter/Transformer Apply/Save/Overwrite）。
+    TextTransform,
 }
 
 impl OperationKind {
@@ -25,6 +27,7 @@ impl OperationKind {
             OperationKind::Rename => "rename",
             OperationKind::Move => "move",
             OperationKind::DuplicateRecycle => "duplicateRecycle",
+            OperationKind::TextTransform => "textTransform",
         }
     }
 }

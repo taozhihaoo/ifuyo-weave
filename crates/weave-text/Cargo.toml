@@ -6,6 +6,9 @@ license.workspace = true
 description = "Text formatting, comparison, transformation and extraction tools (M4)."
 
 [dependencies]
+weave-core = { path = "../weave-core" }
+encoding_rs = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

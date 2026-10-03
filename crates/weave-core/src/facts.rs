@@ -27,6 +27,13 @@ pub enum TextEncoding {
     Utf16Le,
     Utf16Be,
     Ascii,
+    /// M4（charter #27）：GB 编码族。GB18030 是 GBK 的超集；无 BOM 时
+    /// 检测按"能被 GB18030 严格解码"保守归类，不硬分 GBK（DECISIONS D38）。
+    Gb18030,
+    Gbk,
+    /// M4（charter #27）：Latin-1（ISO-8859-1）——字节到 U+00xx 的无损映射，
+    /// 任何字节序列都可解码，作为兜底时必须如实标注。
+    Latin1,
     /// 无法可靠判断时如实报告 Unknown，不猜测（charter：不伪造）。
     Unknown,
 }

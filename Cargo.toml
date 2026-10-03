@@ -25,6 +25,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 
+# M4 Text：编码解码（Mozilla 维护，Firefox 同源）与结构化格式解析器。
+encoding_rs = "0.8"
+quick-xml = "0.38"
+yaml-rust2 = "0.10"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
