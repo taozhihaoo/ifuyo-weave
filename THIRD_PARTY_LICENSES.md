@@ -25,6 +25,9 @@
 | tracing / tracing-subscriber / tracing-appender | 日志 | MIT |
 | sha2 (RustCrypto) | SHA-256 流式哈希 | MIT OR Apache-2.0 |
 | trash | 回收站适配（Windows IFileOperation，MIT，M3/D34） | MIT |
+| encoding_rs | 文本解码级联（Mozilla/Firefox 同源，M4/D38） | MIT OR Apache-2.0 |
+| quick-xml | XML 事件流解析（MIT/Apache-2.0，M4/D43） | MIT OR Apache-2.0 |
+| yaml-rust2 | YAML 真解析（MIT/Apache-2.0，维护中替代 archived serde_yaml，M4/D43） | MIT OR Apache-2.0 |
 | regex | 重命名规则正则（M2/D28） | MIT OR Apache-2.0 |
 | chrono | 日期重命名规则（M2/D28） | MIT OR Apache-2.0 |
 | react / react-dom | UI | MIT |

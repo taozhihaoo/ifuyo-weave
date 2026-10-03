@@ -95,6 +95,15 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
   （9 操作）、安全写回（快照 TOCTOU + 备份 + 原子替换 + 历史/撤销）。
   进度见 [PROGRESS.md](PROGRESS.md)。
 
+## 文本工具 / Text Tools（M4）
+
+- **Formatter**：JSON / XML / YAML / SQL / JavaScript / CSS / Markdown——
+  Validate / Format / Minify / Sort / Normalize 按格式真实能力提供
+  （能力矩阵与边界见 [docs/text.md](docs/text.md)）
+- **Compare**：A vs B 确定性 diff（Added/Removed/Changed/Moved + Unified）
+- **Extractor**：URL / Email / 路径 / 数字 / IPv4 / IPv6 / JSON / MD 链接 / 正则
+- **Transformer**：Trim / 去重 / 排序 / 前后缀 / 大小写 / 行号 / 查找替换
+
 ## Text Tools 使用流程 / M4 Flow
 
 ```text

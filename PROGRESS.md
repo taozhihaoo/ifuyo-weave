@@ -112,8 +112,8 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M4（下）收尾：大文本策略/取消与进度/错误 UX 细化、测试矩阵补全
-  （下 §115–§136）
+- M5（Spec/M5（上）（下）；JSON as data / CSV / TSV——必须复用 M4 文本
+  基座 Encoding/TextDocument/Diagnostics，§243 Handoff）
 
 ## M3 Duplicate Finder
 
@@ -199,7 +199,7 @@ Known Limitations:
 
 ## M4 Text
 
-Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+Status: COMPLETE
 
 Implemented:
 
@@ -257,6 +257,15 @@ Known Limitations:
   （degraded 标注）
 - Open Folder/File 对话框 D27 挂起沿袭；Text 文件入口 = 路径输入
 - macOS/Linux 运行时未验证（CI windows-latest）
-- （下）范围未做：大文本流式策略细化、任务取消进度展示、错误 UX 文案
-  分层、§115–§136 全测试矩阵——列入"下一步"
+- （下）补强轮（2026-10-04，提交 df7139d/ee1bb20/e396b8d/096893e + 本笔）：
+  TextLimits 分档限额（§104/§166）；auto 检测移服务端（§112）；二进制守卫
+  加固（§103）；Drop 文件直接加载（§102）；Compare 选项 UI + Empty State +
+  提取计数/截断标注（§146/§160/§185）；Save-As + collision 双检（§88/§132）；
+  golden 7 基线（审阅抓出 XML 括号缺失/SQL 缩进双写两个真 bug）+ 性质 9 +
+  畸形 6（§126-129/§181-184）；文件级集成 5（§131-135）；**性能证据抓到
+  Compare P1（100k 全不同 169.6s → 102ms，HashMap 配对修复）**；
+  docs/text.md 工具文档 + SECURITY.md M4 专项（§209/§215）
+- （下）遗留（如实）：预览为同步有界计算（限额使最坏延迟小，D44 决策）；
+  写回任务取消经错误码映射为"已取消"（§108 等价实现）；1M 行实测与 100k
+  同机制（fixture 复用），真实 1M 列入 M7 场景；macOS/Linux 未实测
 
