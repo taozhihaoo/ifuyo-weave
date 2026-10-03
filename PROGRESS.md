@@ -112,8 +112,7 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M5（下）收尾：Viewer 虚拟滚动细化、Anomaly Discovery 规则扩展、
-  转换选项 UI 化、性能场景补全（下 §115+ 测试矩阵）
+- M6（Spec/M6（上）（下）；Image 工具）
 
 ## M3 Duplicate Finder
 
@@ -271,7 +270,7 @@ Known Limitations:
 
 ## M5 Data
 
-Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+Status: COMPLETE
 
 Implemented:
 
@@ -320,3 +319,21 @@ Known Limitations:
 - OR 过滤组、日期 locale 归一（非 ISO 输入）v1 不做（显式 NOT SUPPORTED）
 - 预览为同步有界计算（限额使最坏延迟小，D44）
 - （下）范围：§115+ 完整测试矩阵、Viewer 虚拟滚动、Anomaly 扩展
+
+### M5（下）补强轮（2026-10-04，提交 9aa0d10/f0a11f9/faf35db/9038b56/299abd3+）
+
+- §116-§118 巨限守卫：max_columns 4096 / max_cell 8 MiB ⇒ 结构化
+  `data.tooManyColumns` / `data.cellTooLarge`（fail safely）
+- §119 取消：`parse_csv_cancellable` 每 record 检查 token ⇒
+  `data.cancelled`（真取消，非假按钮）
+- 回归套件（§126-§138）：CJK/emoji 往返、escaping 往返（语义等价
+  §129/§130）、数值永不强转（§131）、行列边界、会话确定性/稳定性
+  （§121/§124）、JSONL 错误预算（§118）——weave-data 7 integration
+- §176/§179 导出范围：all | view（view = 过滤/排序后所见即所得）+
+  UI "Exporting X of Y rows" 明示；data_close 会话关闭（§146 LRU+last-
+  used，§147 隔离）
+- 性能证据（§157-§161）：CSV scan 100k 17ms / filter 10ms / sort 16ms；
+  JSONL 100k 48ms；csv→json 83ms；PERF.md M5 节
+- docs/DATA_FORMATS.md（§192 每格式语义/限额/边界）
+- 已知边界（如实）：大文件 open 仍同步（< 限额最坏延迟有界，D44）；
+  OR 过滤组 / 非 ISO 日期归一 / 真实 1M 行未做（显式 NOT SUPPORTED）
