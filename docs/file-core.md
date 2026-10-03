@@ -157,5 +157,20 @@ recursive scan（复用 M1 symlink 不跟随 / 访问集防环策略）
 扫描报告以 scan_id、Plan 以 operation_id 缓存于服务端内存（应用重启
 失效，结构化错误提示重扫/重建）；快照不过 IPC（同 M2 PlanCache 纪律）。
 
+### Crash / 中断语义（§112）
+
+执行前以 InProgress 事务落盘（复用 M2 两阶段纪律）；崩溃遗留的
+InProgress 事务被 Undo 明确拒绝（`undo.incompleteTransaction`）。
+事务只记录**真实发生**的回收（§111）：failed/取消条目以 NotExecuted
+如实入账，绝不把"计划 N 条"写成"成功 N 条"。
+
+### 入口（§106）
+
+复用统一 Drag & Drop（Duplicates 页落目录即填入 roots）+ 会话内
+最近根目录（不持久化）；Open Folder 对话框因 D27（plugin-dialog 本机
+挂起）暂不可用。
+
 已知限制：回收站恢复依赖 Windows 回收站可枚举（`trash` crate
-os_limited）；用户清空回收站后 Undo 如实报告 Missing。
+os_limited）；用户清空回收站后 Undo 如实报告 Missing；硬链接的两条
+路径按内容事实归入同组，回收其中一条不影响另一条（不做硬链接豁免，
+见 DECISIONS D37）；「最近根目录」为会话态，重启不保留。

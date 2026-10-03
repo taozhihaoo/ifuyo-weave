@@ -258,3 +258,23 @@ scan_duplicates 的报告以 scan_id 缓存服务端内存；build_recycle_plan
 IPC，天然满足"Preview 与 Execute 同一快照"。内存态：重启后 scan_id
 失效 ⇒ `duplicates.scanUnknownOrExpired`（提示重扫）；大报告驻留
 内存的规模边界与 PlanCache 一致（会话级，M7 Job 持久化时统一评估）。
+
+## D37 — M3 语义定案：硬链接 / 无哈希缓存 / 顺序管线 / 结果排序
+
+- **Exact Duplicate 定义**：size 相同且完整 SHA-256 相同（M3 §2）。工程判定
+  基于密码学哈希，不宣称数学绝对证明；文件名/mtime/扩展名不参与判定，
+  路径大小写不污染内容身份（§95，A.TXT 与 a.txt 内容相同即重复——有测试）。
+- **硬链接语义**：同一内容的两条硬链接路径 size/hash 一致 ⇒ 如实报告为
+  同组重复。回收其中一条不影响另一条（回收站按路径操作）；不检测
+  硬链接关系、不做去重豁免——诚实呈现事实，避免智能猜测。
+- **符号链接语义**：复用 M1 策略——不跟随 symlink/junction（other_entries
+  计数），访问集防环（§139 scope 不逃逸）。
+- **无哈希缓存**：M3 不建持久 hash 缓存/索引（§99/§104 防 premature
+  optimization）。每次 Scan 重新验证文件系统（§100 Repeat Scan 语义）；
+  ScanCache 只是单次扫描报告的会话内快照，不是内容缓存。
+- **顺序管线**：三级管线单线程顺序执行。Scenario A–D 实测证明当前
+  瓶颈是 I/O 而非 CPU（D 场景 1.56 GiB/s）；并行化（rayon 等）留待
+  实测证明需要时再评估（§104）。
+- **结果排序**：组按 wasted_size DESC（展示策略）；组内文件按规范化
+  路径 case-insensitive 升序；GroupId = "grp_{hash16}" 内容派生——
+  三者共同保证结果确定性（不依赖 OS 枚举顺序，有 r1/r2 测试）。

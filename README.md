@@ -93,6 +93,18 @@ MIT OR Apache-2.0（双许可，见 LICENSE-MIT / LICENSE-APACHE）。
   事务 + 历史 + 回收站还原 Undo。进度见 [PROGRESS.md](PROGRESS.md)，
   语义见 [docs/file-core.md](docs/file-core.md)。
 
+## Duplicate Finder 使用流程 / M3 Flow
+
+```text
+拖入 / 粘贴目录 → Scan 扫描（size → partial hash → full SHA-256）
+  → 按组查看重复文件 → 勾选要回收的文件（每组至少保留一份）
+  → 生成回收计划（Preview）→ 确认（明确告知：移入系统回收站，可撤销）
+  → Recycle 执行 → 结果统计 → History 历史 → Undo（从回收站还原）
+```
+
+Weave 不做"一键清理磁盘"式的承诺：扫描结果只是事实，回收什么由用户逐项
+决定；每组必须保留至少一份；扫描后被改动的文件会被拒绝回收。
+
 ## 已知限制 / Known Limitations
 
 - Text / Data / Image / PDF 等上层工具尚未实现——按 M4–M11 里程碑推进
