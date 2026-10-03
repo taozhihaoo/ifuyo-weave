@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { translate } from "../i18n";
 import { useAppStore } from "../stores/appStore";
 
 const mocks = vi.hoisted(() => ({
@@ -63,7 +64,8 @@ describe("App shell (M0 §8.2)", () => {
     expect(screen.getByRole("heading", { name: "Weave" })).toBeTruthy();
     expect(screen.getByText(/ifuyo/)).toBeTruthy();
     expect(screen.getByText(/v0\.1\.0/)).toBeTruthy();
-    expect(screen.getByText("M1 File Core")).toBeTruthy();
+    // milestone 文案随 i18n 资源演进：断言资源键有翻译即可，不锚定字面值
+    expect(screen.getByText(translate("zh-CN", "app.milestone"))).toBeTruthy();
   });
 
   it("renders IPC connection status from real state", () => {
@@ -87,7 +89,8 @@ describe("App shell (M0 §8.2)", () => {
     await vi.waitFor(() => {
       expect(useAppStore.getState().locale).toBe("en");
     });
-    expect(screen.getByText("M1 File Core")).toBeTruthy();
+    // 切语言后 milestone 文案取自 en 资源（非硬编码拷贝）
+    expect(screen.getByText(translate("en", "app.milestone"))).toBeTruthy();
   });
 
   it("renders an error state with code and suggestion when present", () => {
@@ -174,7 +177,8 @@ describe("M1 file core panels", () => {
       hash: null,
       scan: null,
       plan: null,
-      undo: null, duplicateScan: null,
+      undo: null,
+      duplicateScan: null,
       error: null,
     });
     render(<App />);
@@ -190,7 +194,8 @@ describe("M1 file core panels", () => {
       progressCurrent: null,
       hash: null,
       plan: null,
-      undo: null, duplicateScan: null,
+      undo: null,
+      duplicateScan: null,
       scan: {
         scanId: "op_test",
         root: "C:" + BS_CONST + "w",
@@ -238,7 +243,8 @@ describe("M1 file core panels", () => {
       progressCurrent: null,
       hash: null,
       plan: null,
-      undo: null, duplicateScan: null,
+      undo: null,
+      duplicateScan: null,
       scan: {
         scanId: "op_c",
         root: "C:" + BS_CONST + "w",

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type {
   DuplicateGroupDto,
   DuplicateScanReportDto,
@@ -17,6 +17,13 @@ import {
 
 interface DuplicatesPanelProps {
   onOperationDone: (operationId: string, undoable: boolean) => void;
+  /** 会话内最近成功扫描的根目录（§106 Recent Root；会话态，不入全局配置）。 */
+  recentRoots: string[];
+  /** 全局 Drop 落到本页的目录（§106 复用统一 Drag & Drop，不造第二套）。 */
+  seedFolder: string | null;
+  onSeedConsumed: () => void;
+  /** 扫描成功后回传 roots（App 层写会话 recentRoots）。 */
+  onScanCompleted: (roots: string[]) => void;
 }
 
 interface RecycleResult {
@@ -58,7 +65,13 @@ function fileRowStyle(selected: boolean): CSSProperties {
  *
  * 安全边界（M3）：唯一动作 = Move to Recycle Bin（可撤销）；
  * 每组至少保留一份；执行前服务端 Revalidate（扫描后改动 ⇒ 拒绝该条目）。 */
-export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
+export function DuplicatesPanel({
+  onOperationDone,
+  recentRoots,
+  seedFolder,
+  onSeedConsumed,
+  onScanCompleted,
+}: DuplicatesPanelProps) {
   const t = useT();
   const [rootsText, setRootsText] = useState("");
   const [minSizeText, setMinSizeText] = useState("0");
@@ -76,6 +89,28 @@ export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+
+  // §106：统一 Drop 入口落进本页的目录 → 追加到 roots（去重，不覆盖已输入）。
+  // setState 经定时器回调执行——effect 体内同步 setState 会触发级联渲染告警。
+  useEffect(() => {
+    if (!seedFolder) {
+      return;
+    }
+    const id = setTimeout(() => {
+      setRootsText((prev) => {
+        const lines = prev
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        if (lines.includes(seedFolder)) {
+          return prev;
+        }
+        return lines.length > 0 ? `${prev.trimEnd()}\n${seedFolder}` : seedFolder;
+      });
+      onSeedConsumed();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [seedFolder, onSeedConsumed]);
 
   const doScan = (): void => {
     setBusy(true);
@@ -95,6 +130,12 @@ export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
             setScanning(false);
             const dup = status.duplicateScan;
             if (dup) {
+              onScanCompleted(
+                rootsText
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .filter((l) => l.length > 0),
+              );
               setReport(dup);
               // 预选：每组保留首个，其余勾选（wasted 语义的默认选择）。
               const auto: Record<string, string[]> = {};
@@ -260,6 +301,50 @@ export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
         }}
       />
 
+      {recentRoots.length > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--spacing-xs)",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+            {t("duplicates.recent")}
+          </span>
+          {recentRoots.map((root) => (
+            <button
+              key={root}
+              type="button"
+              title={root}
+              onClick={() =>
+                setRootsText((prev) => {
+                  const lines = prev
+                    .split("\n")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
+                  if (lines.includes(root)) {
+                    return prev;
+                  }
+                  return lines.length > 0 ? `${prev.trimEnd()}\n${root}` : root;
+                })
+              }
+              style={{
+                ...boxStyle,
+                maxWidth: "24em",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: "var(--typography-size-sm)",
+              }}
+            >
+              {root}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "flex",
@@ -350,7 +435,8 @@ export function DuplicatesPanel({ onOperationDone }: DuplicatesPanelProps) {
       {plan && !confirming ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}>
           <div>
-            {t("duplicates.planReady", { count: plan.readyCount ?? 0 })} · {formatBytes(selectedBytes)}
+            {t("duplicates.planReady", { count: plan.readyCount ?? 0 })} ·{" "}
+            {formatBytes(selectedBytes)}
           </div>
           <button
             type="button"

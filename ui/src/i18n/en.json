@@ -153,5 +153,6 @@
   "duplicates.undo": "Undo recycle (restore from Recycle Bin)",
   "duplicates.undoing": "Undoing…",
   "duplicates.fileSizeEach": "{size} each",
-  "duplicates.execute": "Send to Recycle Bin"
+  "duplicates.execute": "Send to Recycle Bin",
+  "duplicates.recent": "Recent roots:"
 }

@@ -44,6 +44,9 @@ function App() {
     "tools",
   );
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
+  const [dupSeedFolder, setDupSeedFolder] = useState<string | null>(null);
+  const recentRoots = useAppStore((s) => s.recentRoots);
   const hashPollStop = useRef<(() => void) | null>(null);
   const scanPollStop = useRef<(() => void) | null>(null);
 
@@ -109,7 +112,12 @@ function App() {
           return;
         }
         if (result.data.kind === "directory") {
-          startScan(result.data.normalizedPath);
+          if (view === "duplicates") {
+            // §106：Duplicates 页复用全局 Drop 作为扫描根入口，不另造第二套。
+            setDupSeedFolder(result.data.normalizedPath);
+          } else {
+            startScan(result.data.normalizedPath);
+          }
         } else {
           useAppStore.getState().setInspection(result.data);
         }
@@ -359,7 +367,15 @@ function App() {
       ) : null}
 
       {view === "duplicates" ? (
-        <DuplicatesPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+        <DuplicatesPanel
+          onOperationDone={() => setHistoryRefresh((n) => n + 1)}
+          recentRoots={recentRoots}
+          seedFolder={dupSeedFolder}
+          onSeedConsumed={() => setDupSeedFolder(null)}
+          onScanCompleted={(roots) =>
+            useAppStore.getState().setRecentRoots([...new Set(roots)].slice(0, 5))
+          }
+        />
       ) : null}
 
       {view === "history" ? (

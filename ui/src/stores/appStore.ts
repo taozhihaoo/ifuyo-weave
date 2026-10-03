@@ -34,8 +34,12 @@ interface AppState {
   hashJob: ActiveJob | null;
   hashStatus: JobStatusDto | null;
   hashResult: HashResultDto | null;
+  // M3：会话内最近使用的重复扫描根目录（charter #37：工具参数不入全局配置，
+  // 这里只是 UI 会话态，重启即清）。
+  recentRoots: string[];
 
   setLocale: (locale: Locale) => void;
+  setRecentRoots: (roots: string[]) => void;
   setTheme: (theme: Theme) => void;
   setAppInfo: (info: AppInfoDto) => void;
   setIpcStatus: (status: IpcStatus) => void;
@@ -68,7 +72,9 @@ export const useAppStore = create<AppState>((set) => ({
   hashJob: null,
   hashStatus: null,
   hashResult: null,
+  recentRoots: [],
   setLocale: (locale) => set({ locale }),
+  setRecentRoots: (recentRoots) => set({ recentRoots }),
   setTheme: (theme) => set({ theme }),
   setAppInfo: (appInfo) => set({ appInfo }),
   setIpcStatus: (ipcStatus) => set({ ipcStatus }),

@@ -153,5 +153,6 @@
   "duplicates.undo": "撤销回收（从回收站还原）",
   "duplicates.undoing": "撤销中…",
   "duplicates.fileSizeEach": "单文件 {size}",
-  "duplicates.execute": "执行回收"
+  "duplicates.execute": "执行回收",
+  "duplicates.recent": "最近使用："
 }
