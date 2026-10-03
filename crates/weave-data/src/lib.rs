@@ -8,19 +8,26 @@
 //! 核心纪律（§5/§7）：CSV 单元格是**原始文本**；类型只是 potential 观测；
 //! 整数精度不得因 f64 转换静默丢失——保留原始文本或显式报告。
 
+pub mod convert;
 pub mod csv_parse;
 pub mod diagnostics;
+pub mod inspect;
 pub mod json_doc;
 pub mod jsonl;
 pub mod limits;
 pub mod table;
 
+pub use convert::{
+    FlattenStrategy, TypedMode, json_records_to_table, table_to_delimited, table_to_json,
+    table_to_jsonl,
+};
 pub use csv_parse::{CsvDialect, HeaderDecision, parse_csv};
 pub use diagnostics::{DataDiagnostic, DataSeverity};
 pub use json_doc::{JsonProfile, JsonRootKind, JsonSchemaPath, profile_json};
 pub use jsonl::{JsonlErrorMode, JsonlReport, parse_jsonl};
 pub use limits::DataLimits;
 pub use table::{ColumnDefinition, DataTable};
+pub use weave_text::model::LineEnding;
 
 /// 数据格式（§0.2：CSV 与 TSV 在模型层面显式区分，不靠扩展名）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
