@@ -57,9 +57,14 @@ pub fn validate(content: &str) -> FormatOutcome {
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut stack: Vec<Vec<u8>> = Vec::new();
+    let mut saw_root = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => stack.push(e.name().as_ref().to_vec()),
+            Ok(Event::Start(e)) => {
+                saw_root = true;
+                stack.push(e.name().as_ref().to_vec());
+            }
+            Ok(Event::Empty(_)) => saw_root = true,
             Ok(Event::End(e)) => {
                 let name = e.name().as_ref().to_vec();
                 match stack.pop() {
@@ -107,6 +112,14 @@ pub fn validate(content: &str) -> FormatOutcome {
             format!("unclosed element <{}>", String::from_utf8_lossy(open)),
         )]);
     }
+    if !saw_root {
+        // XML 规范：文档必须有唯一根元素（空输入不是合法 XML 文档）
+        return FormatOutcome::failed(vec![TextDiagnostic::without_range(
+            "text.xmlNoRoot",
+            Severity::Error,
+            "XML document requires a root element",
+        )]);
+    }
     FormatOutcome::success(None, false)
 }
 
@@ -126,7 +139,9 @@ pub fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
         match ev {
             Event::Start(e) => {
                 newline_indent(&mut out, &indent, depth, inline_text);
+                out.push('<');
                 out.push_str(&String::from_utf8_lossy(e.as_ref()));
+                out.push('>');
                 depth += 1;
                 inline_text = false;
             }
@@ -169,7 +184,7 @@ pub fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
                 inline_text = false;
             }
             Event::Decl(d) => {
-                out.push_str("<?xml");
+                out.push_str("<?");
                 out.push_str(&String::from_utf8_lossy(d.as_ref()));
                 out.push_str("?>\n");
                 inline_text = false;
@@ -182,7 +197,9 @@ pub fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
             }
             Event::Empty(e) => {
                 newline_indent(&mut out, &indent, depth, inline_text);
+                out.push('<');
                 out.push_str(&String::from_utf8_lossy(e.as_ref()));
+                out.push_str("/>");
                 inline_text = false;
             }
             Event::GeneralRef(r) => {
@@ -232,7 +249,21 @@ pub fn minify(content: &str, options: &FormatOptions) -> FormatOutcome {
                 out.push_str(&String::from_utf8_lossy(t.as_ref()));
                 out.push_str("-->");
             }
-            Event::Decl(_) => out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"),
+            Event::Decl(d) => {
+                out.push_str("<?");
+                out.push_str(&String::from_utf8_lossy(d.as_ref()));
+                out.push_str("?>");
+            }
+            Event::Start(e) => {
+                out.push('<');
+                out.push_str(&String::from_utf8_lossy(e.as_ref()));
+                out.push('>');
+            }
+            Event::Empty(e) => {
+                out.push('<');
+                out.push_str(&String::from_utf8_lossy(e.as_ref()));
+                out.push_str("/>");
+            }
             Event::End(e) => {
                 out.push_str("</");
                 out.push_str(&String::from_utf8_lossy(e.name().as_ref()));

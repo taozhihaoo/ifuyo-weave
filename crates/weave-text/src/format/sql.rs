@@ -233,6 +233,7 @@ fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
     let mut out = String::new();
     let mut newline_pending = false;
     let mut in_select_list = false;
+    let mut skip_next_space = false;
     for (idx, token) in tokens.iter().enumerate() {
         match token.kind {
             Tok::Space => continue,
@@ -266,6 +267,7 @@ fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
                 out.push_str(",\n");
                 out.push_str(&pad);
                 newline_pending = false;
+                skip_next_space = true;
             }
             Tok::Punct if token.text == "(" || token.text == "," => {
                 out.push_str(&token.text);
@@ -281,7 +283,9 @@ fn format(content: &str, options: &FormatOptions) -> FormatOutcome {
                 newline_pending = true;
             }
             _ => {
-                if newline_pending {
+                if skip_next_space {
+                    skip_next_space = false;
+                } else if newline_pending {
                     out.push(' ');
                     newline_pending = false;
                 } else if needs_space(&out, token, tokens.get(idx.saturating_sub(1))) {

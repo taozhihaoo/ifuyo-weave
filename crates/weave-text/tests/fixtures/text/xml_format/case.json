@@ -1,0 +1,6 @@
+{
+  "format": "xml",
+  "operation": "format",
+  "indent_spaces": 2,
+  "final_newline": true
+}

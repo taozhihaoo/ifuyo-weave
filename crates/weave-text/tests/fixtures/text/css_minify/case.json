@@ -1,0 +1,6 @@
+{
+  "format": "css",
+  "operation": "minify",
+  "indent_spaces": 2,
+  "final_newline": true
+}

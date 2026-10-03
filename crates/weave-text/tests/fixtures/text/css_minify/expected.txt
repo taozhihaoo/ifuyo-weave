@@ -1,0 +1,1 @@
+body{color:red;background:url("img.png")}.x{margin:0}

@@ -1,0 +1,7 @@
+body {
+  color: red;
+  background: url("img.png");
+}
+
+/* comment */
+.x { margin: 0 }

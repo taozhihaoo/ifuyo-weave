@@ -1,0 +1,6 @@
+{
+  "format": "yaml",
+  "operation": "sort",
+  "indent_spaces": 2,
+  "final_newline": true
+}
