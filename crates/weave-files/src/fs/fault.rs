@@ -26,6 +26,8 @@ pub enum FsFault {
     OpenLocked,
     /// 读取中途返回 I/O 错误（部分读取后失败）。
     ReadFailure,
+    /// rename 返回 PermissionDenied。
+    RenameDenied,
 }
 
 /// 包装任意 [`Filesystem`]，在布防的故障点注入失败。
@@ -132,7 +134,16 @@ impl Filesystem for FaultFilesystem {
     }
 
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        if let Some(err) = self.trip(FsFault::RenameDenied, || {
+            io::Error::from(io::ErrorKind::PermissionDenied)
+        }) {
+            return Err(err);
+        }
         self.inner.rename(from, to)
+    }
+
+    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(path)
     }
 }
 

@@ -4139,6 +4139,7 @@ dependencies = [
  "serde",
  "sha2 0.11.0",
  "weave-core",
+ "weave-history",
  "weave-testkit",
 ]
 

@@ -273,6 +273,9 @@ mod tests {
             fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
                 StdFilesystem.rename(from, to)
             }
+            fn create_dir_all(&self, path: &Path) -> io::Result<()> {
+                StdFilesystem.create_dir_all(path)
+            }
         }
 
         let ws = TempWorkspace::new("hash-unstable").expect("ws");

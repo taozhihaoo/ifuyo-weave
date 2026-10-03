@@ -36,6 +36,10 @@ impl Filesystem for StdFilesystem {
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
         std::fs::rename(from, to)
     }
+
+    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
 }
 
 #[cfg(test)]

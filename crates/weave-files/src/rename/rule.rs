@@ -356,8 +356,10 @@ pub fn apply_rules(
                 };
             }
             CompiledRule::Template { segments } => {
+                // 模板（若提供）是最后一步：组合出**完整最终名**（含扩展名），
+                // 原 ext 无条件消费——"new-{counter}.txt" 与 "vacation-{counter}.{ext}"
+                // 都产出单扩展名的正确结果（§17/§18）。
                 let mut composed = String::new();
-                let mut ext_consumed = false;
                 for segment in segments {
                     match segment {
                         TemplateSegment::Literal(l) => composed.push_str(l),
@@ -366,8 +368,6 @@ pub fn apply_rules(
                             if let Some(e) = &ext {
                                 composed.push_str(e);
                             }
-                            // {ext} 已并入组合名：外层不再追加扩展名（防 .jpg.jpg，§17）。
-                            ext_consumed = true;
                         }
                         TemplateSegment::Counter => {
                             composed.push_str(&format!("{:03}", context.index + 1));
@@ -379,9 +379,7 @@ pub fn apply_rules(
                     }
                 }
                 base = composed;
-                if ext_consumed {
-                    ext = None;
-                }
+                ext = None;
             }
         }
     }

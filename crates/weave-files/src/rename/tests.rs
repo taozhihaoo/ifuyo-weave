@@ -179,13 +179,10 @@ fn cycle_rename_detected_as_cycle_collision_ready() {
         .iter()
         .find(|i| i.source_path.ends_with("b.txt"))
         .expect("b");
-    assert_eq!(item_a.collision, CollisionKind::Cycle);
-    assert_eq!(
-        item_a.status,
-        PlanItemStatus::Ready,
-        "cycle is executable via two-phase"
-    );
+    // b→b 是 NoOp（永不让位）⇒ a→b 是真实的 ExistingTarget 冲突，而非环
     assert_eq!(item_b.status, PlanItemStatus::NoOp, "b → b is identity");
+    assert_eq!(item_a.status, PlanItemStatus::Conflict);
+    assert_eq!(item_a.collision, CollisionKind::ExistingTarget);
 }
 
 #[test]

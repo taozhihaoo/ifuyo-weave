@@ -3,7 +3,7 @@
 //! Plan = 文件系统状态的事实快照（§11）。Preview 与 Execute 共用同一 Plan；
 //! Execute 前做 Revalidate（§38）而非重新推导。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use weave_core::prelude::{
     CancellationToken, CollisionKind, OperationId, OperationKind, Plan, PlanItem, PlanItemStatus,
@@ -13,7 +13,7 @@ use weave_core::prelude::{
 use super::rule::{RenameContext, RenameRule, compile_rules, split_name};
 use crate::fs::Filesystem;
 
-/// 单个输入的名字候选（规则应用结果），供碰撞检测。
+/// 单个输入的名字候选（规则应用结果），供碰撞检测。与 items 平行（同下标）。
 struct NameCandidate {
     item_id: String,
     source_normalized: String,
@@ -26,8 +26,6 @@ struct NameCandidate {
 /// - `inputs`：用户提供的绝对路径（顺序无关；内部按 case-insensitive 路径
 ///   升序规范化，序号分配基于该顺序，M2 §20）。
 /// - `rules`：有序规则；`template`：可选最终模板（最后应用）。
-///
-/// Preview 阶段允许读取（stat/sniff 之外不读内容），但绝不写入（M2 §36）。
 pub fn build_rename_plan(
     fs: &dyn Filesystem,
     inputs: &[String],
@@ -69,8 +67,7 @@ pub fn build_rename_plan(
     let mut candidates: Vec<NameCandidate> = Vec::with_capacity(sorted.len());
 
     for (index, raw) in sorted.into_iter().enumerate() {
-        if entries_processed_gate(cancel, index) {
-            // 计划构建阶段也可取消（大输入集）。
+        if cancel.is_cancelled() {
             return Err(WeaveError::cancelled(
                 "rename.planCancelled",
                 "plan building was cancelled",
@@ -185,7 +182,7 @@ pub fn build_rename_plan(
         });
     }
 
-    detect_collisions(&mut items, &candidates);
+    detect_collisions(fs, &mut items, &candidates);
 
     Ok(Plan {
         operation_id,
@@ -196,15 +193,10 @@ pub fn build_rename_plan(
 }
 
 fn date_for(stat: &crate::metadata::FileStat) -> std::time::SystemTime {
-    // §15：默认 Modified；不可用时退 Created，再退 now（诚实降级有限）。
+    // §15：默认 Modified；不可用时退 Created。
     stat.modified
         .or(stat.created)
         .unwrap_or_else(std::time::SystemTime::now)
-}
-
-fn entries_processed_gate(cancel: &CancellationToken, index: usize) -> bool {
-    let _ = index;
-    cancel.is_cancelled()
 }
 
 fn invalid_item(item_id: &str, requested: &str, error: WeaveError) -> PlanItem {
@@ -231,64 +223,96 @@ fn rejected_candidate(item_id: &str, requested: &str) -> NameCandidate {
 }
 
 /// 碰撞检测（M2 §21 四类 + 环）。
-fn detect_collisions(items: &mut [PlanItem], candidates: &[NameCandidate]) {
-    // 1) NoOp：target 与 source 字面相同。
-    // 2) CaseOnly：规范化相等但字面不同。
-    // 3) ExistingTarget：目标在文件系统已存在（且非 NoOp）。
-    // 4) InternalTarget / Cycle：批内归并。
-    let source_norms: Vec<(usize, &str)> = candidates
-        .iter()
-        .enumerate()
-        .map(|(i, c)| (i, c.source_normalized.as_str()))
-        .collect();
-
+///
+/// 第一遍（只读）：逐条判 NoOp / CaseOnly / Cycle / ExistingTarget。
+/// 第二遍：Ready 条目按归一化目标归并 ⇒ InternalTarget。
+///
+/// 环判定排除 **NoOp 条目的 source**：`b→b` 永不让位，对他人而言
+/// `a→b` 是真实的 ExistingTarget 而非可让位的环。
+fn detect_collisions(fs: &dyn Filesystem, items: &mut [PlanItem], candidates: &[NameCandidate]) {
+    // Pass 0：NoOp 先行标记（供环判定的“会否让位”检查使用）。
     for (idx, item) in items.iter_mut().enumerate() {
         let cand = &candidates[idx];
-        if item.status != PlanItemStatus::Ready {
-            continue;
-        }
-        if cand.target_normalized.is_empty() {
-            continue;
-        }
-        let source_literal = &item.source_path;
-        let target_literal = &item.target_path;
-        if source_literal == target_literal {
+        if item.status == PlanItemStatus::Ready
+            && !cand.target_normalized.is_empty()
+            && item.source_path == item.target_path
+        {
             item.status = PlanItemStatus::NoOp;
+        }
+    }
+
+    // Pass 1：NoOp / CaseOnly / Cycle / ExistingTarget。
+    // 先不可变收集标记（环判定需要读其他条目状态），再统一应用。
+    struct Mark {
+        status: PlanItemStatus,
+        collision: CollisionKind,
+        error: Option<WeaveError>,
+    }
+
+    impl Clone for Mark {
+        fn clone(&self) -> Self {
+            Self {
+                status: self.status,
+                collision: self.collision,
+                error: self.error.clone(),
+            }
+        }
+    }
+    let mut marks: Vec<Option<Mark>> = vec![None; items.len()];
+    for (idx, item) in items.iter().enumerate() {
+        let cand = &candidates[idx];
+        if item.status != PlanItemStatus::Ready || cand.target_normalized.is_empty() {
             continue;
         }
         if cand.source_normalized == cand.target_normalized {
-            item.status = PlanItemStatus::Ready;
-            item.collision = CollisionKind::CaseOnly;
+            marks[idx] = Some(Mark {
+                status: PlanItemStatus::Ready,
+                collision: CollisionKind::CaseOnly,
+                error: None,
+            });
             continue;
         }
-        // 环判定优先于 ExistingTarget：target 是另一条目的 source 时，
-        // 该“已存在”正是批内将被让出的名字（两阶段让位），不是真碰撞。
-        let target_is_batch_source = candidates.iter().any(|c| {
-            !c.source_normalized.is_empty()
+        // 环：target 是另一条目的 source，且该条目会真正让位（非 NoOp）。
+        let target_is_moving_batch_source = candidates.iter().enumerate().any(|(other_idx, c)| {
+            c.item_id != cand.item_id
+                && !c.source_normalized.is_empty()
                 && c.source_normalized == cand.target_normalized
-                && c.item_id != cand.item_id
+                && items[other_idx].status != PlanItemStatus::NoOp
         });
-        if target_is_batch_source {
-            item.collision = CollisionKind::Cycle;
+        if target_is_moving_batch_source {
+            marks[idx] = Some(Mark {
+                status: PlanItemStatus::Ready,
+                collision: CollisionKind::Cycle,
+                error: None,
+            });
             continue;
         }
-        if crate::fs::StdFilesystem.exists(Path::new(&cand.target)) {
-            item.status = PlanItemStatus::Conflict;
-            item.collision = CollisionKind::ExistingTarget;
-            item.errors.push(WeaveError::conflict(
-                "rename.targetExists",
-                format!("target already exists: {}", item.target_path),
-            ));
-            continue;
+        if fs.exists(&cand.target) {
+            marks[idx] = Some(Mark {
+                status: PlanItemStatus::Conflict,
+                collision: CollisionKind::ExistingTarget,
+                error: Some(WeaveError::conflict(
+                    "rename.targetExists",
+                    format!("target already exists: {}", item.target_path),
+                )),
+            });
         }
-        let _ = source_norms;
+    }
+    for (idx, mark) in marks.into_iter().enumerate() {
+        if let Some(mark) = mark {
+            items[idx].status = mark.status;
+            items[idx].collision = mark.collision;
+            if let Some(e) = mark.error {
+                items[idx].errors.push(e);
+            }
+        }
     }
 
-    // 内部碰撞：多个 Ready 条目归一化后指向同一目标。
+    // InternalTarget：多个 Ready 条目归一化后指向同一目标。
     let mut by_target: std::collections::BTreeMap<&str, Vec<usize>> =
         std::collections::BTreeMap::new();
     for (idx, cand) in candidates.iter().enumerate() {
-        if candidates_is_ready(items, idx) && !cand.target_normalized.is_empty() {
+        if items[idx].status == PlanItemStatus::Ready && !cand.target_normalized.is_empty() {
             by_target
                 .entry(cand.target_normalized.as_str())
                 .or_default()
@@ -310,10 +334,4 @@ fn detect_collisions(items: &mut [PlanItem], candidates: &[NameCandidate]) {
             }
         }
     }
-}
-
-fn candidates_is_ready(items: &[PlanItem], idx: usize) -> bool {
-    items
-        .get(idx)
-        .is_some_and(|i| i.status == PlanItemStatus::Ready)
 }

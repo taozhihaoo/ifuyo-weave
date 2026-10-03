@@ -14,21 +14,30 @@
 
 pub mod classify;
 pub mod encoding;
+pub mod execute;
 pub mod fs;
 pub mod hash;
 pub mod inspect;
 pub mod metadata;
+pub mod organize;
 pub mod rename;
 pub mod scan;
+pub mod undo;
 
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
 pub use encoding::detect_encoding;
+pub use execute::{ExecutionReport, execute_plan};
 pub use fs::Filesystem;
 pub use hash::{HASH_CHUNK_SIZE, hash_file};
 pub use inspect::{FileInspection, InspectOptions, InspectionStatus, inspect_file};
 pub use metadata::FileStat;
+pub use organize::{OrganizerCondition, OrganizerRule, build_organizer_plan};
 pub use rename::{CaseForm, DateField, DateFormat, RenameRule, TemplateError, build_rename_plan};
 pub use scan::{
     DEFAULT_MAX_DEPTH, DEFAULT_MAX_ENTRIES, DirectoryScanReport, FileLineItem, HARD_MAX_DEPTH,
     HARD_MAX_ENTRIES, ScanErrorEntry, ScanOptions, scan_directory,
 };
+pub use undo::{UndoItemStatus, UndoReport, undo_transaction};
+
+#[cfg(test)]
+mod execute_tests;
