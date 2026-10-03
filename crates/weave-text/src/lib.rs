@@ -7,6 +7,7 @@
 //! Offset 契约（§18，高风险边界）：域内 byte offset；IPC 额外携带 line +
 //! UTF-16 column；UI 不得把 byte offset 当 JS string index。
 
+pub mod compare;
 pub mod detection;
 pub mod diagnostics;
 pub mod encoding;
@@ -29,3 +30,8 @@ pub use transform::{
 };
 
 pub use extract::{ExtractKind, ExtractMatch, ExtractOptions, extract_matches, extract_regex};
+
+pub use compare::{
+    CompareError, CompareLimits, CompareOptions, DiffHunk, DiffLine, DiffReport, DiffStats,
+    LineChange, WhitespaceMode, compare_texts, unified_diff,
+};
