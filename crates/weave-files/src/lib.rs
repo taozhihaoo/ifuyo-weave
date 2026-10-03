@@ -24,8 +24,9 @@ pub use classify::{Classification, ClassificationEvidence, FileCategory, classif
 pub use encoding::detect_encoding;
 pub use fs::Filesystem;
 pub use hash::{HASH_CHUNK_SIZE, hash_file};
+pub use inspect::{FileInspection, InspectOptions, InspectionStatus, inspect_file};
 pub use metadata::FileStat;
 pub use scan::{
-    DEFAULT_MAX_DEPTH, DEFAULT_MAX_ENTRIES, DirectoryScanReport, FileLineItem, ScanErrorEntry,
-    ScanOptions, scan_directory,
+    DEFAULT_MAX_DEPTH, DEFAULT_MAX_ENTRIES, DirectoryScanReport, FileLineItem, HARD_MAX_DEPTH,
+    HARD_MAX_ENTRIES, ScanErrorEntry, ScanOptions, scan_directory,
 };

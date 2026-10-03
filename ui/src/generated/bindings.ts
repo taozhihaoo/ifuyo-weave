@@ -19,6 +19,21 @@ export const commands = {
 	getAppConfig: () => typedError<AppConfig, IpcError>(__TAURI_INVOKE("get_app_config")),
 	/**  校验并保存应用配置。 */
 	setAppConfig: (config: AppConfig) => typedError<AppConfig, IpcError>(__TAURI_INVOKE("set_app_config", { config })),
+	/**  同步检查：默认不读文件内容（除 ≤8 KiB 有界嗅探），立即返回。 */
+	inspectFile: (rawPath: string) => typedError<FileInspectionDto, IpcError>(__TAURI_INVOKE("inspect_file", { rawPath })),
+	/**  显式哈希任务（M1 §34：单独触发，带进度与取消）。 */
+	hashFile: (rawPath: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("hash_file", { rawPath })),
+	/**  目录扫描任务（非阻塞；进度经 get_job 轮询，取消经 cancel_job）。 */
+	analyzeDirectory: (rawPath: string, options: {
+	maxDepth: number | null,
+	maxEntries: number | null,
+} | null) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("analyze_directory", { rawPath, options })),
+	/**  轮询任务状态（running 带 progress；completed 带 hash/scan 结果）。 */
+	getJob: (jobId: string) => typedError<JobStatusDto, IpcError>(__TAURI_INVOKE("get_job", { jobId })),
+	/**  协作式取消：立即返回，任务在安全点自行收尾为 Cancelled 结果。 */
+	cancelJob: (jobId: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("cancel_job", { jobId })),
+	/**  统一工具发现（Command Palette / Quick Drop 的单一事实源）。 */
+	listTools: () => __TAURI_INVOKE<ToolDescriptorDto[]>("list_tools"),
 };
 
 /* Types */
@@ -38,6 +53,50 @@ export type AppInfo = {
 	environment: string,
 };
 
+export type ClassificationDto = {
+	category: string,
+	evidence: string,
+	mime: string | null,
+};
+
+export type FileInspectionDto = {
+	status: string,
+	requested: string,
+	normalizedPath: string,
+	name: string,
+	extension: string | null,
+	kind: string,
+	size: number | null,
+	readonly: boolean,
+	hidden: boolean | null,
+	createdMs: number | null,
+	modifiedMs: number | null,
+	accessedMs: number | null,
+	classification: ClassificationDto,
+	/**  仅类文本场景；null = 不适用（与 Unknown = 无法判断 区分）。 */
+	encoding: string | null,
+	warnings: string[],
+};
+
+export type FileLineItemDto = {
+	relativePath: string,
+	size: number | null,
+	modifiedMs: number | null,
+};
+
+export type FileTypeCountDto = {
+	label: string,
+	count: number | null,
+};
+
+export type HashResultDto = {
+	algorithm: string,
+	digestHex: string | null,
+	bytesProcessed: number | null,
+	durationMs: number | null,
+	status: string,
+};
+
 /**
  *  统一错误在 IPC 边界的 DTO。weave-core 不依赖 specta；
  *  错误在 Application 层显式翻译（Domain Error → Application → UI）。
@@ -49,6 +108,23 @@ export type IpcError = {
 	location: string | null,
 	recoverability: string,
 	suggestion: string | null,
+};
+
+export type JobHandleDto = {
+	jobId: string,
+};
+
+export type JobStatusDto = {
+	jobId: string,
+	/**
+	 *  running | completed | failed（cancelled 由 outcome 内的 status 表达，
+	 *  因为"用户已点取消但任务尚未到达安全点"仍是 running）。
+	 */
+	state: string,
+	progressCurrent: number | null,
+	hash: HashResultDto | null,
+	scan: ScanReportDto | null,
+	error: IpcError | null,
 };
 
 /**  `inspect_path` 的结果。这是 M0 架构探针，不是正式 File Inspector 工具（M0 §38）。 */
@@ -69,6 +145,51 @@ export type PathProbe = {
 /**  `ping` 的应答。真实 IPC 往返，不是前端本地 mock。 */
 export type Pong = {
 	message: string,
+};
+
+export type ScanErrorDto = {
+	relativePath: string,
+	code: string,
+	message: string,
+};
+
+/**  扫描选项（IPC 侧）。数值用 f64 并在应用层校验边界（M1 §18.1）。 */
+export type ScanOptionsDto = {
+	maxDepth: number | null,
+	maxEntries: number | null,
+};
+
+export type ScanReportDto = {
+	scanId: string,
+	root: string,
+	status: string,
+	startedAtMs: number | null,
+	finishedAtMs: number | null,
+	durationMs: number | null,
+	directoriesScanned: number | null,
+	filesScanned: number | null,
+	otherEntries: number | null,
+	errorCount: number | null,
+	entriesProcessed: number | null,
+	totalSize: number | null,
+	maxDepth: number | null,
+	emptyDirectories: string[],
+	emptyDirectoriesTruncated: boolean,
+	fileTypeDistribution: FileTypeCountDto[],
+	largestFiles: FileLineItemDto[],
+	oldestFiles: FileLineItemDto[],
+	newestFiles: FileLineItemDto[],
+	warnings: string[],
+	errors: ScanErrorDto[],
+	errorsTruncated: boolean,
+	limited: boolean,
+	limitedReason: string | null,
+};
+
+export type ToolDescriptorDto = {
+	id: string,
+	category: string,
+	inputKinds: string[],
 };
 
 /* Tauri Specta runtime */

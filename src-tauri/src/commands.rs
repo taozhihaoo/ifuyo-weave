@@ -10,6 +10,9 @@
 
 use crate::app_info;
 use crate::config::{self, AppConfig};
+use crate::files_dto::{
+    FileInspectionDto, JobHandleDto, JobStatusDto, ScanOptionsDto, ToolDescriptorDto,
+};
 use serde::Serialize;
 use specta::Type;
 use weave_core::prelude::{
@@ -51,7 +54,7 @@ pub struct PathProbe {
 
 /// 统一错误在 IPC 边界的 DTO。weave-core 不依赖 specta；
 /// 错误在 Application 层显式翻译（Domain Error → Application → UI）。
-#[derive(Debug, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct IpcError {
     pub kind: String,
@@ -187,4 +190,135 @@ pub fn set_app_config(app: tauri::AppHandle, config: AppConfig) -> Result<AppCon
     config::save(&app, &config)?;
     tracing::info!(language = %config.language, theme = %config.theme, "config saved");
     Ok(config)
+}
+
+// ─── File Core（M1）───
+//
+// 命令只做 orchestration（M1 §19）：校验输入 → 调 weave-files 服务 → 结构化返回。
+// inspect 是同步快速路径（stat + 有界嗅探）；hash/scan 是显式任务（进度 + 取消）。
+
+fn validate_input_path(raw_path: &str) -> Result<(), IpcError> {
+    weave_core::prelude::validate_absolute_path(raw_path)
+        .map(|_| ())
+        .map_err(Into::into)
+}
+
+/// 同步检查：默认不读文件内容（除 ≤8 KiB 有界嗅探），立即返回。
+#[tauri::command]
+#[specta::specta]
+pub fn inspect_file(raw_path: String) -> Result<FileInspectionDto, IpcError> {
+    let inspection = weave_files::inspect_file(
+        &weave_files::fs::StdFilesystem,
+        &raw_path,
+        &weave_files::InspectOptions::default(),
+    )?;
+    Ok(FileInspectionDto::from_inspection(inspection))
+}
+
+/// 显式哈希任务（M1 §34：单独触发，带进度与取消）。
+#[tauri::command]
+#[specta::specta]
+pub fn hash_file(app: tauri::AppHandle, raw_path: String) -> Result<JobHandleDto, IpcError> {
+    use tauri::Manager;
+    validate_input_path(&raw_path)?;
+    let (job_id, cancel, sink, state_cell) = app.state::<crate::state::AppState>().jobs.register();
+    let handle = app.clone();
+    let job_id_for_task = job_id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let app_state = handle.state::<crate::state::AppState>();
+        let result = weave_files::hash_file(
+            &weave_files::fs::StdFilesystem,
+            std::path::Path::new(&raw_path),
+            &cancel,
+            &mut |p| sink.report(&p),
+        );
+        match result {
+            Ok(hash) => app_state
+                .jobs
+                .finish(&job_id_for_task, crate::jobs::JobOutcome::Hash(hash.into())),
+            Err(e) => app_state.jobs.fail(&job_id_for_task, e),
+        }
+    });
+    drop(state_cell);
+    Ok(JobHandleDto {
+        job_id: job_id.to_string(),
+    })
+}
+
+/// 目录扫描任务（非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
+#[tauri::command]
+#[specta::specta]
+pub fn analyze_directory(
+    app: tauri::AppHandle,
+    raw_path: String,
+    options: Option<ScanOptionsDto>,
+) -> Result<JobHandleDto, IpcError> {
+    use tauri::Manager;
+    validate_input_path(&raw_path)?;
+    let domain_options = options.unwrap_or_default().into_domain().map_err(|e| {
+        WeaveError::validation(
+            "scan.invalidOptions",
+            format!("option '{}' = {} is out of range", e.what, e.value),
+        )
+    })?;
+
+    let (job_id, cancel, sink, state_cell) = app.state::<crate::state::AppState>().jobs.register();
+    let handle = app.clone();
+    let job_id_for_task = job_id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let app_state = handle.state::<crate::state::AppState>();
+        let result = weave_files::scan_directory(
+            &weave_files::fs::StdFilesystem,
+            &raw_path,
+            &domain_options,
+            &cancel,
+            &mut |p| sink.report(&p),
+        );
+        match result {
+            Ok(report) => app_state.jobs.finish(
+                &job_id_for_task,
+                crate::jobs::JobOutcome::Scan(report.into()),
+            ),
+            Err(e) => app_state.jobs.fail(&job_id_for_task, e),
+        }
+    });
+    drop(state_cell);
+    Ok(JobHandleDto {
+        job_id: job_id.to_string(),
+    })
+}
+
+/// 轮询任务状态（running 带 progress；completed 带 hash/scan 结果）。
+#[tauri::command]
+#[specta::specta]
+pub fn get_job(app: tauri::AppHandle, job_id: String) -> Result<JobStatusDto, IpcError> {
+    use tauri::Manager;
+    app.state::<crate::state::AppState>()
+        .jobs
+        .status(&job_id)
+        .ok_or_else(|| {
+            WeaveError::validation("job.unknown", format!("unknown job id '{job_id}'")).into()
+        })
+}
+
+/// 协作式取消：立即返回，任务在安全点自行收尾为 Cancelled 结果。
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_job(app: tauri::AppHandle, job_id: String) -> Result<bool, IpcError> {
+    use tauri::Manager;
+    let cancelled = app.state::<crate::state::AppState>().jobs.cancel(&job_id);
+    if cancelled {
+        tracing::info!(%job_id, "job cancel requested");
+        Ok(true)
+    } else {
+        Err(WeaveError::validation("job.unknown", format!("unknown job id '{job_id}'")).into())
+    }
+}
+
+/// 统一工具发现（Command Palette / Quick Drop 的单一事实源）。
+#[tauri::command]
+#[specta::specta]
+pub fn list_tools(app: tauri::AppHandle) -> Vec<ToolDescriptorDto> {
+    use tauri::Manager;
+    crate::tools::describe_registry(&app.state::<crate::state::AppState>().tools)
 }

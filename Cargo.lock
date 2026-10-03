@@ -4022,6 +4022,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "weave-core",
+ "weave-files",
  "weave-testkit",
 ]
 

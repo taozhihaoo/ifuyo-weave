@@ -8,8 +8,11 @@
 pub mod app_info;
 pub mod commands;
 pub mod config;
+pub mod files_dto;
+pub mod jobs;
 pub mod logging;
 pub mod state;
+pub mod tools;
 
 use tauri::Manager;
 use tauri_specta::{Builder, collect_commands};
@@ -22,6 +25,12 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         commands::inspect_path,
         commands::get_app_config,
         commands::set_app_config,
+        commands::inspect_file,
+        commands::hash_file,
+        commands::analyze_directory,
+        commands::get_job,
+        commands::cancel_job,
+        commands::list_tools,
     ])
 }
 
@@ -51,7 +60,10 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
             let log_guard = logging::init(app.handle())?;
-            app.manage(state::AppState::new(log_guard));
+            app.manage(state::AppState::new(
+                log_guard,
+                tools::build_file_tools_registry(),
+            ));
             tracing::info!("Weave started (M0 Foundation)");
             Ok(())
         })
