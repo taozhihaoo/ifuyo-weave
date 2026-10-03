@@ -347,7 +347,9 @@ pub fn scan_duplicates(
                     full_hashed += 1;
                     by_full.entry(hex).or_default().push(DuplicateFileEntry {
                         file_id: String::new(),
-                        path: c.normalized.clone(),
+                        // 原始大小写路径（normalized 只用于去重/排序，不得外泄——
+                        // Linux 大小写敏感文件系统上回收/还原会找不到原文件，§95/§93）
+                        path: c.path.to_string_lossy().into_owned(),
                         size: c.size,
                         modified: c.modified,
                         full_hash: String::new(),

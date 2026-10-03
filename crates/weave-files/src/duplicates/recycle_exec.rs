@@ -13,7 +13,7 @@ use weave_history::{
     OperationStatus, OperationTransaction, TransactionItem, TransactionItemStatus,
 };
 
-use crate::recycle::{RECYCLE_TARGET_PREFIX, RecycleOutcome, recycle_path};
+use crate::recycle::{RECYCLE_TARGET_PREFIX, RecycleAdapter, RecycleOutcome, StdRecycleAdapter};
 
 /// 执行回收计划的完整结果（M3 §58）：更新后的 Plan + 事务 + 计数。
 pub struct RecycleExecution {
@@ -25,10 +25,21 @@ pub struct RecycleExecution {
     pub duration_ms: u64,
 }
 
-/// 执行回收计划。逐项 Revalidate → 回收站适配器 → 事务记账；
+/// 执行回收计划（生产入口：标准平台适配器）。
+/// 逐项 Revalidate → 回收站适配器 → 事务记账；
 /// 取消/校验失败/回收失败的条目互不牵连（失败隔离，M3 §26）。
 pub fn execute_recycle_plan(
     plan: &Plan,
+    cancel: &CancellationToken,
+    report_progress: &mut dyn FnMut(Progress),
+) -> RecycleExecution {
+    execute_recycle_plan_with(plan, &StdRecycleAdapter, cancel, report_progress)
+}
+
+/// 注入适配器的执行入口（fault 注入测试 / 未来批处理引擎复用，M3 §91）。
+pub fn execute_recycle_plan_with(
+    plan: &Plan,
+    adapter: &dyn RecycleAdapter,
     cancel: &CancellationToken,
     report_progress: &mut dyn FnMut(Progress),
 ) -> RecycleExecution {
@@ -65,7 +76,7 @@ pub fn execute_recycle_plan(
         }
 
         let path = PathBuf::from(&item.source_path);
-        match recycle_path(&path) {
+        match adapter.recycle(&path) {
             RecycleOutcome::Success(receipt) => {
                 recycled += 1;
                 let target = match &receipt.token {

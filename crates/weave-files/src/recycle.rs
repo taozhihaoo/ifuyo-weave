@@ -41,14 +41,28 @@ pub enum RecycleOutcome {
     Failed(String),
 }
 
-/// 批量回收：逐条执行并返回逐条结果（失败隔离，M3 §26）。
-pub fn recycle_paths(paths: &[PathBuf]) -> Vec<(PathBuf, RecycleOutcome)> {
-    paths.iter().map(|p| (p.clone(), recycle_one(p))).collect()
+/// 回收适配器接口（M3 §91 fault 注入缝隙；§94 平台隔离边界）。
+/// Domain 与执行器只面向此 trait；生产实现走进程内 Shell 回收站 API。
+pub trait RecycleAdapter {
+    fn recycle(&self, path: &Path) -> RecycleOutcome;
 }
 
-/// 单条回收（逐项执行器用；失败隔离由调用方记账）。
-pub fn recycle_path(path: &Path) -> RecycleOutcome {
-    recycle_one(path)
+/// 标准适配器：`trash` crate（Windows IFileOperation，进程内调用，非 shell 进程）。
+pub struct StdRecycleAdapter;
+
+impl RecycleAdapter for StdRecycleAdapter {
+    fn recycle(&self, path: &Path) -> RecycleOutcome {
+        recycle_one(path)
+    }
+}
+
+/// 批量回收：逐条执行并返回逐条结果（失败隔离，M3 §26）。
+pub fn recycle_paths(paths: &[PathBuf]) -> Vec<(PathBuf, RecycleOutcome)> {
+    let adapter = StdRecycleAdapter;
+    paths
+        .iter()
+        .map(|p| (p.clone(), adapter.recycle(p)))
+        .collect()
 }
 
 fn recycle_one(path: &Path) -> RecycleOutcome {

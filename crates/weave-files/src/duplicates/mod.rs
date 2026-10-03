@@ -18,7 +18,7 @@ pub mod model;
 pub mod pipeline;
 pub mod recycle_exec;
 
-pub use recycle_exec::{RecycleExecution, execute_recycle_plan};
+pub use recycle_exec::{RecycleExecution, execute_recycle_plan, execute_recycle_plan_with};
 
 pub use model::{DuplicateFileEntry, DuplicateGroup, DuplicateScanReport, ScanStage};
 pub use pipeline::{
