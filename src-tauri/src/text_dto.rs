@@ -77,32 +77,39 @@ impl TextDiagnosticDto {
 pub enum TransformOpDto {
     TrimLines,
     TrimDocument,
+    #[serde(rename_all = "camelCase")]
     DeduplicateLines {
         keep: String,
         blank: String,
     },
+    #[serde(rename_all = "camelCase")]
     SortLines {
         descending: bool,
         case_sensitive: bool,
         blank: String,
     },
+    #[serde(rename_all = "camelCase")]
     AddPrefix {
         text: String,
         skip_blank: bool,
     },
+    #[serde(rename_all = "camelCase")]
     AddSuffix {
         text: String,
         skip_blank: bool,
     },
+    #[serde(rename_all = "camelCase")]
     CaseConvert {
         form: String,
     },
+    #[serde(rename_all = "camelCase")]
     NumberLines {
         start: f64,
         step: f64,
         separator: String,
         pad: String,
     },
+    #[serde(rename_all = "camelCase")]
     FindReplace {
         find: String,
         replacement: String,

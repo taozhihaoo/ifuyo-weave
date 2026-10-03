@@ -5,6 +5,7 @@ import { listCommands, runCommand } from "../commands/registry";
 import type { IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
 import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
+import { TextPanel } from "../features/text/TextPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
 import { RenamePanel } from "../features/ops/RenamePanel";
@@ -40,9 +41,9 @@ function App() {
     hashStatus,
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
-  const [view, setView] = useState<"tools" | "rename" | "organizer" | "duplicates" | "history">(
-    "tools",
-  );
+  const [view, setView] = useState<
+    "tools" | "rename" | "organizer" | "duplicates" | "text" | "history"
+  >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
   const [dupSeedFolder, setDupSeedFolder] = useState<string | null>(null);
@@ -280,7 +281,7 @@ function App() {
         aria-label={t("app.nav")}
         style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
       >
-        {(["tools", "rename", "organizer", "duplicates", "history"] as const).map((v) => (
+        {(["tools", "rename", "organizer", "duplicates", "text", "history"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -364,6 +365,10 @@ function App() {
 
       {view === "organizer" ? (
         <OrganizerPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "text" ? (
+        <TextPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "duplicates" ? (

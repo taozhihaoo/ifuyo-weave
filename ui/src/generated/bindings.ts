@@ -404,7 +404,7 @@ export type TransactionItemDto = {
 };
 
 /**  变换操作（tagged enum，与 Rust TransformKind 一一对应）。 */
-export type TransformOpDto = { type: "trimLines" } | { type: "trimDocument" } | { type: "deduplicateLines"; keep: string; blank: string } | { type: "sortLines"; descending: boolean; case_sensitive: boolean; blank: string } | { type: "addPrefix"; text: string; skip_blank: boolean } | { type: "addSuffix"; text: string; skip_blank: boolean } | { type: "caseConvert"; form: string } | { type: "numberLines"; start: number | null; step: number | null; separator: string; pad: string } | { type: "findReplace"; find: string; replacement: string; regex: boolean; case_insensitive: boolean; first_only: boolean };
+export type TransformOpDto = { type: "trimLines" } | { type: "trimDocument" } | { type: "deduplicateLines"; keep: string; blank: string } | { type: "sortLines"; descending: boolean; caseSensitive: boolean; blank: string } | { type: "addPrefix"; text: string; skipBlank: boolean } | { type: "addSuffix"; text: string; skipBlank: boolean } | { type: "caseConvert"; form: string } | { type: "numberLines"; start: number | null; step: number | null; separator: string; pad: string } | { type: "findReplace"; find: string; replacement: string; regex: boolean; caseInsensitive: boolean; firstOnly: boolean };
 
 export type TransformResultDto = {
 	content: string,
