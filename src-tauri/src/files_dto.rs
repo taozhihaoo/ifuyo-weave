@@ -113,6 +113,9 @@ pub fn encoding_to_str(encoding: TextEncoding) -> String {
         TextEncoding::Utf16Le => "utf16Le",
         TextEncoding::Utf16Be => "utf16Be",
         TextEncoding::Ascii => "ascii",
+        TextEncoding::Gb18030 => "gb18030",
+        TextEncoding::Gbk => "gbk",
+        TextEncoding::Latin1 => "latin1",
         TextEncoding::Unknown => "unknown",
     }
     .to_string()
