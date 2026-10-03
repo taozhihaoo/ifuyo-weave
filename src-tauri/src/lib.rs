@@ -63,7 +63,7 @@ pub fn run() {
                 log_guard,
                 tools::build_file_tools_registry(),
             ));
-            tracing::info!("Weave started (M0 Foundation)");
+            tracing::info!("Weave started (M1 File Core)");
             Ok(())
         })
         .build(tauri::generate_context!())
