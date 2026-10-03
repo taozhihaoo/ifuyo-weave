@@ -13,6 +13,7 @@ pub mod diagnostics;
 pub mod encoding;
 pub mod extract;
 pub mod format;
+pub mod limits;
 pub mod model;
 pub mod offset;
 pub mod transform;
@@ -38,3 +39,5 @@ pub use compare::{
 };
 
 pub use format::{FormatOperation, FormatOptions, FormatOutcome, run_formatter};
+
+pub use limits::TextLimits;

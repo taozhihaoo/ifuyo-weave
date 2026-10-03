@@ -374,3 +374,23 @@ fn change_str(change: weave_text::LineChange) -> &'static str {
         weave_text::LineChange::Moved => "moved",
     }
 }
+
+/// 文本预览任务的统一结果载荷（按工具 tagged；UI 据此分流渲染）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(tag = "tool", rename_all = "camelCase")]
+pub enum TextPreviewDto {
+    Format(FormatOutcomeDto),
+    Transform(TransformResultDto),
+    Extract(ExtractResultDto),
+    Compare(DiffReportDto),
+}
+
+/// 提取结果（§158/§160：matches + 计数 + 截断/警告诊断）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractResultDto {
+    pub matches: Vec<ExtractMatchDto>,
+    pub count: f64,
+    pub unique_count: f64,
+    pub truncated: bool,
+}

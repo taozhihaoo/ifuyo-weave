@@ -1,10 +1,13 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { commands, type DiffReportDto, type IpcError } from "../../generated/bindings";
 import { useT } from "../../i18n";
 import { pollUntilDone } from "../../lib/operations";
 
 interface TextPanelProps {
   onOperationDone: (operationId: string, undoable: boolean) => void;
+  /** 统一 Drop 落到文本页的文件路径（§102：直接加载；二进制 ⇒ 结构化错误）。 */
+  seedFile: string | null;
+  onSeedConsumed: () => void;
 }
 
 type Tab = "format" | "transform" | "extract" | "compare";
@@ -42,7 +45,10 @@ const rowStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-function errText(e: IpcError): string {
+function errText(e: IpcError, cancelledLabel: string): string {
+  if (e.code === "text.cancelled") {
+    return cancelledLabel;
+  }
   return `${e.code} · ${e.message}${e.suggestion ? ` (${e.suggestion})` : ""}`;
 }
 
@@ -50,7 +56,7 @@ function errText(e: IpcError): string {
  *
  * Preview-first（§84–§86）：预览无副作用；Apply 才写回且需确认（§87/§89）；
  * 写回走服务端 Plan（TOCTOU 快照 §90）+ 备份 + 原子替换 + 历史/Undo。 */
-export function TextPanel({ onOperationDone }: TextPanelProps) {
+export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPanelProps) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("format");
   const [content, setContent] = useState("");
@@ -83,27 +89,19 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
   const [extractRows, setExtractRows] = useState<{ value: string; line: number; column: number }[]>(
     [],
   );
+  const [extractSummary, setExtractSummary] = useState<string | null>(null);
   // compare
   const [compareText, setCompareText] = useState("");
+  const [compareWhitespace, setCompareWhitespace] = useState("none");
+  const [compareIgnoreCase, setCompareIgnoreCase] = useState(false);
   const [compareResult, setCompareResult] = useState<DiffReportDto | null>(null);
 
-  const detectFormat = (text: string): string => {
-    const head = text.trimStart();
-    if (head.startsWith("{") || head.startsWith("[")) {
-      return "json";
-    }
-    if (head.startsWith("<?xml") || head.startsWith("<")) {
-      return "xml";
-    }
-    return "json";
-  };
-
-  const doLoad = (): void => {
+  const doLoadPath = (path: string): void => {
     setBusy(true);
     setError(null);
     setStatus(null);
     commands
-      .loadTextDocument(loadPath, null)
+      .loadTextDocument(path, null)
       .then((r) => {
         setBusy(false);
         if (r.status === "ok") {
@@ -120,10 +118,28 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
             }),
           );
         } else {
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
         }
       })
       .catch(() => setBusy(false));
+  };
+
+  // §102：统一 Drop 入口落在文本页的文件 → 直接加载（二进制/未知编码 ⇒ 结构化错误）
+  useEffect(() => {
+    if (!seedFile) {
+      return;
+    }
+    const id = setTimeout(() => {
+      setLoadPath(seedFile);
+      doLoadPath(seedFile);
+      onSeedConsumed();
+    }, 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedFile, onSeedConsumed]);
+
+  const doLoad = (): void => {
+    doLoadPath(loadPath);
   };
 
   const doFormatPreview = (): void => {
@@ -131,9 +147,9 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
     setError(null);
     setFormatResult(null);
     setFormatNotes([]);
-    const fmt = format === "auto" ? detectFormat(content) : format;
+    // §112：auto 由服务端保守检测；Unknown ⇒ 结构化错误要求手选
     commands
-      .formatText(fmt, operation, content, 2, true)
+      .formatText(format, operation, content, 2, true)
       .then((r) => {
         setBusy(false);
         if (r.status === "ok") {
@@ -147,7 +163,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
             setFormatNotes([t("text.validateOk")]);
           }
         } else {
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
         }
       })
       .catch(() => setBusy(false));
@@ -171,7 +187,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
             setTransformStat(t("text.removedLines", { count: r.data.removedLines }));
           }
         } else {
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
         }
       })
       .catch(() => setBusy(false));
@@ -234,6 +250,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
     setBusy(true);
     setError(null);
     setExtractRows([]);
+    setExtractSummary(null);
     commands
       .extractText(
         content,
@@ -245,14 +262,20 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
         setBusy(false);
         if (r.status === "ok") {
           setExtractRows(
-            r.data.map((m) => ({
+            r.data.matches.map((m) => ({
               value: m.value,
               line: m.line ?? 0,
               column: m.column ?? 0,
             })),
           );
+          setExtractSummary(
+            t("text.extractSummary", {
+              count: r.data.count ?? 0,
+              unique: r.data.uniqueCount ?? 0,
+            }) + (r.data.truncated ? ` · ${t("text.resultsTruncated")}` : ""),
+          );
         } else {
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
         }
       })
       .catch(() => setBusy(false));
@@ -263,13 +286,13 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
     setError(null);
     setCompareResult(null);
     commands
-      .compareText(content, compareText, "none", false)
+      .compareText(content, compareText, compareWhitespace, compareIgnoreCase)
       .then((r) => {
         setBusy(false);
         if (r.status === "ok") {
           setCompareResult(r.data);
         } else {
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
         }
       })
       .catch(() => setBusy(false));
@@ -292,7 +315,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
       .then((r) => {
         if (r.status !== "ok") {
           setBusy(false);
-          setError(errText(r.error));
+          setError(errText(r.error, t("text.cancelled")));
           return;
         }
         // §87/§89：写回需显式确认
@@ -303,7 +326,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
         return commands.executeTextPlan(r.data.operationId).then((x) => {
           if (x.status !== "ok") {
             setBusy(false);
-            setError(errText(x.error));
+            setError(errText(x.error, t("text.cancelled")));
             return;
           }
           pollUntilDone(
@@ -322,6 +345,7 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
                       recoverability: "retryable",
                       suggestion: null,
                     },
+                    t("text.cancelled"),
                   ),
                 );
                 return;
@@ -631,6 +655,11 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
               {t("text.extract")}
             </button>
           </div>
+          {extractSummary ? (
+            <div role="status" style={{ fontSize: "var(--typography-size-sm)" }}>
+              {extractSummary}
+            </div>
+          ) : null}
           {extractRows.length > 0 ? (
             <>
               <table style={{ borderCollapse: "collapse", fontSize: "var(--typography-size-sm)" }}>
@@ -680,14 +709,34 @@ export function TextPanel({ onOperationDone }: TextPanelProps) {
             placeholder={t("text.compareWith")}
             style={areaStyle}
           />
-          <button
-            type="button"
-            disabled={busy || content.length === 0}
-            onClick={doCompare}
-            style={{ ...boxStyle, alignSelf: "flex-start" }}
-          >
-            {t("text.compare")}
-          </button>
+          <div style={rowStyle}>
+            <select
+              aria-label={t("text.whitespace")}
+              value={compareWhitespace}
+              onChange={(e) => setCompareWhitespace(e.target.value)}
+              style={boxStyle}
+            >
+              <option value="none">{t("text.ws.none")}</option>
+              <option value="trailing">{t("text.ws.trailing")}</option>
+              <option value="all">{t("text.ws.all")}</option>
+            </select>
+            <label style={{ fontSize: "var(--typography-size-sm)" }}>
+              <input
+                type="checkbox"
+                checked={compareIgnoreCase}
+                onChange={(e) => setCompareIgnoreCase(e.target.checked)}
+              />
+              {t("text.ignoreCase")}
+            </label>
+            <button
+              type="button"
+              disabled={busy || content.length === 0}
+              onClick={doCompare}
+              style={boxStyle}
+            >
+              {t("text.compare")}
+            </button>
+          </div>
           {compareResult ? (
             <>
               <div role="status" style={{ fontSize: "var(--typography-size-sm)" }}>

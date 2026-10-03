@@ -208,5 +208,15 @@
   "text.compare": "Compare",
   "text.diffStats": "+{added} -{removed} ~{changed} moved {moved}",
   "text.diffDegraded": "beyond optimal window; whole-block result (flagged)",
-  "text.diffUnified": "Unified Diff"
+  "text.diffUnified": "Unified Diff",
+  "text.cancelled": "Cancelled.",
+  "text.empty.default": "Drop a text file, or paste/type text to start.",
+  "text.empty.compare": "Enter or load text A, then paste text B to compare.",
+  "text.whitespace": "Whitespace mode",
+  "text.ws.none": "Keep whitespace",
+  "text.ws.trailing": "Ignore leading/trailing",
+  "text.ws.all": "Ignore all whitespace",
+  "text.ignoreCase": "Ignore case",
+  "text.extractSummary": "{count} matches ({unique} unique)",
+  "text.resultsTruncated": "results beyond the cap are not shown"
 }

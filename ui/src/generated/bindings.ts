@@ -61,7 +61,7 @@ export const commands = {
 	/**  Transformer 预览（纯函数）。 */
 	transformText: (content: string, operation: TransformOpDto) => typedError<TransformResultDto, IpcError>(__TAURI_INVOKE("transform_text", { content, operation })),
 	/**  Extractor（含用户 Regex）。 */
-	extractText: (content: string, kind: string, regex: string | null, uniqueValues: boolean | null) => typedError<ExtractMatchDto[], IpcError>(__TAURI_INVOKE("extract_text", { content, kind, regex, uniqueValues })),
+	extractText: (content: string, kind: string, regex: string | null, uniqueValues: boolean | null) => typedError<ExtractResultDto, IpcError>(__TAURI_INVOKE("extract_text", { content, kind, regex, uniqueValues })),
 	/**  Compare（Side-by-side 模型 + Unified 输出）。 */
 	compareText: (a: string, b: string, whitespace: string | null, ignoreCase: boolean | null) => typedError<DiffReportDto, IpcError>(__TAURI_INVOKE("compare_text", { a, b, whitespace, ignoreCase })),
 	/**  构建写回计划（内容进服务端缓存；快照随 PlanItem，§90）。 */
@@ -177,6 +177,14 @@ export type ExtractMatchDto = {
 	line: number | null,
 	column: number | null,
 	label: string | null,
+};
+
+/**  提取结果（§158/§160：matches + 计数 + 截断/警告诊断）。 */
+export type ExtractResultDto = {
+	matches: ExtractMatchDto[],
+	count: number | null,
+	uniqueCount: number | null,
+	truncated: boolean,
 };
 
 export type FileInspectionDto = {

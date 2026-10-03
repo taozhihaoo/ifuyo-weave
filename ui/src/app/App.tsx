@@ -47,6 +47,8 @@ function App() {
   const [historyRefresh, setHistoryRefresh] = useState(0);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
   const [dupSeedFolder, setDupSeedFolder] = useState<string | null>(null);
+  // M4 下 §102：统一 Drop 入口落在文本页的文件（面板直接加载）。
+  const [textSeedFile, setTextSeedFile] = useState<string | null>(null);
   const recentRoots = useAppStore((s) => s.recentRoots);
   const hashPollStop = useRef<(() => void) | null>(null);
   const scanPollStop = useRef<(() => void) | null>(null);
@@ -119,6 +121,9 @@ function App() {
           } else {
             startScan(result.data.normalizedPath);
           }
+        } else if (view === "text") {
+          // M4 下 §102：文本页 Drop 文本文件 → 直接加载（二进制 ⇒ 结构化错误）
+          setTextSeedFile(result.data.normalizedPath);
         } else {
           useAppStore.getState().setInspection(result.data);
         }
@@ -368,7 +373,11 @@ function App() {
       ) : null}
 
       {view === "text" ? (
-        <TextPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+        <TextPanel
+          onOperationDone={() => setHistoryRefresh((n) => n + 1)}
+          seedFile={textSeedFile}
+          onSeedConsumed={() => setTextSeedFile(null)}
+        />
       ) : null}
 
       {view === "duplicates" ? (

@@ -208,5 +208,15 @@
   "text.compare": "比较",
   "text.diffStats": "新增 {added} · 删除 {removed} · 修改 {changed} · 移动 {moved}",
   "text.diffDegraded": "超出最优窗口，结果为整块替换（已标注）",
-  "text.diffUnified": "Unified Diff"
+  "text.diffUnified": "Unified Diff",
+  "text.cancelled": "已取消。",
+  "text.empty.default": "拖入文本文件，或直接粘贴/输入文本开始。",
+  "text.empty.compare": "输入或加载文本 A，再粘贴要比较的文本 B。",
+  "text.whitespace": "空白忽略档位",
+  "text.ws.none": "不忽略空白",
+  "text.ws.trailing": "忽略行首尾空白",
+  "text.ws.all": "忽略全部空白",
+  "text.ignoreCase": "忽略大小写",
+  "text.extractSummary": "共 {count} 个匹配（唯一值 {unique}）",
+  "text.resultsTruncated": "结果超出上限，仅显示前一部分"
 }

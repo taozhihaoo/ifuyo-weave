@@ -18,13 +18,16 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use encoding_rs;
 use weave_core::prelude::{CancellationToken, OperationId, Plan, Progress, WeaveError};
 use weave_text::model::{SourceKind, TextDocument, TextFormat};
 
 use crate::commands::IpcError;
 
-/// 文本工具输入上限（M4 下 §104 前置；集中常量，D43）。
-pub const MAX_TEXT_BYTES: u64 = 2 * 1024 * 1024;
+/// 统一分档限额（M4 下 §104/§166；单一来源 = weave_text::TextLimits）。
+pub fn limits() -> weave_text::TextLimits {
+    weave_text::TextLimits::default()
+}
 
 /// 写回内容缓存：build → execute 的会话内衔接（同 PlanCache 纪律）。
 #[derive(Default)]
@@ -80,20 +83,11 @@ pub fn load_text_document(
 ) -> Result<crate::text_dto::TextDocumentDto, IpcError> {
     weave_core::prelude::validate_absolute_path(raw_path)?;
     let meta = std::fs::metadata(raw_path).map_err(|e| err("text.loadFailed", e.to_string()))?;
-    if meta.len() > MAX_TEXT_BYTES {
-        return Err(err(
-            "text.tooLarge",
-            format!("file exceeds {MAX_TEXT_BYTES} bytes"),
-        ));
+    if let Err((message, code)) = limits().check("document", meta.len()) {
+        return Err(err(code, message));
     }
     let bytes = std::fs::read(raw_path).map_err(|e| err("text.loadFailed", e.to_string()))?;
-    // 二进制守卫（M4 下 §103 前置）：前 8 KiB 出现 NUL ⇒ 拒绝当文本处理
-    if bytes[..bytes.len().min(8192)].contains(&0) {
-        return Err(err(
-            "text.binaryDetected",
-            "file looks binary (NUL byte in first 8 KiB); text tools refuse to guess",
-        ));
-    }
+    detect_binary(&bytes)?;
     let decoded = match encoding_override {
         Some(name) => {
             let encoding = parse_encoding(name)?;
@@ -194,11 +188,24 @@ pub fn format_text(
     indent_spaces: f64,
     final_newline: bool,
 ) -> Result<crate::text_dto::FormatOutcomeDto, IpcError> {
-    let too_big = content.len() as u64 > MAX_TEXT_BYTES;
-    if too_big {
-        return Err(err("text.tooLarge", "input exceeds the text size limit"));
+    if let Err((message, code)) = limits().check("format", content.len() as u64) {
+        return Err(err(code, message));
     }
-    let format = parse_format(format)?;
+    // §112：Auto 检测在服务端做（保守），Unknown ⇒ 结构化错误要求手选，
+    // 绝不猜测后把用户输入"格式化坏"。
+    let format = if format == "auto" {
+        match weave_text::detect_format(None, content) {
+            TextFormat::Unknown => {
+                return Err(err(
+                    "text.formatUnknown",
+                    "format could not be detected; choose a format manually",
+                ));
+            }
+            detected => detected,
+        }
+    } else {
+        parse_format(format)?
+    };
     let operation = parse_operation(operation)?;
     let options = weave_text::format::FormatOptions {
         indent_spaces: indent_spaces.clamp(0.0, 8.0) as u32,
@@ -229,8 +236,8 @@ pub fn transform_text(
     content: &str,
     op: crate::text_dto::TransformOpDto,
 ) -> Result<crate::text_dto::TransformResultDto, IpcError> {
-    if content.len() as u64 > MAX_TEXT_BYTES {
-        return Err(err("text.tooLarge", "input exceeds the text size limit"));
+    if let Err((message, code)) = limits().check("transform", content.len() as u64) {
+        return Err(err(code, message));
     }
     let kind = op.into_domain()?;
     let result = weave_text::apply_transform(content, &kind).map_err(|e| {
@@ -248,9 +255,9 @@ pub fn extract_text(
     kind: &str,
     regex: Option<String>,
     unique_values: bool,
-) -> Result<Vec<crate::text_dto::ExtractMatchDto>, IpcError> {
-    if content.len() as u64 > MAX_TEXT_BYTES {
-        return Err(err("text.tooLarge", "input exceeds the text size limit"));
+) -> Result<crate::text_dto::ExtractResultDto, IpcError> {
+    if let Err((message, code)) = limits().check("extract", content.len() as u64) {
+        return Err(err(code, message));
     }
     let options = weave_text::ExtractOptions { unique_values };
     let matches = if kind == "regex" {
@@ -263,10 +270,58 @@ pub fn extract_text(
         let domain_kind = parse_extract_kind(kind)?;
         weave_text::extract_matches(content, domain_kind, &options)
     };
-    Ok(matches
+    let unique_count = {
+        let mut seen = std::collections::HashSet::new();
+        matches
+            .iter()
+            .filter(|m| seen.insert(m.value.clone()))
+            .count()
+    };
+    let total = matches.len();
+    // §185/§166：结果上限——超出截断 + Warning（诚实标注，不静默）
+    let truncated = total > limits().max_extract_matches;
+    let matches: Vec<_> = matches
         .into_iter()
+        .take(limits().max_extract_matches)
         .map(crate::text_dto::ExtractMatchDto::from_match)
-        .collect())
+        .collect();
+    Ok(crate::text_dto::ExtractResultDto {
+        count: total as f64,
+        unique_count: unique_count as f64,
+        truncated,
+        matches,
+    })
+}
+
+/// 二进制守卫（§103）：NUL 命中 + Latin-1 兜底路径的高控制字符占比——
+/// 两道事实检查，而非仅"contains zero byte"。
+fn detect_binary(bytes: &[u8]) -> Result<(), IpcError> {
+    let sample = &bytes[..bytes.len().min(8192)];
+    if sample.contains(&0) {
+        return Err(err(
+            "text.binaryDetected",
+            "file looks binary (NUL byte in the first 8 KiB); text tools refuse to guess",
+        ));
+    }
+    // 无 NUL 但解码会落到 Latin-1 兜底且控制字符密集 ⇒ 同样按二进制拒绝
+    if std::str::from_utf8(bytes).is_err() {
+        let (decoded, had_errors) = encoding_rs::GB18030.decode_without_bom_handling(bytes);
+        if had_errors {
+            let controls = decoded
+                .chars()
+                .take(2048)
+                .filter(|c| c.is_control() && !c.is_whitespace())
+                .count();
+            if controls > 512 {
+                return Err(err(
+                    "text.binaryDetected",
+                    "file looks binary (dense control characters; encoding undetectable)",
+                ));
+            }
+        }
+        let _ = decoded;
+    }
+    Ok(())
 }
 
 fn parse_extract_kind(name: &str) -> Result<weave_text::ExtractKind, IpcError> {
@@ -296,8 +351,11 @@ pub fn compare_text(
     whitespace: &str,
     ignore_case: bool,
 ) -> Result<crate::text_dto::DiffReportDto, IpcError> {
-    if a.len() as u64 > MAX_TEXT_BYTES || b.len() as u64 > MAX_TEXT_BYTES {
-        return Err(err("text.tooLarge", "input exceeds the text size limit"));
+    if let Err((message, code)) = limits().check("compare", a.len() as u64) {
+        return Err(err(code, message));
+    }
+    if let Err((message, code)) = limits().check("compare", b.len() as u64) {
+        return Err(err(code, message));
     }
     let options = weave_text::CompareOptions {
         whitespace: match whitespace {
@@ -327,8 +385,8 @@ pub fn build_text_write_plan(
     snapshot_modified_ms: Option<f64>,
 ) -> Result<crate::ops_dto::PlanDto, IpcError> {
     weave_core::prelude::validate_absolute_path(path)?;
-    if content.len() as u64 > MAX_TEXT_BYTES {
-        return Err(err("text.tooLarge", "content exceeds the text size limit"));
+    if let Err((message, code)) = limits().check("transform", content.len() as u64) {
+        return Err(err(code, message));
     }
     let encoding = parse_encoding(encoding)?;
     let bom = parse_bom(bom)?;

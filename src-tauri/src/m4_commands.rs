@@ -12,15 +12,10 @@ use crate::files_dto::JobHandleDto;
 use crate::jobs::JobOutcome;
 use crate::ops_dto::PlanDto;
 use crate::text_dto::{
-    DiffReportDto, ExtractMatchDto, FormatOutcomeDto, TextDocumentDto, TransformOpDto,
-    TransformResultDto,
+    DiffReportDto, FormatOutcomeDto, TextDocumentDto, TransformOpDto, TransformResultDto,
 };
 use tauri::Manager;
 use weave_core::prelude::WeaveError;
-
-fn too_big() -> IpcError {
-    WeaveError::validation("text.tooLarge", "input exceeds the text size limit").into()
-}
 
 /// 加载文本文档（解码级联 + 二进制守卫 + 尺寸上限）。
 #[tauri::command]
@@ -69,7 +64,7 @@ pub fn extract_text(
     kind: String,
     regex: Option<String>,
     unique_values: Option<bool>,
-) -> Result<Vec<ExtractMatchDto>, IpcError> {
+) -> Result<crate::text_dto::ExtractResultDto, IpcError> {
     crate::text_service::extract_text(&content, &kind, regex, unique_values.unwrap_or(false))
 }
 
@@ -181,13 +176,4 @@ pub fn execute_text_plan(
     Ok(JobHandleDto {
         job_id: job_id.to_string(),
     })
-}
-
-// 输入尺寸统一守卫（供未来批量入口复用）
-#[allow(dead_code)]
-fn ensure_size(len: usize) -> Result<(), IpcError> {
-    if len as u64 > crate::text_service::MAX_TEXT_BYTES {
-        return Err(too_big());
-    }
-    Ok(())
 }
