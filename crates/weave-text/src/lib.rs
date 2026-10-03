@@ -10,6 +10,7 @@
 pub mod detection;
 pub mod diagnostics;
 pub mod encoding;
+pub mod extract;
 pub mod model;
 pub mod offset;
 pub mod transform;
@@ -26,3 +27,5 @@ pub use offset::{LineIndex, TextRange};
 pub use transform::{
     BlankPolicy, CaseForm, KeepPolicy, PadMode, TransformKind, TransformResult, apply_transform,
 };
+
+pub use extract::{ExtractKind, ExtractMatch, ExtractOptions, extract_matches, extract_regex};
