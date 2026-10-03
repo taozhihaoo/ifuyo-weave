@@ -15,6 +15,8 @@ use std::time::SystemTime;
 pub enum OperationKind {
     Rename,
     Move,
+    /// M3：重复文件回收（Move to Recycle Bin）。
+    DuplicateRecycle,
 }
 
 impl OperationKind {
@@ -22,6 +24,7 @@ impl OperationKind {
         match self {
             OperationKind::Rename => "rename",
             OperationKind::Move => "move",
+            OperationKind::DuplicateRecycle => "duplicateRecycle",
         }
     }
 }

@@ -16,6 +16,7 @@
 
 pub mod model;
 pub mod pipeline;
+pub mod recycle_exec;
 
 pub use model::{DuplicateFileEntry, DuplicateGroup, DuplicateScanReport, ScanStage};
 pub use pipeline::{PARTIAL_HASH_BYTES, partial_hash, scan_duplicates};

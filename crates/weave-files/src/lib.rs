@@ -21,6 +21,7 @@ pub mod hash;
 pub mod inspect;
 pub mod metadata;
 pub mod organize;
+pub mod recycle;
 pub mod rename;
 pub mod scan;
 pub mod undo;
