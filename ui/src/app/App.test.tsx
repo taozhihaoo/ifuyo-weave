@@ -173,6 +173,8 @@ describe("M1 file core panels", () => {
       progressCurrent: 512,
       hash: null,
       scan: null,
+      plan: null,
+      undo: null,
       error: null,
     });
     render(<App />);
@@ -187,6 +189,8 @@ describe("M1 file core panels", () => {
       state: "completed",
       progressCurrent: null,
       hash: null,
+      plan: null,
+      undo: null,
       scan: {
         scanId: "op_test",
         root: "C:" + BS_CONST + "w",
@@ -233,6 +237,8 @@ describe("M1 file core panels", () => {
       state: "completed",
       progressCurrent: null,
       hash: null,
+      plan: null,
+      undo: null,
       scan: {
         scanId: "op_c",
         root: "C:" + BS_CONST + "w",

@@ -4,6 +4,9 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listCommands, runCommand } from "../commands/registry";
 import type { IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
+import { HistoryPanel } from "../features/ops/HistoryPanel";
+import { OrganizerPanel } from "../features/ops/OrganizerPanel";
+import { RenamePanel } from "../features/ops/RenamePanel";
 import { ScanPanel } from "../features/files/ScanPanel";
 import { commands } from "../generated/bindings";
 import { useT } from "../i18n";
@@ -36,6 +39,8 @@ function App() {
     hashStatus,
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
+  const [view, setView] = useState<"tools" | "rename" | "organizer" | "history">("tools");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const hashPollStop = useRef<(() => void) | null>(null);
   const scanPollStop = useRef<(() => void) | null>(null);
 
@@ -198,7 +203,18 @@ function App() {
       // 对话框失败必须可见（本机曾出现插件挂起——见 Known Limitations）。
       useAppStore
         .getState()
-        .setError(e instanceof Error ? { kind: "internal", code: "dialog.failed", message: e.message, location: null, recoverability: "retryable", suggestion: null } : (e as IpcError));
+        .setError(
+          e instanceof Error
+            ? {
+                kind: "internal",
+                code: "dialog.failed",
+                message: e.message,
+                location: null,
+                recoverability: "retryable",
+                suggestion: null,
+              }
+            : (e as IpcError),
+        );
     }
   };
 
@@ -250,6 +266,27 @@ function App() {
           {locale === "zh-CN" ? "English" : "中文"}
         </button>
       </header>
+
+      <nav
+        aria-label={t("app.nav")}
+        style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
+      >
+        {(["tools", "rename", "organizer", "history"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            aria-current={view === v ? "page" : undefined}
+            style={{
+              ...buttonStyle,
+              background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
+              borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+            }}
+          >
+            {t(`nav.${v}`)}
+          </button>
+        ))}
+      </nav>
 
       <section
         style={{
@@ -312,21 +349,55 @@ function App() {
         ))}
       </section>
 
-      <section
-        aria-label={t("drop.hint")}
-        style={{
-          border: "2px dashed " + (dragOver ? "var(--color-accent)" : "var(--color-border)"),
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--spacing-xl)",
-          textAlign: "center",
-          background: dragOver ? "var(--color-accent-soft)" : "var(--color-surface)",
-          transition: "background var(--motion-normal) var(--motion-ease)",
-        }}
-      >
-        {t("drop.hint")}
-      </section>
+      {view === "rename" ? (
+        <RenamePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
 
-      {inspectError ? (
+      {view === "organizer" ? (
+        <OrganizerPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "history" ? (
+        <HistoryPanel
+          locale={locale}
+          refreshSignal={historyRefresh}
+          onUndoDone={() => setHistoryRefresh((n) => n + 1)}
+        />
+      ) : null}
+
+      {view === "tools" ? (
+        <section
+          aria-label={t("drop.hint")}
+          style={{
+            border: "2px dashed " + (dragOver ? "var(--color-accent)" : "var(--color-border)"),
+            borderRadius: "var(--radius-lg)",
+            padding: "var(--spacing-xl)",
+            textAlign: "center",
+            background: dragOver ? "var(--color-accent-soft)" : "var(--color-surface)",
+            transition: "background var(--motion-normal) var(--motion-ease)",
+          }}
+        >
+          {t("drop.hint")}
+        </section>
+      ) : null}
+
+      {view === "rename" ? (
+        <RenamePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "organizer" ? (
+        <OrganizerPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "history" ? (
+        <HistoryPanel
+          locale={locale}
+          refreshSignal={historyRefresh}
+          onUndoDone={() => setHistoryRefresh((n) => n + 1)}
+        />
+      ) : null}
+
+      {view === "tools" && inspectError ? (
         <section
           role="alert"
           style={{ color: "var(--color-danger)", fontSize: "var(--typography-size-sm)" }}
@@ -335,7 +406,7 @@ function App() {
         </section>
       ) : null}
 
-      {inspection ? (
+      {view === "tools" && inspection ? (
         <InspectorPanel
           inspection={inspection}
           locale={locale}
@@ -349,7 +420,7 @@ function App() {
         />
       ) : null}
 
-      {scanJob ? (
+      {view === "tools" && scanJob ? (
         <ScanPanel
           root={scanJob.path}
           status={scanStatus}
