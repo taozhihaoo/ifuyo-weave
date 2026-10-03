@@ -79,6 +79,8 @@ export const commands = {
 	dataPreviewTransform: (sessionId: string, plan: DataTransformPlan) => typedError<TransformPreviewDto, IpcError>(__TAURI_INVOKE("data_preview_transform", { sessionId, plan })),
 	dataApplyTransform: (sessionId: string, plan: DataTransformPlan) => typedError<DataPageDto, IpcError>(__TAURI_INVOKE("data_apply_transform", { sessionId, plan })),
 	dataExport: (sessionId: string, options: DataExportOptionsDto) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("data_export", { sessionId, options })),
+	/**  §146 手动关闭会话：立即释放内存。 */
+	dataClose: (sessionId: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("data_close", { sessionId })),
 };
 
 /* Types */

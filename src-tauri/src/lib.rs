@@ -62,6 +62,7 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         data_service::data_preview_transform,
         data_service::data_apply_transform,
         data_service::data_export,
+        data_service::data_close,
     ])
 }
 

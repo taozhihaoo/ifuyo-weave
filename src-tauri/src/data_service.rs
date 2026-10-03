@@ -34,11 +34,13 @@ fn limits() -> DataLimits {
     DataLimits::default()
 }
 
-/// 会话存储（§17 ephemeral；上限 8 个，超出挤掉最旧）。
+/// 会话存储（§17 ephemeral；§146 生命周期：上限 8 个 LRU 淘汰 +
+/// 显式 close 释放内存）。
 #[derive(Default)]
 pub struct DataSessions {
-    inner: Mutex<HashMap<String, DataSession>>,
+    inner: Mutex<HashMap<String, (DataSession, u64)>>,
     counter: std::sync::atomic::AtomicU64,
+    last_used: std::sync::atomic::AtomicU64,
 }
 
 const MAX_SESSIONS: usize = 8;
@@ -55,20 +57,42 @@ impl DataSessions {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
             + 1;
         let handle = format!("ds_{n}");
-        map.insert(handle.clone(), session);
+        let stamp = self
+            .last_used
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        map.insert(handle.clone(), (session, stamp));
+        // §146 LRU：超上限挤掉最久未用（stamp 最小）
         if map.len() > MAX_SESSIONS
             && let Some(oldest) = map
-                .keys()
-                .min_by_key(|k| k.trim_start_matches("ds_").parse::<u64>().unwrap_or(0))
-                .cloned()
+                .iter()
+                .min_by_key(|(_, (_, stamp))| *stamp)
+                .map(|(k, _)| k.clone())
         {
             map.remove(&oldest);
         }
         handle
     }
 
+    fn close(&self, handle: &str) -> bool {
+        self.inner
+            .lock()
+            .expect("sessions")
+            .remove(handle)
+            .is_some()
+    }
+
+    /// §147 隔离：with 只触达指定 handle；每次访问刷新 last-used。
     fn with<R>(&self, handle: &str, f: impl FnOnce(&mut DataSession) -> R) -> Option<R> {
-        self.inner.lock().expect("sessions").get_mut(handle).map(f)
+        let mut map = self.inner.lock().expect("sessions");
+        let stamp = self
+            .last_used
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        map.get_mut(handle).map(|(session, stamp_cell)| {
+            *stamp_cell = stamp;
+            f(session)
+        })
     }
 }
 
@@ -474,6 +498,17 @@ pub fn data_inspect_profiles(
             format!("unknown session '{session_id}'"),
         )
     })
+}
+
+/// §146 手动关闭会话：立即释放内存。
+#[tauri::command]
+#[specta::specta]
+pub fn data_close(app: tauri::AppHandle, session_id: String) -> Result<bool, IpcError> {
+    use tauri::Manager;
+    Ok(app
+        .state::<crate::state::AppState>()
+        .data_sessions
+        .close(&session_id))
 }
 
 // ─── transform（Cleaner）───

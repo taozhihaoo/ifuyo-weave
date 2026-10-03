@@ -20,12 +20,11 @@ fn csv_fixture(rows: usize, seed: usize) -> String {
     out.push_str("id,name,amount,note\n");
     for i in 0..rows {
         out.push_str(&format!(
-            "{},{},{}.{}\n",
+            "{},name-{},{}.{}\n",
             i,
-            format!("name-{}", i % 9973),
+            i % 9973,
             i % 1000,
             i % 13,
-            // note 内嵌引号/逗号 exercised by escape path
         ));
         let _ = seed;
     }
@@ -68,11 +67,7 @@ fn main() {
             &limits,
         )
         .expect("scan");
-        println!(
-            "| {} | scan | {} ms |",
-            scale,
-            t.elapsed().as_millis()
-        );
+        println!("| {} | scan | {} ms |", scale, t.elapsed().as_millis());
 
         let mut session = DataSession::new(weave_data::DataTable {
             columns: parsed.columns,
@@ -141,7 +136,11 @@ fn main() {
         println!("| {scale} | csv→json {} ms |", t.elapsed().as_millis());
         let t = Instant::now();
         let jsonl = table_to_jsonl(&table, weave_data::TypedMode::PreserveStrings);
-        println!("| {scale} | csv→jsonl {} ms ({} B) |", t.elapsed().as_millis(), jsonl.len());
+        println!(
+            "| {scale} | csv→jsonl {} ms ({} B) |",
+            t.elapsed().as_millis(),
+            jsonl.len()
+        );
     }
 
     // §141 回归锚点：Compare P1 修复后 100k 全不同应 < 200ms（见 PERF.md M4 节）
