@@ -7,6 +7,7 @@
 //! 文件系统状态的事实快照，Execute 前重新验证（Revalidate）而非重新推导。
 
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
 
 /// 操作种类（M2 §9）。M2 只实现 Rename / Move（Organizer = Move 的一种规划）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,7 +67,7 @@ pub enum ItemOutcome {
 }
 
 /// 计划中的一个条目（M2 §10）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanItem {
     /// 批内稳定 ID（如 "item_0007"）；不使用 UI index（M2 §8）。
@@ -75,6 +76,9 @@ pub struct PlanItem {
     pub target_path: String,
     pub status: PlanItemStatus,
     pub collision: CollisionKind,
+    /// 计划时源快照——Execute 前的 Revalidate 依据（M2 §38；变化 ⇒ PreconditionFailed）。
+    pub source_size: Option<u64>,
+    pub source_modified: Option<SystemTime>,
     pub warnings: Vec<String>,
     pub errors: Vec<WeaveError>,
 }
@@ -82,7 +86,7 @@ pub struct PlanItem {
 use crate::error::WeaveError;
 
 /// 结构化执行计划（M2 §10）：Preview 与 Execute 共用的事实快照。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Plan {
     pub operation_id: crate::id::OperationId,
@@ -142,6 +146,8 @@ mod tests {
                     target_path: "C:\\b.jpg".to_string(),
                     status: PlanItemStatus::Ready,
                     collision: CollisionKind::None,
+                    source_size: Some(10),
+                    source_modified: None,
                     warnings: vec![],
                     errors: vec![],
                 },
@@ -151,6 +157,8 @@ mod tests {
                     target_path: "C:\\b.jpg".to_string(),
                     status: PlanItemStatus::Conflict,
                     collision: CollisionKind::InternalTarget,
+                    source_size: None,
+                    source_modified: None,
                     warnings: vec![],
                     errors: vec![WeaveError::conflict("rename.internalCollision", "dup")],
                 },
@@ -160,6 +168,8 @@ mod tests {
                     target_path: "C:\\d.jpg".to_string(),
                     status: PlanItemStatus::NoOp,
                     collision: CollisionKind::None,
+                    source_size: None,
+                    source_modified: None,
                     warnings: vec![],
                     errors: vec![],
                 },

@@ -255,6 +255,9 @@ fn child_read_failure_aggregates_and_continues() {
         fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
             StdFilesystem.open_read(p)
         }
+        fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+            StdFilesystem.rename(from, to)
+        }
     }
 
     let ws = TempWorkspace::new("scan-fault-child").expect("ws");
@@ -315,6 +318,9 @@ fn file_deleted_during_scan_is_recorded_not_silent() {
         }
         fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
             StdFilesystem.open_read(p)
+        }
+        fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+            StdFilesystem.rename(from, to)
         }
     }
 

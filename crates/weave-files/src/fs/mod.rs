@@ -34,4 +34,8 @@ pub trait Filesystem: Send + Sync {
 
     /// 打开只读流。Hash 等流式消费方按 chunk 读取，禁止整读入内存（M1 §7.1）。
     fn open_read(&self, path: &Path) -> io::Result<Box<dyn io::Read + Send>>;
+
+    /// 原生重命名/同卷移动（M2 §70：避免 copy+delete 模拟）。
+    /// 目标已存在时的行为由平台决定——调用方必须先做碰撞校验（M2 §21）。
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()>;
 }

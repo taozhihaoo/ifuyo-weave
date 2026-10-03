@@ -270,6 +270,9 @@ mod tests {
             fn open_read(&self, p: &Path) -> io::Result<Box<dyn io::Read + Send>> {
                 StdFilesystem.open_read(p)
             }
+            fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+                StdFilesystem.rename(from, to)
+            }
         }
 
         let ws = TempWorkspace::new("hash-unstable").expect("ws");

@@ -18,6 +18,7 @@ pub mod fs;
 pub mod hash;
 pub mod inspect;
 pub mod metadata;
+pub mod rename;
 pub mod scan;
 
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
@@ -26,6 +27,7 @@ pub use fs::Filesystem;
 pub use hash::{HASH_CHUNK_SIZE, hash_file};
 pub use inspect::{FileInspection, InspectOptions, InspectionStatus, inspect_file};
 pub use metadata::FileStat;
+pub use rename::{CaseForm, DateField, DateFormat, RenameRule, TemplateError, build_rename_plan};
 pub use scan::{
     DEFAULT_MAX_DEPTH, DEFAULT_MAX_ENTRIES, DirectoryScanReport, FileLineItem, HARD_MAX_DEPTH,
     HARD_MAX_ENTRIES, ScanErrorEntry, ScanOptions, scan_directory,

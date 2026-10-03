@@ -32,6 +32,10 @@ impl Filesystem for StdFilesystem {
         // 显式只读 + 不创建；share mode 使用 std 默认（Windows 上允许共享读）。
         Ok(Box::new(std::fs::File::open(path)?))
     }
+
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        std::fs::rename(from, to)
+    }
 }
 
 #[cfg(test)]

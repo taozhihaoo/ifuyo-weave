@@ -130,6 +130,10 @@ impl Filesystem for FaultFilesystem {
         }
         Ok(reader)
     }
+
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename(from, to)
+    }
 }
 
 fn windows_sharing_violation_code() -> i32 {
