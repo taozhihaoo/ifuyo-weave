@@ -69,6 +69,8 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  // §88：Save As（低风险输出；目标已存在 ⇒ 结构化 collision，§132）
+  const [saveAsPath, setSaveAsPath] = useState("");
 
   // format
   const [format, setFormat] = useState("auto");
@@ -303,15 +305,25 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
     setStatus(t("text.copied"));
   };
 
-  const doApply = (newContent: string): void => {
-    if (!loadedPath) {
+  const doApply = (newContent: string, saveAsPath: string | null): void => {
+    const target = saveAsPath ?? loadedPath;
+    if (!target) {
       setError(t("text.noFileLoaded"));
       return;
     }
     setBusy(true);
     setError(null);
+    const isSaveAs = saveAsPath !== null;
     commands
-      .buildTextWritePlan(loadedPath, newContent, docEncoding, docBom, docSize, docModified)
+      .buildTextWritePlan(
+        target,
+        newContent,
+        docEncoding,
+        docBom,
+        isSaveAs ? 0 : docSize,
+        isSaveAs ? null : docModified,
+        isSaveAs,
+      )
       .then((r) => {
         if (r.status !== "ok") {
           setBusy(false);
@@ -353,9 +365,15 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
               const report = st.plan;
               if (report) {
                 onOperationDone(report.operationId, report.undoable);
-                setStatus(t("text.applied", { bytes: docSize }));
-                // 重新加载以刷新快照（Preview 基于新状态）
-                doLoad();
+                setStatus(
+                  isSaveAs
+                    ? t("text.savedAs", { path: target })
+                    : t("text.applied", { bytes: docSize }),
+                );
+                // 覆盖写后重新加载以刷新快照（Save-As 目标是新路径，不重载）
+                if (!isSaveAs) {
+                  doLoad();
+                }
               }
             },
           );
@@ -496,10 +514,25 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => doApply(formatResult)}
+                  onClick={() => doApply(formatResult, null)}
                   style={boxStyle}
                 >
                   {t("text.applyOverwrite")}
+                </button>
+                <input
+                  aria-label={t("text.saveAsPath")}
+                  value={saveAsPath}
+                  onChange={(e) => setSaveAsPath(e.target.value)}
+                  placeholder={t("text.saveAsPath")}
+                  style={{ ...boxStyle, flex: 1, minWidth: "12em" }}
+                />
+                <button
+                  type="button"
+                  disabled={busy || saveAsPath.trim().length === 0}
+                  onClick={() => doApply(formatResult, saveAsPath.trim())}
+                  style={boxStyle}
+                >
+                  {t("text.saveAs")}
                 </button>
               </div>
             </>
@@ -593,10 +626,25 @@ export function TextPanel({ onOperationDone, seedFile, onSeedConsumed }: TextPan
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => doApply(transformResult)}
+                  onClick={() => doApply(transformResult, null)}
                   style={boxStyle}
                 >
                   {t("text.applyOverwrite")}
+                </button>
+                <input
+                  aria-label={t("text.saveAsPath")}
+                  value={saveAsPath}
+                  onChange={(e) => setSaveAsPath(e.target.value)}
+                  placeholder={t("text.saveAsPath")}
+                  style={{ ...boxStyle, flex: 1, minWidth: "12em" }}
+                />
+                <button
+                  type="button"
+                  disabled={busy || saveAsPath.trim().length === 0}
+                  onClick={() => doApply(transformResult, saveAsPath.trim())}
+                  style={boxStyle}
+                >
+                  {t("text.saveAs")}
                 </button>
               </div>
             </>

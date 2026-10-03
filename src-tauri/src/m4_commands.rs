@@ -86,6 +86,7 @@ pub fn compare_text(
 }
 
 /// 构建写回计划（内容进服务端缓存；快照随 PlanItem，§90）。
+#[expect(clippy::too_many_arguments)]
 #[tauri::command]
 #[specta::specta]
 pub fn build_text_write_plan(
@@ -96,6 +97,7 @@ pub fn build_text_write_plan(
     bom: String,
     snapshot_size: f64,
     snapshot_modified_ms: Option<f64>,
+    must_not_exist: Option<bool>,
 ) -> Result<PlanDto, IpcError> {
     let state = app.state::<crate::state::AppState>();
     crate::text_service::build_text_write_plan(
@@ -107,6 +109,7 @@ pub fn build_text_write_plan(
         &bom,
         snapshot_size,
         snapshot_modified_ms,
+        must_not_exist.unwrap_or(false),
     )
 }
 

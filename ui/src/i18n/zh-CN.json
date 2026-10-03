@@ -218,5 +218,8 @@
   "text.ws.all": "忽略全部空白",
   "text.ignoreCase": "忽略大小写",
   "text.extractSummary": "共 {count} 个匹配（唯一值 {unique}）",
-  "text.resultsTruncated": "结果超出上限，仅显示前一部分"
+  "text.resultsTruncated": "结果超出上限，仅显示前一部分",
+  "text.saveAsPath": "另存为路径",
+  "text.saveAs": "另存为",
+  "text.savedAs": "已另存到 {path}"
 }

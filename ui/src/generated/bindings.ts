@@ -65,7 +65,7 @@ export const commands = {
 	/**  Compare（Side-by-side 模型 + Unified 输出）。 */
 	compareText: (a: string, b: string, whitespace: string | null, ignoreCase: boolean | null) => typedError<DiffReportDto, IpcError>(__TAURI_INVOKE("compare_text", { a, b, whitespace, ignoreCase })),
 	/**  构建写回计划（内容进服务端缓存；快照随 PlanItem，§90）。 */
-	buildTextWritePlan: (path: string, content: string, encoding: string, bom: string, snapshotSize: number | null, snapshotModifiedMs: number | null) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_text_write_plan", { path, content, encoding, bom, snapshotSize, snapshotModifiedMs })),
+	buildTextWritePlan: (path: string, content: string, encoding: string, bom: string, snapshotSize: number | null, snapshotModifiedMs: number | null, mustNotExist: boolean | null) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("build_text_write_plan", { path, content, encoding, bom, snapshotSize, snapshotModifiedMs, mustNotExist })),
 	/**  执行写回（任务内 Revalidate → 备份 → 原子写 → 事务/历史）。 */
 	executeTextPlan: (operationId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("execute_text_plan", { operationId })),
 };

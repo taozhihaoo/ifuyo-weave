@@ -39,6 +39,8 @@ pub struct TextWriteCache {
 pub struct TextWriteEntry {
     pub path: PathBuf,
     pub bytes: Vec<u8>,
+    /// Save-As 语义（§132）：目标被外部创建 ⇒ text.destinationExists 拒绝。
+    pub must_not_exist: bool,
 }
 
 impl TextWriteCache {
@@ -383,10 +385,18 @@ pub fn build_text_write_plan(
     bom: &str,
     snapshot_size: f64,
     snapshot_modified_ms: Option<f64>,
+    must_not_exist: bool,
 ) -> Result<crate::ops_dto::PlanDto, IpcError> {
     weave_core::prelude::validate_absolute_path(path)?;
     if let Err((message, code)) = limits().check("transform", content.len() as u64) {
         return Err(err(code, message));
+    }
+    // §132 第三例：Save-As 目标已存在 ⇒ 计划期即 collision（执行期还会复查）
+    if must_not_exist && std::fs::metadata(path).is_ok() {
+        return Err(err(
+            "text.destinationExists",
+            format!("save-as destination already exists: {path}"),
+        ));
     }
     let encoding = parse_encoding(encoding)?;
     let bom = parse_bom(bom)?;
@@ -401,9 +411,18 @@ pub fn build_text_write_plan(
             target_path: String::new(), // 备份路径执行期决定
             status: weave_core::prelude::PlanItemStatus::Ready,
             collision: weave_core::prelude::CollisionKind::None,
-            source_size: Some(snapshot_size as u64),
-            source_modified: snapshot_modified_ms
-                .map(|ms| std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64)),
+            // Save-As（must_not_exist）无加载快照：size=None ⇒ 不做 TOCTOU 缺失检查
+            source_size: if must_not_exist {
+                None
+            } else {
+                Some(snapshot_size as u64)
+            },
+            source_modified: if must_not_exist {
+                None
+            } else {
+                snapshot_modified_ms
+                    .map(|ms| std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64))
+            },
             warnings: Vec::new(),
             errors: Vec::new(),
         }],
@@ -415,6 +434,7 @@ pub fn build_text_write_plan(
         TextWriteEntry {
             path: PathBuf::from(path),
             bytes,
+            must_not_exist,
         },
     );
     Ok(dto)
@@ -436,6 +456,7 @@ fn parse_bom(name: &str) -> Result<weave_text::Bom, IpcError> {
 }
 
 /// 任务内执行写回：Revalidate → 备份 → 原子写 → 事务/历史落盘。
+#[derive(Debug)]
 pub struct TextWriteReport {
     pub operation_id: OperationId,
     pub bytes_written: u64,
@@ -472,18 +493,40 @@ pub fn run_text_write_job(
 
     // §90 TOCTOU Revalidate：外部改动 ⇒ 拒绝写回
     let current = std::fs::metadata(&entry.path);
+    // §132 第三例复查：Save-As 目标在计划后被外部创建 ⇒ collision
+    if entry.must_not_exist && current.is_ok() {
+        return Err((
+            report_of(plan, &started),
+            WeaveError::conflict(
+                "text.destinationExists",
+                format!(
+                    "save-as destination was created after planning: {}",
+                    entry.path.display()
+                ),
+            )
+            .with_location("text_service::run_text_write_job"),
+        ));
+    }
+    // §132 第二例：加载快照存在但文件已被外部删除 ⇒ FileMissing（不静默重建）
+    if item.source_size.is_some() && current.is_err() {
+        return Err((
+            report_of(plan, &started),
+            WeaveError::validation(
+                "text.fileMissing",
+                format!(
+                    "source disappeared after preview: {}; reload and re-preview",
+                    entry.path.display()
+                ),
+            )
+            .with_location("text_service::run_text_write_job"),
+        ));
+    }
     if let Ok(meta) = &current
         && let Some(expected) = item.source_size
         && meta.len() != expected
     {
         return Err((
-            TextWriteReport {
-                operation_id: plan.operation_id.clone(),
-                bytes_written: 0,
-                backup: None,
-                failed: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-            },
+            report_of(plan, &started),
             WeaveError::conflict(
                 "text.fileChangedSincePreview",
                 format!(
@@ -617,6 +660,17 @@ pub fn run_text_write_job(
 
 fn parent_dir(path: &std::path::Path) -> PathBuf {
     path.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+}
+
+/// 失败报告的统一构造（零写入）。
+fn report_of(plan: &Plan, started: &std::time::Instant) -> TextWriteReport {
+    TextWriteReport {
+        operation_id: plan.operation_id.clone(),
+        bytes_written: 0,
+        backup: None,
+        failed: true,
+        duration_ms: started.elapsed().as_millis() as u64,
+    }
 }
 
 /// 纯函数入口共用的小文档构造（UI Paste/Typed 来源）。

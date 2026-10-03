@@ -218,5 +218,8 @@
   "text.ws.all": "Ignore all whitespace",
   "text.ignoreCase": "Ignore case",
   "text.extractSummary": "{count} matches ({unique} unique)",
-  "text.resultsTruncated": "results beyond the cap are not shown"
+  "text.resultsTruncated": "results beyond the cap are not shown",
+  "text.saveAsPath": "Save-as path",
+  "text.saveAs": "Save As",
+  "text.savedAs": "Saved to {path}"
 }
