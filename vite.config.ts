@@ -16,7 +16,7 @@ export default defineConfig({
     outDir: "dist",
     target: "chrome110",
     sourcemap: false,
-    minify: "esbuild",
+    minify: true,
   },
   test: {
     environment: "jsdom",
