@@ -6,12 +6,13 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use weave_core::prelude::{TextEncoding, WeaveError};
+use weave_core::prelude::{CancellationToken, TextEncoding, WeaveError};
+use weave_files::atomic_write;
 use weave_utilities::{
     Base64Alphabet, Base64DecodeLimits, Base64Padding, ColorHsl, ColorHsv, ColorInput, ColorRgb,
     RegexFlag, RegexLimits, SystemClock, TimestampConversion, TimestampUnit, UuidBatchLimits,
-    UuidFormat, UuidInfo, UuidVersion, base64_decode, base64_encode, color_contrast,
-    hash_algorithm_matrix, hash_text, now_utc, parse_color, parse_timestamp,
+    UuidFormat, UuidInfo, UuidVersion, base64_decode, base64_encode, checksum_file, color_contrast,
+    export_report, hash_algorithm_matrix, hash_text, now_utc, parse_color, parse_timestamp,
     regex_capability_matrix, regex_find, regex_replace, url_decode_component, url_decode_query,
     url_encode_component, url_encode_query, url_parse, uuid_generate, uuid_validate,
 };
@@ -560,4 +561,135 @@ pub fn utilities_color_contrast(hex_a: String, hex_b: String) -> Result<f64, Ipc
     let a = weave_utilities::parse_hex(&hex_a).map_err(|e| err(&e))?;
     let b = weave_utilities::parse_hex(&hex_b).map_err(|e| err(&e))?;
     Ok(color_contrast(&a, &b))
+}
+
+// ── 文件 Checksum + 导出（M9 下 §131/§140/§144-§148）──
+
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChecksumEntryDto {
+    pub path: String,
+    pub algorithm: String,
+    pub digest_hex: String,
+    pub bytes_processed: f64,
+    pub status: String,
+}
+
+/// 文件校验和（同步命令——校验和为流式快速计算；任务化列下批）。
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)] // D10
+pub fn utilities_checksum_file(
+    path: String,
+    algorithm_id: String,
+) -> Result<FileChecksumEntryDto, IpcError> {
+    weave_core::prelude::validate_absolute_path(&path)?;
+    let algorithm = weave_utilities::ChecksumAlgorithm::parse(&algorithm_id).ok_or_else(|| {
+        err(&weave_utilities::UtilityError::new(
+            weave_utilities::UtilityErrorKind::UnsupportedAlgorithm,
+            "checksum.unknownAlgorithm",
+            format!("unknown checksum algorithm '{algorithm_id}'"),
+        ))
+    })?;
+    let entry = checksum_file(
+        std::path::Path::new(&path),
+        algorithm,
+        &CancellationToken::new(),
+        &mut |_| {},
+    )
+    .map_err(|e| err(&e))?;
+    Ok(FileChecksumEntryDto {
+        path: entry.path,
+        algorithm: entry.algorithm,
+        digest_hex: entry.digest_hex,
+        bytes_processed: entry.bytes_processed,
+        status: entry.status,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FileExportResultDto {
+    /// 写出文件路径（M2 atomic_write + History 创建型事务，可撤销）。
+    pub output: String,
+    pub entry_count: f64,
+}
+
+/// 报告导出（§93/§144/§146-§148）：TXT/CSV/JSON 统一经 M2 atomic_write
+/// + History 创建型事务（撤销 = 删除，stat 守卫）。禁止 UI 层直接写盘。
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)] // D10
+pub fn utilities_export_report(
+    app: tauri::AppHandle,
+    entries: Vec<FileChecksumEntryDto>,
+    format: String,
+    destination_dir: String,
+    file_name: String,
+) -> Result<FileExportResultDto, IpcError> {
+    use weave_utilities::{ExportFormat, FileChecksumEntry};
+    if entries.is_empty() {
+        return Err(err(&weave_utilities::UtilityError::invalid_input(
+            "export.emptyEntries",
+            "no checksum entries to export",
+        )));
+    }
+    weave_core::prelude::validate_absolute_path(&destination_dir)?;
+    let domain_entries: Vec<FileChecksumEntry> = entries
+        .iter()
+        .map(|e| FileChecksumEntry {
+            path: e.path.clone(),
+            algorithm: e.algorithm.clone(),
+            digest_hex: e.digest_hex.clone(),
+            bytes_processed: e.bytes_processed,
+            status: e.status.clone(),
+        })
+        .collect();
+    let format = match format.as_str() {
+        "json" => ExportFormat::Json,
+        "csv" => ExportFormat::Csv,
+        "txt" => ExportFormat::Txt,
+        other => {
+            return Err(err(&weave_utilities::UtilityError::invalid_input(
+                "export.unknownFormat",
+                format!("unknown export format '{other}' (json/csv/txt)"),
+            )));
+        }
+    };
+    let content = export_report(&domain_entries, format);
+    let file_name = if file_name.is_empty() {
+        "checksum-report.txt".to_owned()
+    } else {
+        file_name
+    };
+    let output = std::path::PathBuf::from(&destination_dir).join(&file_name);
+    if output.exists() {
+        return Err(err(&weave_utilities::UtilityError::invalid_input(
+            "document.destinationExists",
+            format!("output already exists: {} (output-first)", output.display()),
+        )));
+    }
+    // §93/§201：复用 M2 atomic_write（temp → flush → rename）
+    atomic_write(&weave_files::fs::StdFilesystem, &output, content.as_bytes()).map_err(|e| {
+        err(&weave_utilities::UtilityError::new(
+            weave_utilities::UtilityErrorKind::InternalError,
+            "export.writeFailed",
+            format!("{}: {}", output.display(), e.message),
+        ))
+    })?;
+    let inputs: Vec<String> = entries.iter().map(|e| e.path.clone()).collect();
+    if let Ok(hdir) = crate::rename_service::resolve_history_dir(&app)
+        && let Err(e) = crate::batch_service::record_creation_transaction(
+            &hdir,
+            &inputs,
+            std::slice::from_ref(&output),
+            &format!("Utilities export · {} entries", entries.len()),
+        )
+    {
+        tracing::warn!(error = %e, "utilities export history failed");
+    }
+    Ok(FileExportResultDto {
+        output: output.to_string_lossy().into_owned(),
+        entry_count: entries.len() as f64,
+    })
 }

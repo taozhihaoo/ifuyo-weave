@@ -102,6 +102,8 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         utilities_service::utilities_regex_capabilities,
         utilities_service::utilities_color_convert,
         utilities_service::utilities_color_contrast,
+        utilities_service::utilities_checksum_file,
+        utilities_service::utilities_export_report,
     ])
 }
 
