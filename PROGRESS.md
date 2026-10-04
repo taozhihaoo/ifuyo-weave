@@ -573,3 +573,12 @@ Known Limitations:
   大文件取消列（下））
 - Bookmarks/Page Labels/Annotations 保留行为未验证记录（§81/§82 列（下）
   专项测试）；大文档基线（§101/§102）列（下）
+- tauri build: PASS（4.48 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — 文档页 inspect（PDF facts 含
+  元数据标题/页数 Known(4)；DOCX facts 含 core properties/标题/表格计数）
+  → rotate（output-first：二次执行 destinationExists 拒绝）→ extract 1-2
+  → merge 预览（4+2=6）+ 执行 → History 撤销 = 删除 merged 产物、输入与
+  其余产物保留；console 零错误
+- **冒烟抓出 P1 并修复（fdf743f）**：record_creation_transaction 为
+  HistoryEntry 生成了第二个 OperationId——按入口 id 撤销找不到事务
+  （undo.unknownOperation）；入口现共享事务 id，经冒烟复核
