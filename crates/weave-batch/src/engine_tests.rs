@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    ItemStatus, Pipeline, StageSpec, TextOpSpec, build_job_plan, execute_plan, preview_plan,
-    revalidate_snapshot, snapshot_inputs,
+    ItemStatus, JobExecOptions, Pipeline, StageSpec, TextOpSpec, build_job_plan, execute_plan,
+    execute_subset, preview_plan, revalidate_snapshot, snapshot_inputs,
 };
 
 use weave_core::prelude::CancellationToken;
@@ -375,4 +375,242 @@ fn perf_image_batch_100() {
     let dt = t0.elapsed();
     assert_eq!(result.succeeded, 100);
     eprintln!("PERF image batch 100 files (decode+fit-resize+png-encode): {dt:?}");
+}
+
+// ── M7（下）C2：子集执行 / workers 确定性 / pause / retryable ──
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+fn pipeline_trim_to(dest: &std::path::Path) -> Pipeline {
+    Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::TextTransform {
+                operations: vec![TextOpSpec::TrimLines],
+            },
+            StageSpec::Encode {
+                format: "txt".into(),
+                quality: None,
+            },
+            StageSpec::Export {
+                destination_dir: dest.to_path_buf(),
+                overwrite: true,
+            },
+        ],
+    }
+}
+
+#[test]
+fn workers_do_not_change_results() {
+    // 下 §123：1 worker 与 4 workers 同计划同输入 ⇒ 结果一致（含批内重名）
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    // 子目录 a 与 b 各有同名 same.txt ⇒ 批内输出重名（快照序小者胜）
+    let sa = dir.path().join("a");
+    let sb = dir.path().join("b");
+    std::fs::create_dir_all(&sa).expect("sa");
+    std::fs::create_dir_all(&sb).expect("sb");
+    write_text(&sa.join("same.txt"), "  alpha  ");
+    write_text(&sb.join("same.txt"), "  beta  ");
+    write_text(&dir.path().join("z.txt"), "  gamma  ");
+    let inputs = vec![
+        sa.join("same.txt"),
+        sb.join("same.txt"),
+        dir.path().join("z.txt"),
+    ];
+
+    let results: Vec<_> = [1usize, 4]
+        .iter()
+        .map(|&w| {
+            // 每个 worker 档独立目录，避免上次落盘碰撞干扰
+            let d = dest.join(format!("w{w}"));
+            std::fs::create_dir_all(&d).expect("d");
+            let plan = build_job_plan(inputs.clone(), pipeline_trim_to(&d), d.clone(), true, false)
+                .expect("plan");
+            execute_plan(&plan, &CancellationToken::new(), None)
+        })
+        .collect();
+    let r1 = &results[0];
+    let r4 = &results[1];
+    assert_eq!((r1.succeeded, r1.failed), (2, 1), "1 worker: {r1:?}");
+    assert_eq!(
+        (r4.succeeded, r4.failed, r4.skipped, r4.cancelled),
+        (r1.succeeded, r1.failed, r1.skipped, r1.cancelled),
+        "下 §123：worker 数不得改变结果"
+    );
+    assert_eq!(
+        r1.items.iter().map(|i| i.status).collect::<Vec<_>>(),
+        r4.items.iter().map(|i| i.status).collect::<Vec<_>>()
+    );
+    let cat = |r: &crate::JobResult| -> Vec<Option<String>> {
+        r.items
+            .iter()
+            .map(|i| {
+                i.error
+                    .as_ref()
+                    .map(|e| e.split(':').next().unwrap_or("").to_owned())
+            })
+            .collect()
+    };
+    assert_eq!(
+        cat(r1),
+        cat(r4),
+        "Collision 获胜方 = 快照序小者，与完成序无关"
+    );
+}
+
+#[test]
+fn pause_at_safe_point_leaves_pending_not_cancelled() {
+    // 下 §143：Pause ⇒ 未开始条目 = pending（非终态），非 Cancelled
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let inputs: Vec<PathBuf> = (0..8)
+        .map(|i| {
+            let p = dir.path().join(format!("f{i}.txt"));
+            write_text(&p, "x");
+            p
+        })
+        .collect();
+    let plan =
+        build_job_plan(inputs, pipeline_trim_to(&dest), dest.clone(), true, false).expect("plan");
+
+    let pause = AtomicBool::new(true); // 一开始就置位 ⇒ 第一安全点即暂停
+    let result = execute_subset(
+        &plan,
+        &(0..8).collect::<Vec<_>>(),
+        JobExecOptions {
+            workers: 1,
+            pause: Some(&pause),
+            dry_run: false,
+        },
+        &CancellationToken::new(),
+        None,
+    );
+    assert_eq!(result.pending, 8, "{result:?}");
+    assert_eq!(result.succeeded + result.failed + result.cancelled, 0);
+    assert_eq!(result.items.len(), 0, "pending 条目不产生 item 终态");
+
+    // 解除暂停后续跑同一 subset ⇒ 全部完成（Resume 语义）
+    pause.store(false, Ordering::SeqCst);
+    let resumed = execute_subset(
+        &plan,
+        &(0..8).collect::<Vec<_>>(),
+        JobExecOptions {
+            workers: 1,
+            pause: None,
+            dry_run: false,
+        },
+        &CancellationToken::new(),
+        None,
+    );
+    assert_eq!(resumed.succeeded, 8);
+}
+
+#[test]
+fn subset_execution_equals_full_execution() {
+    // 下 §39/§126：Retry/Resume 的子集机制 = 全量执行的逐条结果
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let inputs: Vec<PathBuf> = (0..4)
+        .map(|i| {
+            let p = dir.path().join(format!("f{i}.txt"));
+            write_text(&p, "  pad  ");
+            p
+        })
+        .collect();
+    // 失败条目：doomed.txt 在快照后删除 ⇒ Read 失败
+    let doomed = dir.path().join("doomed.txt");
+    write_text(&doomed, "bye");
+    let mut all_inputs = inputs.clone();
+    all_inputs.push(doomed.clone());
+
+    let plan_a = build_job_plan(
+        all_inputs.clone(),
+        pipeline_trim_to(&dest),
+        dest.clone(),
+        true,
+        false,
+    )
+    .expect("plan a");
+    let full = execute_plan(&plan_a, &CancellationToken::new(), None);
+
+    // 单独执行 doomed 一条 = 全量执行中该条结果
+    std::fs::create_dir_all(dest.join("out2")).expect("out2");
+    let plan_b = build_job_plan(
+        all_inputs.clone(),
+        pipeline_trim_to(&dest.join("out2")),
+        dest.join("out2"),
+        true,
+        false,
+    )
+    .expect("plan b");
+    std::fs::remove_file(&doomed).expect("remove");
+    let single = execute_subset(
+        &plan_b,
+        &[4],
+        JobExecOptions {
+            workers: 1,
+            pause: None,
+            dry_run: false,
+        },
+        &CancellationToken::new(),
+        None,
+    );
+    assert_eq!(single.items.len(), 1);
+    assert_eq!(single.items[0].status, full.items[4].status);
+    assert_eq!(
+        single.items[0].error.clone(),
+        full.items[4].error.clone(),
+        "子集执行的失败事实与全量一致"
+    );
+}
+
+#[test]
+fn retryable_reflects_error_category() {
+    // 下 §142/§237：Read 失败可重试；Validation 类不可重试
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let gone = dir.path().join("gone.txt");
+    write_text(&gone, "x");
+    let plan = build_job_plan(
+        vec![gone],
+        pipeline_trim_to(&dest),
+        dest.clone(),
+        true,
+        false,
+    )
+    .expect("plan");
+    std::fs::remove_file(dir.path().join("gone.txt")).expect("rm");
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
+    assert_eq!(result.failed, 1);
+    assert!(result.items[0].retryable, "Read 失败 = 瞬态可重试");
+
+    // Validation：未知 resize mode ⇒ 不可重试（需先过 Decode——用真实 PNG）
+    let p2 = dir.path().join("v.png");
+    image::DynamicImage::new_rgba8(8, 8)
+        .save_with_format(&p2, image::ImageFormat::Png)
+        .expect("save png");
+    let pipeline_bad = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::ImageResize {
+                width: 10,
+                height: 10,
+                mode: "bogus".into(),
+                prevent_upscale: true,
+            },
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: true,
+            },
+        ],
+    };
+    let plan2 = build_job_plan(vec![p2], pipeline_bad, dest, true, false).expect("plan2");
+    let r2 = execute_plan(&plan2, &CancellationToken::new(), None);
+    assert_eq!(r2.failed, 1);
+    assert!(!r2.items[0].retryable, "Validation 失败不可重试");
 }

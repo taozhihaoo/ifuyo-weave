@@ -17,7 +17,8 @@ mod engine_tests;
 mod journal_tests;
 
 pub use engine::{
-    ItemResult, ItemStatus, JobResult, StageError, StageResult, execute_plan, preview_plan,
+    ItemResult, ItemStatus, JobExecOptions, JobResult, StageError, StageResult, execute_plan,
+    execute_subset, preview_plan,
 };
 pub use item::{ItemContext, ItemPayload};
 pub use plan::{

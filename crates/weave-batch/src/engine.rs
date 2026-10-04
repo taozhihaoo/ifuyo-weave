@@ -1,14 +1,23 @@
-//! Batch Engine（M7 上 §20–§36）：同一 JobPlan 的执行；item 级失败隔离
-//! （§25/§49）；协作取消（§32-§34）；Filter 拒绝 ⇒ Skipped（§14）。
+//! Batch Engine（M7 上 §20–§36 + 下 §123/§126/§201）：同一 JobPlan 的
+//! 执行；item 级失败隔离（§25/§49）；协作取消（§32-§34）；Filter 拒绝
+//! ⇒ Skipped（§14）。
 //!
-//! 诚实进度（§30）：per-item 计数；不伪造百分比。
+//! 诚实进度（§30）：per-item 计数；不伪造百分比；回调只在调用线程触发。
+//! 有界并发（下 §123/§211）：workers 参数（≥1）；结果按快照序还原，
+//! 与 worker 数无关（确定性 §54/§124——批内输出名预claim 快照序小者胜）。
+//! Pause（下 §90/§143）：安全点检查 pause 旗标——未开始条目计入
+//! `pending`（非终态；Resume 走 journal 子集执行）。
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc;
 
 use weave_core::prelude::CancellationToken;
 
 use crate::item::{ItemContext, ItemPayload};
-use crate::plan::{JobPlan, StageSpec};
+use crate::plan::{InputSnapshotEntry, JobPlan, StageSpec};
 use weave_media::ImageLimits;
 
 /// 条目状态（§27）。
@@ -37,12 +46,14 @@ pub struct ItemResult {
     pub output: Option<PathBuf>,
     pub status: ItemStatus,
     pub error: Option<String>,
+    /// 下 §142/§237：Failed 时是否可 Retry（Validation/Unsupported ⇒ 否）。
+    pub retryable: bool,
     pub stage_results: Vec<StageResult>,
     pub input_bytes: u64,
     pub output_bytes: u64,
 }
 
-/// Job 结果（§26 Result Model）。
+/// Job 结果（§26 Result Model + 下 pending）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobResult {
     pub items: Vec<ItemResult>,
@@ -51,6 +62,8 @@ pub struct JobResult {
     pub failed: u64,
     pub skipped: u64,
     pub cancelled: u64,
+    /// Pause 安全点后未开始条目（非终态；Resume 重跑，下 §143）。
+    pub pending: u64,
     pub input_bytes: u64,
     pub output_bytes: u64,
     /// true = Preview（§21：无副作用模拟）；false = Execute。
@@ -71,6 +84,11 @@ impl StageError {
             message: message.into(),
         }
     }
+
+    /// 下 §142/§237：非瞬态（计划/类型错误）Retry 无意义。
+    pub fn is_retryable(&self) -> bool {
+        !matches!(self.category, "Validation" | "Unsupported")
+    }
 }
 
 fn stage_name(stage: &StageSpec) -> String {
@@ -84,12 +102,61 @@ fn stage_name(stage: &StageSpec) -> String {
     }
 }
 
+/// 静态推导条目最终扩展名（与运行时 current_ext 转移一致：Resize⇒png、
+/// Encode⇒format、其余不变）。用于批内输出名预claim（下 §124 确定性）。
+fn intended_ext(plan: &JobPlan, entry: &InputSnapshotEntry) -> String {
+    let mut ext = entry
+        .path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+    for stage in &plan.pipeline.stages {
+        match stage {
+            StageSpec::ImageResize { .. } => ext = "png".into(),
+            StageSpec::Encode { format, .. } => ext = format.clone(),
+            _ => {}
+        }
+    }
+    ext
+}
+
+/// 批内输出名预claim（下 §124）：同 Job 两条 item 目标同名时，**快照序
+/// 小者胜**——预计算、与 worker 数无关（结果确定性不因并发改变）。
+fn claim_outputs(plan: &JobPlan, indices: &[usize]) -> HashMap<PathBuf, usize> {
+    let mut claimed: HashMap<PathBuf, usize> = HashMap::new();
+    let export_dir = plan
+        .pipeline
+        .stages
+        .iter()
+        .find_map(|s| match s {
+            StageSpec::Export {
+                destination_dir, ..
+            } => Some(destination_dir.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| plan.destination_dir.clone());
+    for &i in indices {
+        let entry = &plan.input_snapshot[i];
+        let stem = entry
+            .path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "item".into());
+        let out = export_dir.join(format!("{stem}.{}", intended_ext(plan, entry)));
+        claimed.entry(out).or_insert(i);
+    }
+    claimed
+}
+
 /// 单阶段执行（§13-§16）。Ok(Some(payload))=前进；Ok(None)=Filter 拒绝。
 /// `dry_run`（§21 Preview）：Export 只做碰撞检查，不落盘。
 fn run_stage(
     stage: &StageSpec,
     ctx: &mut ItemContext,
     dry_run: bool,
+    claimed: &HashMap<PathBuf, usize>,
+    item_index: usize,
 ) -> Result<Option<ItemPayload>, StageError> {
     match stage {
         StageSpec::Source => {
@@ -236,6 +303,20 @@ fn run_stage(
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "item".to_string());
             let out_path = destination_dir.join(format!("{stem}.{}", ctx.current_ext));
+            // 批内重名：预claim 快照序小者胜（下 §124 确定性，与 worker 数无关）
+            if claimed
+                .get(&out_path)
+                .is_some_and(|&owner| owner != item_index)
+            {
+                return Err(StageError::new(
+                    "Collision",
+                    format!(
+                        "internal duplicate output: item {} claims {}",
+                        claimed[&out_path],
+                        out_path.display()
+                    ),
+                ));
+            }
             if out_path.exists() && !overwrite {
                 // Preview 也报告碰撞——§22 Potential Failures
                 return Err(StageError::new(
@@ -283,6 +364,19 @@ fn batch_text_op_to_kind(
     })
 }
 
+/// 进度回调（§30：已完成计数 + 当前条目描述；仅调用线程触发）。
+pub type ProgressCallback<'a> = &'a mut dyn FnMut(u64, &str);
+
+/// 执行参数（下 §123/§211：Concurrency = Bounded）。
+pub struct JobExecOptions<'a> {
+    /// worker 数（≥1；1 = 顺序执行）。
+    pub workers: usize,
+    /// Pause 旗标（下 §90/§143）：安全点置位 ⇒ 未开始条目计入 pending。
+    pub pause: Option<&'a AtomicBool>,
+    /// §21 Preview dry-run。
+    pub dry_run: bool,
+}
+
 /// Batch Engine 执行（§20-§36）：
 /// - item 级失败隔离（§25/§49）：单条失败不放弃其余；
 /// - §33 取消：未开始 ⇒ Cancelled；流水线中途 ⇒ 该条 Cancelled；
@@ -291,165 +385,269 @@ fn batch_text_op_to_kind(
 pub fn execute_plan(
     plan: &JobPlan,
     cancel: &CancellationToken,
-    on_progress: Option<&mut dyn FnMut(u64)>,
+    on_progress: Option<ProgressCallback<'_>>,
 ) -> JobResult {
-    run_job(plan, cancel, false, on_progress)
+    let indices: Vec<usize> = (0..plan.input_snapshot.len()).collect();
+    execute_subset(
+        plan,
+        &indices,
+        JobExecOptions {
+            workers: 1,
+            pause: None,
+            dry_run: false,
+        },
+        cancel,
+        on_progress,
+    )
 }
 
 /// Preview（§20-§23）：与 Execute 同一引擎、同一 JobPlan，仅 Export 不落盘
 /// （§21 No destructive mutation）；碰撞仍作为潜在失败上报（§22）。
 pub fn preview_plan(plan: &JobPlan) -> JobResult {
-    let mut result = run_job(plan, &CancellationToken::new(), true, None);
+    let indices: Vec<usize> = (0..plan.input_snapshot.len()).collect();
+    let mut result = execute_subset(
+        plan,
+        &indices,
+        JobExecOptions {
+            workers: 1,
+            pause: None,
+            dry_run: true,
+        },
+        &CancellationToken::new(),
+        None,
+    );
     result.preview = true;
     result
 }
 
-fn run_job(
+/// 子集执行（下 §39 Retry / §126 Resume 的共同机制）：只跑 `indices`
+/// 列出的快照条目，结果按快照序还原（与 workers 无关，§54/§123）。
+/// 进度回调（§30）仅在调用线程触发（worker 事件经 channel 汇聚）。
+pub fn execute_subset(
     plan: &JobPlan,
+    indices: &[usize],
+    opts: JobExecOptions<'_>,
     cancel: &CancellationToken,
-    dry_run: bool,
-    mut on_progress: Option<&mut dyn FnMut(u64)>,
+    mut on_progress: Option<ProgressCallback<'_>>,
 ) -> JobResult {
+    let workers = opts.workers.max(1);
+    let claimed = claim_outputs(plan, indices);
+    let next = AtomicU64::new(0);
+    let done = AtomicU64::new(0);
+    let count = indices.len();
+    let spawned = workers.min(count);
+    let slots: Vec<Mutex<Option<ItemResult>>> = indices.iter().map(|_| Mutex::new(None)).collect();
+    let (tx, rx) = mpsc::channel::<(u64, String)>();
+    // 共享状态打成引用元组：worker 闭包 move 一个引用拷贝（Send），其余
+    // 共享数据保持借用；tx 每 worker 一个 clone，原始 tx 在 drain 前 drop
+    // ——channel 关闭 = workers 全部退出（否则 rx 循环永不结束）。
+    let shared = (&plan, &slots, &indices, &claimed, cancel, &next, &done);
+
+    std::thread::scope(|scope| {
+        for _ in 0..spawned {
+            let tx_worker = tx.clone();
+            scope.spawn(move || {
+                let (plan, slots, indices, claimed, cancel, next, done) = shared;
+                loop {
+                    // §33/§34 安全点：取消/暂停 ⇒ 停止取新条目
+                    if cancel.is_cancelled() {
+                        return;
+                    }
+                    if opts.pause.is_some_and(|p| p.load(Ordering::SeqCst)) {
+                        return;
+                    }
+                    let n = next.fetch_add(1, Ordering::SeqCst) as usize;
+                    if n >= count {
+                        return;
+                    }
+                    let idx = indices[n];
+                    let result = run_one_item(plan, idx, opts.dry_run, claimed, cancel);
+                    *slots[n].lock().expect("slot") = Some(result);
+                    let d = done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let desc = plan
+                        .input_snapshot
+                        .get(idx)
+                        .and_then(|e| e.path.file_name().map(|s| s.to_string_lossy().into_owned()))
+                        .unwrap_or_default();
+                    // 接收端消失（理论不可达）不算 item 失败——进度是尽力而为
+                    let _ = tx_worker.send((d, desc));
+                }
+            });
+        }
+        drop(tx);
+        // 调用线程汇聚进度事件（§30 计数；回调不出调用线程）
+        for (d, desc) in rx {
+            if let Some(cb) = on_progress.as_mut() {
+                cb(d, &desc);
+            }
+        }
+    });
+
     let mut result = JobResult {
         total: plan.input_snapshot.len() as u64,
         ..JobResult::default()
     };
-
-    for (n, entry) in plan.input_snapshot.iter().enumerate() {
-        // §33 取消安全点：未开始 ⇒ Cancelled
-        if cancel.is_cancelled() {
-            result.cancelled += 1;
-            result.items.push(ItemResult {
-                item_id: format!("item_{n}"),
-                source: entry.path.clone(),
-                output: None,
-                status: ItemStatus::Cancelled,
-                error: None,
-                stage_results: Vec::new(),
-                input_bytes: entry.size,
-                output_bytes: 0,
-            });
-            continue;
+    let paused = opts.pause.is_some_and(|p| p.load(Ordering::SeqCst));
+    let mut pending: u64 = 0;
+    for (pos, slot) in slots.into_iter().enumerate() {
+        match slot.into_inner().expect("no poison") {
+            Some(mut item) => {
+                match item.status {
+                    ItemStatus::Success => result.succeeded += 1,
+                    ItemStatus::Failed => result.failed += 1,
+                    ItemStatus::Skipped => result.skipped += 1,
+                    ItemStatus::Cancelled => result.cancelled += 1,
+                }
+                result.input_bytes += item.input_bytes;
+                result.output_bytes += item.output_bytes;
+                item.item_id = format!("item_{}", indices[pos]);
+                result.items.push(item);
+            }
+            None => {
+                if paused && !cancel.is_cancelled() {
+                    // 下 §143：Pause ⇒ 未开始条目 = pending（非终态）
+                    pending += 1;
+                } else {
+                    // §33：取消 ⇒ 未开始条目终态 Cancelled
+                    let entry = &plan.input_snapshot[indices[pos]];
+                    result.cancelled += 1;
+                    result.items.push(ItemResult {
+                        item_id: format!("item_{}", indices[pos]),
+                        source: entry.path.clone(),
+                        output: None,
+                        status: ItemStatus::Cancelled,
+                        error: None,
+                        retryable: false,
+                        stage_results: Vec::new(),
+                        input_bytes: entry.size,
+                        output_bytes: 0,
+                    });
+                }
+            }
         }
+    }
+    result.pending = pending;
+    // slots 已按快照序排列；items 顺序即快照序（§54 确定性）
+    result
+}
 
-        let mut ctx = ItemContext {
-            item_id: format!("item_{n}"),
-            source_path: entry.path.clone(),
-            payload: ItemPayload::Bytes(Vec::new()),
-            current_ext: "bin".into(),
-            stage_log: Vec::new(),
-        };
-        let input_bytes = entry.size;
-        let mut stage_results: Vec<StageResult> = Vec::new();
-        let mut failed: Option<StageError> = None;
-        let mut rejected = false;
-        let mut cancelled_mid = false;
+/// 单条目全管线（失败隔离边界 = 一条 item）。
+fn run_one_item(
+    plan: &JobPlan,
+    idx: usize,
+    dry_run: bool,
+    claimed: &HashMap<PathBuf, usize>,
+    cancel: &CancellationToken,
+) -> ItemResult {
+    let entry = &plan.input_snapshot[idx];
+    let mut ctx = ItemContext {
+        item_id: format!("item_{idx}"),
+        source_path: entry.path.clone(),
+        payload: ItemPayload::Bytes(Vec::new()),
+        current_ext: String::new(),
+        stage_log: Vec::new(),
+    };
+    let input_bytes = entry.size;
+    let mut stage_results: Vec<StageResult> = Vec::new();
+    let mut failed: Option<StageError> = None;
+    let mut rejected = false;
+    let mut cancelled_mid = false;
 
-        for (i, stage) in plan.pipeline.stages.iter().enumerate() {
-            // §34 取消安全点：阶段间即安全点（与 Safe Write 结合）
-            if cancel.is_cancelled() {
-                cancelled_mid = true;
+    for (i, stage) in plan.pipeline.stages.iter().enumerate() {
+        // §34 取消安全点：阶段间即安全点（与 Safe Write 结合）
+        if cancel.is_cancelled() {
+            cancelled_mid = true;
+            stage_results.push(StageResult {
+                stage_index: i,
+                stage: stage_name(stage),
+                ok: false,
+                note: "cancelled".into(),
+            });
+            break;
+        }
+        match run_stage(stage, &mut ctx, dry_run, claimed, idx) {
+            Ok(Some(payload)) => {
+                ctx.payload = payload;
+                stage_results.push(StageResult {
+                    stage_index: i,
+                    stage: stage_name(stage),
+                    ok: true,
+                    note: String::new(),
+                });
+            }
+            Ok(None) => {
+                rejected = true;
                 stage_results.push(StageResult {
                     stage_index: i,
                     stage: stage_name(stage),
                     ok: false,
-                    note: "cancelled".into(),
+                    note: "rejected by filter".into(),
                 });
                 break;
             }
-            match run_stage(stage, &mut ctx, dry_run) {
-                Ok(Some(payload)) => {
-                    ctx.payload = payload;
-                    stage_results.push(StageResult {
-                        stage_index: i,
-                        stage: stage_name(stage),
-                        ok: true,
-                        note: String::new(),
-                    });
-                }
-                Ok(None) => {
-                    rejected = true;
-                    stage_results.push(StageResult {
-                        stage_index: i,
-                        stage: stage_name(stage),
-                        ok: false,
-                        note: "rejected by filter".into(),
-                    });
-                    break;
-                }
-                Err(e) => {
-                    stage_results.push(StageResult {
-                        stage_index: i,
-                        stage: stage_name(stage),
-                        ok: false,
-                        note: e.message.clone(),
-                    });
-                    failed = Some(e);
-                    break;
-                }
+            Err(e) => {
+                stage_results.push(StageResult {
+                    stage_index: i,
+                    stage: stage_name(stage),
+                    ok: false,
+                    note: e.message.clone(),
+                });
+                failed = Some(e);
+                break;
             }
         }
-
-        let status = if cancelled_mid {
-            ItemStatus::Cancelled
-        } else if rejected {
-            ItemStatus::Skipped
-        } else if failed.is_some() {
-            ItemStatus::Failed
-        } else {
-            ItemStatus::Success
-        };
-
-        // §70：Export 产物路径（成功时才有）
-        let output_path = if status == ItemStatus::Success {
-            plan.pipeline.stages.iter().rev().find_map(|s| match s {
-                StageSpec::Export {
-                    destination_dir, ..
-                } => {
-                    let stem = entry
-                        .path
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "item".into());
-                    Some(destination_dir.join(format!("{stem}.{}", ctx.current_ext)))
-                }
-                _ => None,
-            })
-        } else {
-            None
-        };
-
-        // §70：产物字节——Execute 读落盘文件；Preview（未落盘）取内存负载长度
-        let output_bytes = if dry_run {
-            ctx.payload.as_bytes().map_or(0, |b| b.len() as u64)
-        } else {
-            output_path
-                .as_ref()
-                .and_then(|p| std::fs::metadata(p).ok())
-                .map(|m| m.len())
-                .unwrap_or(0)
-        };
-
-        match status {
-            ItemStatus::Success => result.succeeded += 1,
-            ItemStatus::Failed => result.failed += 1,
-            ItemStatus::Skipped => result.skipped += 1,
-            ItemStatus::Cancelled => result.cancelled += 1,
-        }
-        result.items.push(ItemResult {
-            item_id: format!("item_{n}"),
-            source: entry.path.clone(),
-            output: output_path,
-            status,
-            error: failed.map(|e| format!("{}: {}", e.category, e.message)),
-            stage_results,
-            input_bytes,
-            output_bytes,
-        });
-        // §30 诚实进度：per-item 已完成计数，不伪造百分比
-        if let Some(cb) = on_progress.as_mut() {
-            cb(result.items.len() as u64);
-        }
     }
-    result
+
+    let status = if cancelled_mid {
+        ItemStatus::Cancelled
+    } else if rejected {
+        ItemStatus::Skipped
+    } else if failed.is_some() {
+        ItemStatus::Failed
+    } else {
+        ItemStatus::Success
+    };
+
+    // §70：Export 产物路径（成功时才有）
+    let output_path = if status == ItemStatus::Success {
+        plan.pipeline.stages.iter().rev().find_map(|s| match s {
+            StageSpec::Export {
+                destination_dir, ..
+            } => {
+                let stem = entry
+                    .path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "item".into());
+                Some(destination_dir.join(format!("{stem}.{}", ctx.current_ext)))
+            }
+            _ => None,
+        })
+    } else {
+        None
+    };
+
+    // §70：产物字节——Execute 读落盘文件；Preview（未落盘）取内存负载长度
+    let output_bytes = if dry_run {
+        ctx.payload.as_bytes().map_or(0, |b| b.len() as u64)
+    } else {
+        output_path
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map(|m| m.len())
+            .unwrap_or(0)
+    };
+
+    let retryable = failed.as_ref().is_none_or(|e| e.is_retryable());
+    ItemResult {
+        item_id: format!("item_{idx}"),
+        source: entry.path.clone(),
+        output: output_path,
+        status,
+        error: failed.map(|e| format!("{}: {}", e.category, e.message)),
+        retryable,
+        stage_results,
+        input_bytes,
+        output_bytes,
+    }
 }
