@@ -11,6 +11,7 @@ members = [
     "crates/weave-history",
     "crates/weave-search",
     "crates/weave-utilities",
+    "crates/weave-workflow",
     "crates/weave-testkit",
     "src-tauri",
 ]

@@ -1,0 +1,19 @@
+[package]
+name = "weave-workflow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Workflow composition: linear pipeline definition, validation, compilation to M7 plans (M10)."
+
+[dependencies]
+weave-core = { path = "../weave-core" }
+weave-batch = { path = "../weave-batch" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+lopdf = "0.45"
+
+[lints]
+workspace = true
