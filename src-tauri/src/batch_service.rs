@@ -966,7 +966,7 @@ pub fn record_creation_transaction(
     let created = items.len();
     let operation = OperationId::generate();
     let tx = weave_history::OperationTransaction {
-        operation_id: operation,
+        operation_id: operation.clone(),
         kind: weave_core::prelude::OperationKind::BatchExecute,
         status: weave_history::OperationStatus::Completed,
         timestamp: now,
@@ -978,7 +978,8 @@ pub fn record_creation_transaction(
         items,
     };
     let entry = weave_history::HistoryEntry {
-        operation_id: OperationId::generate(),
+        // 同一 operation_id：History 行的撤销入口按它加载事务
+        operation_id: operation.clone(),
         kind: weave_core::prelude::OperationKind::BatchExecute,
         timestamp: now,
         summary: summary.to_owned(),
