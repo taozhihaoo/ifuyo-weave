@@ -11,12 +11,16 @@
 //! - §46：Compression ≠ Resize，两者可串联但分别表达。
 //! - §59：动画（GIF/animated WebP）v1 = Static Only，显式 NOT SUPPORTED。
 
+pub mod batch;
 pub mod capabilities;
 pub mod detect;
 pub mod inspect;
 pub mod limits;
 pub mod ops;
 
+pub use batch::{
+    BatchFileResult, BatchFileStatus, BatchResult, ImageBatchPlan, run_batch, snapshot_inputs,
+};
 pub use capabilities::{FormatCapability, capability};
 pub use detect::{ExtensionMismatch, ImageFormat, detect_format};
 pub use inspect::{ImageFacts, MetadataFacts, inspect_bytes};
