@@ -674,3 +674,10 @@ Known Limitations:
   支持）；GB 族编码 Base64 输入指向 M4 管线（§39 复用 D38）
 - 文件 Export（§93）不在本批（文本工具 v1 = 剪贴板复制）；批量经 M1
   hash job / M7 既有能力，M9 专用批量 UI 列（下）
+- tauri build: PASS（4.58 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口，8 工具 tab 逐一）: PASS — Hash SHA-256
+  golden "abc"；CRC-32 "123456789"=cbf43926；Base64 foobar↔Zm9vYmFy 往返；
+  UUID 生成 5 条+校验 RFC 4122；时间戳 1720000000→2024-07-03T09:46:40Z +
+  auto-detect 显示 Seconds；URL component %20 / query + 双语义；正则分组
+  + 位置 [1:1] + 能力矩阵（lookaround=不支持 §67）；颜色 #ff8800→#FF8800
+  归一 + 对比度；console 零错误
