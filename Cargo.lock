@@ -4865,6 +4865,8 @@ dependencies = [
  "tempfile",
  "weave-batch",
  "weave-core",
+ "weave-files",
+ "weave-utilities",
 ]
 
 [[package]]
