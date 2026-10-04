@@ -7,11 +7,14 @@
 
 pub mod engine;
 pub mod item;
+pub mod journal;
 pub mod plan;
 pub mod state;
 
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod journal_tests;
 
 pub use engine::{
     ItemResult, ItemStatus, JobResult, StageError, StageResult, execute_plan, preview_plan,
