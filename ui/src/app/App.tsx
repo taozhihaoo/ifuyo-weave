@@ -7,6 +7,7 @@ import { InspectorPanel, type HashJobView } from "../features/files/InspectorPan
 import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
 import { TextPanel } from "../features/text/TextPanel";
 import { DataPanel } from "../features/data/DataPanel";
+import { ImagePanel } from "../features/image/ImagePanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
 import { RenamePanel } from "../features/ops/RenamePanel";
@@ -43,7 +44,7 @@ function App() {
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
   const [view, setView] = useState<
-    "tools" | "rename" | "organizer" | "duplicates" | "text" | "data" | "history"
+    "tools" | "rename" | "organizer" | "duplicates" | "text" | "data" | "image" | "history"
   >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
@@ -287,23 +288,32 @@ function App() {
         aria-label={t("app.nav")}
         style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
       >
-        {(["tools", "rename", "organizer", "duplicates", "text", "data", "history"] as const).map(
-          (v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              aria-current={view === v ? "page" : undefined}
-              style={{
-                ...buttonStyle,
-                background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
-                borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
-              }}
-            >
-              {t(`nav.${v}`)}
-            </button>
-          ),
-        )}
+        {(
+          [
+            "tools",
+            "rename",
+            "organizer",
+            "duplicates",
+            "text",
+            "data",
+            "image",
+            "history",
+          ] as const
+        ).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            aria-current={view === v ? "page" : undefined}
+            style={{
+              ...buttonStyle,
+              background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
+              borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+            }}
+          >
+            {t(`nav.${v}`)}
+          </button>
+        ))}
       </nav>
 
       <section
@@ -397,6 +407,10 @@ function App() {
 
       {view === "data" ? (
         <DataPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "image" ? (
+        <ImagePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "history" ? (
