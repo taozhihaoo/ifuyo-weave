@@ -9,6 +9,7 @@
 pub mod base64;
 pub mod checksum;
 pub mod color;
+pub mod file_digest;
 pub mod hash;
 pub mod regex_tool;
 pub mod timestamp;
@@ -20,6 +21,9 @@ pub use checksum::{ChecksumAlgorithm, adler32, checksum_bytes, crc32_iso_hdlc, c
 pub use color::{
     ColorHsl, ColorHsv, ColorHwb, ColorInput, ColorRgb, color_contrast, parse_color, parse_hex,
     rgb_to_hsl, rgb_to_hsv, to_hex,
+};
+pub use file_digest::{
+    Crc32Incremental, ExportFormat, FileChecksumEntry, checksum_file, export_report,
 };
 pub use hash::{
     HashAlgorithmInfo, TextHashAlgorithm, TextHashResult, hash_algorithm_matrix, hash_text,

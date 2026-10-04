@@ -9,6 +9,7 @@ description = "General utilities: hash / checksum / base64 / uuid / timestamp / 
 weave-core = { path = "../weave-core" }
 weave-text = { path = "../weave-text" }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 md-5 = "0.10"
 sha1 = "0.10"
 sha2 = "0.10"
