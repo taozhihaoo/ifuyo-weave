@@ -379,6 +379,8 @@ pub struct JobExecOptions<'a> {
     pub pause: Option<&'a AtomicBool>,
     /// §21 Preview dry-run。
     pub dry_run: bool,
+    /// 条目完成事实（Journal 追加点，下 §42）：worker 线程调用（Sync 约束）。
+    pub on_item: Option<&'a (dyn Fn(&ItemResult) + Sync)>,
 }
 
 /// Batch Engine 执行（§20-§36）：
@@ -399,6 +401,7 @@ pub fn execute_plan(
             workers: 1,
             pause: None,
             dry_run: false,
+            on_item: None,
         },
         cancel,
         on_progress,
@@ -416,6 +419,7 @@ pub fn preview_plan(plan: &JobPlan) -> JobResult {
             workers: 1,
             pause: None,
             dry_run: true,
+            on_item: None,
         },
         &CancellationToken::new(),
         None,
@@ -466,6 +470,9 @@ pub fn execute_subset(
                     }
                     let idx = indices[n];
                     let result = run_one_item(plan, idx, opts.dry_run, claimed, cancel);
+                    if let Some(cb) = opts.on_item {
+                        cb(&result);
+                    }
                     *slots[n].lock().expect("slot") = Some(result);
                     let d = done.fetch_add(1, Ordering::SeqCst) + 1;
                     let desc = plan

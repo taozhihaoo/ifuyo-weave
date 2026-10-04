@@ -73,6 +73,10 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         image_batch_service::image_batch_execute,
         batch_service::batch_preview,
         batch_service::batch_execute,
+        batch_service::batch_pause,
+        batch_service::batch_resume,
+        batch_service::batch_retry_failed,
+        batch_service::batch_jobs_list,
     ])
 }
 

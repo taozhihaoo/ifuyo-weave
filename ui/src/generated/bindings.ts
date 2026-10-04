@@ -92,9 +92,26 @@ export const commands = {
 	batchPreview: (inputs: string[], stages: BatchStageDto[], destinationDir: string, options: BatchOptionsDto) => typedError<BatchJobResultDto, IpcError>(__TAURI_INVOKE("batch_preview", { inputs, stages, destinationDir, options })),
 	/**
 	 *  Execute（§24-§26）：任务化执行；任务内先重校验快照（§75，
-	 *  ChangedSincePreview/FileMissing ⇒ Job Failed），再 execute_plan。
+	 *  ChangedSincePreview/FileMissing ⇒ Job Failed）；Journal 逐条落盘；
+	 *  目的地互斥（§202/§204）。
 	 */
 	batchExecute: (inputs: string[], stages: BatchStageDto[], destinationDir: string, options: BatchOptionsDto) => typedError<BatchJobHandleDto, IpcError>(__TAURI_INVOKE("batch_execute", { inputs, stages, destinationDir, options })),
+	/**  下 §90 Pause：安全点后停止调度（未开始条目 = pending，非终态）。 */
+	batchPause: (jobId: string) => typedError<string, IpcError>(__TAURI_INVOKE("batch_pause", { jobId })),
+	/**
+	 *  下 §90/§126/§143 Resume：journal 驱动（对 paused 与 interrupted 统一）——
+	 *  已有终态事实的条目不重跑（§39 副作用不重复）；剩余条目逐一重校验
+	 *  （§238 外部变更 ⇒ 冲突上报并排除，§185 No Magic Recovery）；损坏
+	 *  journal 先隔离（§197）再基于完好前缀恢复。返回新 run 的 job_id。
+	 */
+	batchResume: (jobId: string) => typedError<BatchJobHandleDto, IpcError>(__TAURI_INVOKE("batch_resume", { jobId })),
+	/**
+	 *  下 §39/§142 Retry Failed：失败子集 + 全新快照（从 item 起点重新执行）；
+	 *  新 Job 新 Journal（Retry 是新的一次运行，不续写旧 journal）。
+	 */
+	batchRetryFailed: (jobId: string) => typedError<BatchJobHandleDto, IpcError>(__TAURI_INVOKE("batch_retry_failed", { jobId })),
+	/**  Job 清单（下 §183）：journal 事实源 + 内存活动态合并。 */
+	batchJobsList: () => typedError<BatchJobListItemDto[], IpcError>(__TAURI_INVOKE("batch_jobs_list")),
 };
 
 /* Types */
@@ -132,6 +149,8 @@ export type BatchItemResultDto = {
 	/**  success | failed | skipped | cancelled */
 	status: string,
 	error: string | null,
+	/**  下 §142：Failed 时是否可 Retry。 */
+	retryable: boolean,
 	stages: BatchStageOutcomeDto[],
 	inputBytes: number | null,
 	outputBytes: number | null,
@@ -142,6 +161,20 @@ export type BatchJobHandleDto = {
 	jobId: string,
 };
 
+/**  Job 清单条目（下 §183/§143 Resume UI 数据源）。 */
+export type BatchJobListItemDto = {
+	jobId: string,
+	/**  running | paused | completed | failed | cancelled | interrupted */
+	state: string,
+	totalItems: number | null,
+	settledItems: number | null,
+	pendingItems: number | null,
+	/**  恢复时将被排除的输入（ChangedSincePreview / FileMissing，§185）。 */
+	conflicts: string[],
+	createdMs: number | null,
+	destinationDir: string | null,
+};
+
 /**  Job 结果（§26 Result Model；preview=true 表示模拟结果 §21）。 */
 export type BatchJobResultDto = {
 	items: BatchItemResultDto[],
@@ -150,15 +183,23 @@ export type BatchJobResultDto = {
 	failed: number | null,
 	skipped: number | null,
 	cancelled: number | null,
+	/**  下 §143：Pause 安全点后未开始条目。 */
+	pending: number | null,
 	inputBytes: number | null,
 	outputBytes: number | null,
 	preview: boolean,
+	/**  关联 History 操作（撤销入口；unavailable 时 None）。 */
+	operationId: string | null,
+	/**  Resume 时被排除的输入（§143 Review Conflicts / §185）。 */
+	resumeConflicts: string[],
 };
 
-/**  批处理选项（§19 JobPlan 的 IPC 投影）。 */
+/**  批处理选项（§19 JobPlan 的 IPC 投影；下 §211 默认语义由 UI 层给默认值）。 */
 export type BatchOptionsDto = {
 	continueOnError: boolean,
 	overwriteExisting: boolean,
+	/**  worker 数（下 §211 Concurrency = Bounded；≥1，上限 8）。 */
+	workers: number | null,
 };
 
 export type BatchResultDto = {

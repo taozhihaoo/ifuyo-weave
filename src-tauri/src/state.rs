@@ -4,6 +4,10 @@
 //! Tool Registry（统一工具发现）。settings / history / operation manager
 //! 由后续里程碑按需加入。
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use crate::batch_service::BatchJobRecord;
 use crate::data_service::DataSessions;
 use crate::duplicates_service::ScanCache;
 use crate::jobs::JobTracker;
@@ -24,6 +28,11 @@ pub struct AppState {
     pub text_writes: TextWriteCache,
     /// M5：数据会话（ephemeral，§17）。
     pub data_sessions: DataSessions,
+    /// M7（下）：Batch Job 登记（job_id → 计划/剩余子集/pause/冲突）。
+    pub batch_jobs: Mutex<HashMap<String, BatchJobRecord>>,
+    /// M7（下 §202/§204）：目的地互斥——canonical dest dir → job_id。
+    /// 同一目标目录同时只允许一个 Batch Job（策略 = 拒绝，不排队）。
+    pub batch_dest_locks: Mutex<HashMap<String, String>>,
 }
 
 impl AppState {
@@ -36,6 +45,8 @@ impl AppState {
             scans: ScanCache::new(),
             text_writes: TextWriteCache::new(),
             data_sessions: DataSessions::new(),
+            batch_jobs: Mutex::new(HashMap::new()),
+            batch_dest_locks: Mutex::new(HashMap::new()),
         }
     }
 }
