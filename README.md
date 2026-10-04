@@ -11,6 +11,8 @@ EN: Weave is a local-first desktop utility suite — a set of carefully crafted 
 - **Local-first** — 文件本地处理，默认不联网，无账号无上传
 - **Utility-first** — 首先是工具，不为视觉牺牲效率
 - **Batch-first** — 1 个文件和 10,000 个文件同等对待
+- **Workflow（M10）** — 线性工作流组合：保存/复用/预览/执行（编译为
+  M7 JobPlan 同引擎执行）；v1 无 DAG/脚本/云
 - **Utilities（M9）** — Hash（MD5/SHA-1/SHA-2 族/BLAKE3，弱算法提示）、
   Checksum（CRC-32/CRC-32C/Adler-32）、Base64（标准/URL-safe、严格解码）、
   UUID（v4/v7 生成+校验）、时间戳（多单位/RFC 3339/固定偏移）、URL

@@ -716,3 +716,43 @@ Known Limitations:
   （真实 fixture CRC32 值呈现）→ 导出 CSV（盘侧文件 + RFC 4180 内容
   断言 + digest 在行内）→ 二次导出 output-first 拒绝 → History 撤销 =
   删除导出报告；console 零错误
+
+## M10 Workflow Composition（上）
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-workflow crate：Workflow 模型（schemaVersion=1 §38-§40；id
+  稳定 §42；UI 状态分离 §41）；ToolRegistry 单一事实来源（§25——v1
+  注册真实已实现 M7 stages：document.inspect/pdf.rotate/image.resize/
+  image.encode + filter.extension，§80 无 demo workflow）；Validation
+  （§26-§29 结构 + 语义 + ERROR/WARNING 分级 + §75 尺寸限额 +
+  §48 missing tool 显式 error）；Compiler（§33-§35 Workflow → M7
+  JobPlan，Source 首位/Export 末位/线性约束，disabled=bypass §55）
+- Preview/Execute 同源（§30-§33）：compile 产物 = 同一 JobPlan；
+  preview = weave_batch::preview_plan（dry-run 真实计算非 mock）；
+  execute = execute_plan 经 JobTracker（取消/进度复用 M7 §92/§107；
+  TOCTOU 运行前重校验 §141 同源）
+- Persistence（§40/§120-§121）：workflows/<id>.json（M2 atomic_write）；
+  Library（list/get/delete 只删定义 §87/duplicate 换 id §44）；
+  import/export JSON（§122-§123 validate 后保存，不直接执行）
+- IPC（§111-§112）：workflow_validate/save/list/get/delete/duplicate/
+  import_json/export_json/preview/run——Workflow 经 JSON string 过
+  IPC（§111 bounded；域内强类型校验）
+- UI：Workflow 页（Library + 垂直 step builder §52 + tool palette +
+  step 上移/下移/禁用/删除/内联配置 §53-§54 + validate/preview/save/
+  run 动作 + 预览摘要 + 错误呈现）；i18n zh/en
+- 决策：D63
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-workflow 10）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- 真窗口冒烟：见收口记录
+
+Known Limitations:
+
+- Workflow 参数绑定（§22-§23 模型留位）执行侧未接；Named tz 工具步骤
+  无；导入后自动运行被禁止（§122 需显式 Run）
+- workflow run 复用 BatchOutcome 呈现（workflow 专属 run 视图列（下））

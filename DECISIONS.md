@@ -558,3 +558,26 @@ printpdf（生成向）、pdf-writer（生成向）、calamine（xlsx-only）。
   灰阶归一（§83）。
 - **依赖版本（§184）**：md-5/sha1/sha2 0.10、blake3 1.x、crc 3.x、
   uuid 1.x、time 0.3.x、url 2.x、percent-encoding 2.x、regex 1.x。
+
+## D63 — M10 v1 架构：线性 Workflow → M7 JobPlan 编译（§2.2/§33-§35）
+
+- **新 crate = weave-workflow**（§109 建议；项目无 application crate，
+  workflow 编译逻辑独立成域，执行仍归 weave-batch）。分层 =
+  WorkflowPanel（UI 编辑态 §115）→ workflow_service（IPC + 持久化 +
+  JobTracker 编排）→ weave-workflow（模型/Registry/Validation/Compiler）
+  → weave-batch（preview/execute 同引擎）。
+- **Compiler = Workflow → M7 JobPlan**（§34）：v1 注册表只映射真实已
+  实现 M7 stages（document.inspect / pdf.rotate / image.resize /
+  image.encode / filter.extension / files / export.files）——§80 模板
+  必须可执行的硬约束。preview = `weave_batch::preview_plan`（同编译
+  plan，§30-§33 无 mock）；execute = `execute_plan` 经 JobTracker
+  （取消 §92 / 进度 §107 复用 M7）。
+- **Persistence**：`%APPDATA%/ifuyo/Weave/workflows/<id>.json`
+  （schemaVersion=1 §38-§40；M2 atomic_write 无部分文件 §120-§121）。
+  Workflow JSON 经 IPC 以字符串传输（§111 bounded；serde_json::Value
+  的 specta BigInt 禁令绕开——UI 侧 parse，域内仍强类型校验 §102）。
+- **v1 明确不做**（§2.6/§52）：任意 DAG/循环/条件分支/子工作流/
+  节点画布；Named Timezone 工具步骤；Workflow 参数化绑定（§22-§23
+  模型已留位，执行侧 v1 只收静态 inputs+dest）。
+- TOCTOU（§141 同源）：workflow_run 执行前对编译 plan 的输入快照
+  重校验 ⇒ `workflow.changedSincePlan`。

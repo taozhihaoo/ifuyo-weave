@@ -201,3 +201,12 @@ UI → utilities_service（IPC 映射 + UtilityError→IpcError）→ weave-util
 History/Undo（纯转换 §91）；无文件输出（本版）；批量经 M7 既有能力
 （§95）。React 无核心语义（§18）。隐私：全部本地计算，复制内容不进
 日志/遥测（§90）。
+
+## Workflow 边界（M10）
+
+weave-workflow = 组合层（模型/Registry/Validation/Compiler），不承载
+执行（§2.2 执行归 M7）、Safe Write（§2.3 归 M2）、脚本（§2.4 禁止）。
+Compiler 产物 = weave_batch::JobPlan——Preview（dry-run）与 Execute
+共用同一 plan（§33）。持久化 = workflows/<id>.json（atomic_write，
+schemaVersion=1）。UI = WorkflowPanel（Library + 垂直 step builder，
+v1 无节点画布 §52）。无遥测/云（§2.5/§99）。
