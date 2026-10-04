@@ -582,3 +582,45 @@ Known Limitations:
 - **冒烟抓出 P1 并修复（fdf743f）**：record_creation_transaction 为
   HistoryEntry 生成了第二个 OperationId——按入口 id 撤销找不到事务
   （undo.unknownOperation）；入口现共享事务 id，经冒烟复核
+
+## M8 Documents（下）
+
+Status: COMPLETE
+
+Implemented:
+
+- Fixtures（§131-§135）：`crates/weave-documents/tests/fixtures/documents/`
+  （valid×9 + malformed×4，gen_fixtures example 可复现产出；PDF 页含
+  WeaveMarker 内容标记供顺序验证 §142；200 页大文档 §101 入集）
+- TOCTOU（§141）：PdfMergePlan 携带输入快照（size+mtime），execute 前重
+  校验 ⇒ `pdf.changedSincePlan` 拒绝盲执行（测试：篡改后拒绝且无产物）
+- 原子输出（§178-§179）：PDF 写出 = 同目录 `.weave-tmp-<pid>` → 保存 →
+  重解析校验 → rename promote；失败清理 temp（无半成品 final）
+- Golden（§136-§137）：pdf/docx/xlsx/pptx inspect 期望值固定测试；
+  merge 顺序 = 输入序（内容标记逐页断言 §142）；split 2-4,8-10（§143）；
+  reorder 置换非排序（§144）；rotate 选定页/未选定页（§145）
+- Property/Fuzz（§138-§139）：split 划分恰好覆盖一次（total×n 矩阵）；
+  range 解析器 500 种子随机用例；300 随机字节样本 detect/inspect 无 panic
+- 混合批量（§172-§173）：pdf/docx/xlsx/pptx 混合 inspect 聚合（stage
+  note 承载格式事实）；zip/exe 混入 = unknown/unsupported 如实路由不 crash
+- 批量吞吐基准（§168）：10/100/1000 docs ⇒ 2.5/1.58/1.43 ms/doc（线性）
+- UI（§122-§124/§154）：merge 有序列表（上移/下移）、重复输入标记 +
+  执行阻止、空状态
+- docs：D61（原子化/TOCTOU/恢复语义/版本记录 §184）、ARCHITECTURE/SECURITY
+  M8 边界、THIRD_PARTY_LICENSES（lopdf/zip 行 §161）、docs/DOCUMENTS.md
+  （§190 能力矩阵 + §191 语言约定 + §192 已知限制）、PERF M8（下）、
+  README（§188）
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-documents 18+15 /
+  weave-batch 40+4）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- 真窗口冒烟：见收口记录
+
+Known Limitations:
+
+- 大文档基线（§101/§102 500/1000 页、大型 Office）仅 200 页 fixture 入集，
+  更大规模列 M9 复测
+- 单文档同步命令的取消（批量经 M7 已支持）仍为已知限制
+- M6 直接工具与 M8 均无交叉回归面（workspace 29 套全绿 = §195 PASS）

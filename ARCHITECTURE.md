@@ -180,3 +180,14 @@ Unit（weave-core / weave-app tests/）
 复用既有适配器：文本 = weave_text TransformKind，图像 = weave-media
 inspect/resize/encode（含 ImageLimits 守卫）——不复制第二份 I/O 或
 编解码层。持久化（Journal）与 Resume/Retry 语义属 M7（下）。
+
+## Documents 边界（M8）
+
+领域 = weave-documents（detect/facts/page_range/pdf/office）；适配 = lopdf
+（PDF）/ zip+quick-xml（OOXML），crate-specific API 不出适配层（§182）。
+批量经 M7 StageSpec::DocumentInspect/PdfRotate（§58/§202 无第二套批量）；
+单文档 mutation = output-first（新文件，temp+校验+promote §178）+ 共享
+record_creation_transaction 入 History（创建型撤销 = stat 守卫删除）。
+UI 不解析文档（§3/§200 parser leakage 禁止）。资源限额集中
+DocumentResourceLimits（§100）。隐私：无网络/无内容快照/日志只记
+operation id 与计数（§164-§166）。

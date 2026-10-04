@@ -113,3 +113,18 @@ Regression Test → Document。不删除测试换取绿色，不在 release note
   类型在反序列化即拒绝。
 - Journal Corruption：不 panic；隔离保留原件（§197），恢复仅基于完好
   前缀——无"损坏即重放"面。
+
+## M8 Documents 专项（§162-§163）
+
+- Path Safety：输入/输出经 validate_absolute_path；输出命名 = 固定后缀
+  模板（{stem}.{merged|rotated|extract}.pdf / part-NNN），无用户可控路径
+  成分；temp = 同目录 `.name.weave-tmp-<pid>`（受控、可清理 §127）。
+- ZIP Safety（§87）：条目数/解压总量/单条目上限在打开时全包校验；
+  失败 = 结构化拒绝。
+- XML Safety（§88）：quick-xml 无 DTD/实体展开引擎——XXE/实体扩张面
+  不存在；外部关系只计数不访问（§89 无网络）。
+- PDF Parsing（§162/§163）：lopdf 纯 Rust 解析；malformed corpus（截断/
+  垃圾字节/坏 XML）测试无 panic；限额（pages/file size）防 CPU/内存
+  耗尽；加密 PDF 结构化拒绝（§84）。
+- 输出碰撞：默认不覆盖（output-first）；Merge TOCTOU 重校验（§141）。
+- 崩溃/半成品：temp+promote 保证最终名下永远是完整产物（§179）。

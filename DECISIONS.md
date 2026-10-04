@@ -521,3 +521,18 @@ printpdf（生成向）、pdf-writer（生成向）、calamine（xlsx-only）。
   ——与 M6/M7 `?? 0` 惯例同源）；weave-data/weave-documents 的 specta
   optional dep 需显式 `features=["derive"]`（原先靠 src-tauri feature
   unification 隐式获得，standalone build 暴露）。
+
+## D61 — M8（下）恢复/原子化与版本记录（§127-§130/§141/§178-§179/§184）
+
+- **原子输出**：PDF 写出 = 同目录 `.weave-tmp-<pid>` temp → 保存 → 重解析
+  校验（页数一致）→ rename promote；校验失败清理 temp——绝不留下"看似
+  合法实则不完整"的最终产物（§179）。rename 同卷原子（NTFS 语义）。
+- **Merge TOCTOU（§141）**：PdfMergePlan 携带输入快照（size+mtime ms），
+  execute 前逐一重校验，不符 ⇒ `pdf.changedSincePlan` 拒绝盲执行
+  （冒烟/测试双覆盖）。
+- **Crash Recovery（§128-§130）**：批量路径复用 M7 journal（M7 下已建）；
+  单文档操作 = 同步原子（temp+promote），崩溃只可能留下 temp 残片
+  （`.weave-tmp-*` 前缀可识别、可清理、非合法产物名——orphan 语义），
+  不产生半成品 final。
+- **版本记录（§184）**：lopdf 0.45.0 / zip 8.6.0 / quick-xml 0.38.x
+  （Cargo.lock 实际解析）。

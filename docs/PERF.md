@@ -268,3 +268,20 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
 - 资源限额（§100 集中定义，保守初值）：file 512 MiB / archive 65,536
   entries / entry 256 MiB / decompressed total 1 GiB / xml part 128 MiB /
   pages 10,000 / sheets 1,024 / slides 2,048——待大文档实测校准
+
+## M8 Documents（下）— 2026-10-05
+
+- 复现：`cargo test -p weave-batch --release -- --ignored --nocapture`
+  （document_stage_tests::perf_batch_document_inspection）+ fixture_tests
+- 环境：Windows 11 (10.0.26200)，x64，release，NTFS；fixtures = synthetic
+  （1 页 PDF / 最小 DOCX，gen_fixtures 产出 §132）
+
+| 场景 | 结果 | 备注 |
+| --- | --- | --- |
+| batch document inspect 10 docs | **25.5 ms**（2.5 ms/doc） | 冷启动含前两次 IO 预热 |
+| batch document inspect 100 docs | **158.9 ms**（1.58 ms/doc） | |
+| batch document inspect 1,000 docs | **1.43 s**（1.43 ms/doc） | 线性，无超线性退化（§168 Throughput；§180 资源审计口径） |
+| PDF 单操作（inspect/merge/split/rotate，synthetic 小文档） | 毫秒级 | 见 M8（上）节 |
+- 大文档基线（§101/§102：500/1000 页、大型 Office）：pdf-large-200page
+  fixture 已入 tests/fixtures（200 页 inspect 通过）；更大规模列 M9 复测
+  （KNOWN LIMITATION 如实——本节不宣称）

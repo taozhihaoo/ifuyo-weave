@@ -28,6 +28,9 @@
 | encoding_rs | 文本解码级联（Mozilla/Firefox 同源，M4/D38） | MIT OR Apache-2.0 |
 | quick-xml | XML 事件流解析（MIT/Apache-2.0，M4/D43） | MIT OR Apache-2.0 |
 | yaml-rust2 | YAML 真解析（MIT/Apache-2.0，维护中替代 archived serde_yaml，M4/D43） | MIT OR Apache-2.0 |
+| lopdf 0.45.0 | PDF parse/操作（inspect/merge/split/reorder/rotate，M8/D59） | MIT |
+| zip 8.6.0（deflate） | OOXML 容器读取 + §87 炸弹守卫（MIT，M8/D59） | MIT |
+
 | regex | 重命名规则正则（M2/D28） | MIT OR Apache-2.0 |
 | chrono | 日期重命名规则（M2/D28） | MIT OR Apache-2.0 |
 | react / react-dom | UI | MIT |
