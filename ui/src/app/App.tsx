@@ -37,6 +37,11 @@ const buttonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const pillStyle: CSSProperties = {
+  ...buttonStyle,
+  borderRadius: "var(--radius-full)",
+};
+
 function App() {
   const t = useT();
   const {
@@ -387,13 +392,15 @@ function App() {
       style={{
         minHeight: "100%",
         padding: "var(--spacing-xl)",
+        maxWidth: "1080px",
+        margin: "0 auto",
         display: "flex",
         flexDirection: "column",
         gap: "var(--spacing-lg)",
       }}
     >
       <header style={{ display: "flex", alignItems: "baseline", gap: "var(--spacing-md)" }}>
-        <h1 style={{ margin: 0, fontSize: "var(--typography-size-title)" }}>
+        <h1 style={{ margin: 0, fontSize: "var(--typography-size-title)", fontWeight: 650, letterSpacing: "-0.02em" }}>
           {appInfo?.name ?? "Weave"}
         </h1>
         <span style={{ color: "var(--color-text-muted)" }}>{appInfo?.vendor ?? "ifuyo"}</span>
@@ -409,7 +416,7 @@ function App() {
             v{appInfo.version} · {appInfo.environment}
           </span>
         ) : null}
-        <button type="button" onClick={toggleLocale} style={buttonStyle}>
+        <button type="button" onClick={toggleLocale} style={pillStyle}>
           {locale === "zh-CN" ? "English" : "中文"}
         </button>
         <button
@@ -420,7 +427,7 @@ function App() {
             useAppStore.getState().setTheme(next);
             void persistTheme(next);
           }}
-          style={buttonStyle}
+          style={pillStyle}
           aria-label={t("app.theme")}
         >
           {t(`app.themeName.${theme}`)}
@@ -453,9 +460,11 @@ function App() {
             onClick={() => setView(v)}
             aria-current={view === v ? "page" : undefined}
             style={{
-              ...buttonStyle,
+              ...pillStyle,
               background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
               borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+              color: view === v ? "var(--color-accent)" : "inherit",
+              fontWeight: view === v ? 600 : 400,
             }}
           >
             {t(`nav.${v}`)}
@@ -604,10 +613,14 @@ function App() {
           style={{
             border: "2px dashed " + (dragOver ? "var(--color-accent)" : "var(--color-border)"),
             borderRadius: "var(--radius-lg)",
-            padding: "var(--spacing-xl)",
+            padding: "var(--spacing-xxl)",
             textAlign: "center",
+            fontSize: "var(--typography-size-lg)",
+            color: dragOver ? "var(--color-accent)" : "var(--color-text-muted)",
             background: dragOver ? "var(--color-accent-soft)" : "var(--color-surface)",
-            transition: "background var(--motion-normal) var(--motion-ease)",
+            boxShadow: "var(--shadow-sm)",
+            transition:
+              "background var(--motion-normal) var(--motion-ease), border-color var(--motion-normal) var(--motion-ease)",
           }}
         >
           {t("drop.hint")}
@@ -617,8 +630,20 @@ function App() {
       {view === "tools" ? (
         <>
           {/* M11 §34/§42：首页收藏（引用而非第二套 Registry） */}
-          <section aria-label={t("favorites.title")} style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
-            <strong style={{ fontSize: "var(--typography-size-sm)" }}>{t("favorites.title")}</strong>
+          <section
+            aria-label={t("favorites.title")}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--spacing-sm)",
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-sm)",
+              padding: "var(--spacing-lg)",
+            }}
+          >
+            <strong style={{ fontSize: "var(--typography-size-sm)", letterSpacing: "0.02em" }}>{t("favorites.title")}</strong>
             {favorites.length === 0 ? (
               <div style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
                 {t("favorites.empty")}
@@ -658,8 +683,20 @@ function App() {
           </section>
 
           {/* M11 §43/§45：Recent Operations（真实 M2 History） */}
-          <section aria-label={t("recent.title")} style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
-            <strong style={{ fontSize: "var(--typography-size-sm)" }}>{t("recent.title")}</strong>
+          <section
+            aria-label={t("recent.title")}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--spacing-sm)",
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-sm)",
+              padding: "var(--spacing-lg)",
+            }}
+          >
+            <strong style={{ fontSize: "var(--typography-size-sm)", letterSpacing: "0.02em" }}>{t("recent.title")}</strong>
             {recentHistory.length === 0 ? (
               <div style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
                 {t("recent.empty")}

@@ -56,6 +56,6 @@ describe("design token discipline", () => {
     const out: Record<string, string> = {};
     flattenTokens(tokens.color, "", out);
     expect(Object.keys(out)).toContain("--text-muted");
-    expect(out["--accent"]).toBe("#3d6ffe");
+    expect(out["--accent"]).toBe("#8b7cf6");
   });
 });

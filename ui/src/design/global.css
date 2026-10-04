@@ -17,10 +17,97 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button {
+/* ── M11 视觉刷新：全组件统一过渡 / 悬停 / 焦点（业务组件自动继承） ── */
+
+button,
+input,
+select,
+textarea {
   font-family: inherit;
+  color: inherit;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+button {
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: var(--control-disabled-opacity);
+}
+
+input,
+select,
+textarea {
+  border-radius: var(--radius-sm);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--control-focus-ring);
+  border-color: var(--color-accent);
+}
+
+/* 柔和滚动条（WebView2 = Chromium） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 ::selection {
   background: var(--color-accent-soft);
+}
+
+/* 表格行 hover 柔和（Data/History/Workflow 表格自动继承） */
+tbody tr {
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+tbody tr:hover {
+  background: var(--color-surface-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

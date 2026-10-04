@@ -1,24 +1,25 @@
 /**
  * Design tokens 单一事实源（M0 §11）。
  *
- * 视觉方向（charter §31）：干净、克制、现代、中性、有一点 ifuyo 情绪。
- * 业务代码禁止出现裸色值；`design/` 是唯一例外（M0 §11.3，有自动检查守护）。
+ * 视觉方向（charter §31 + M11 视觉刷新）：柔和、时尚、低饱和、轻投影、
+ * 大圆角；accent = 柔和紫罗兰，中性色偏冷灰蓝。业务代码禁止出现裸色值；
+ * `design/` 是唯一例外（M0 §11.3，有自动检查守护）。
  * 生成的占位应用图标（scripts/generate-icon.mjs）与这里的 accent 保持一致。
  */
 
 export const tokens = {
   color: {
-    background: "#f6f7f9",
+    background: "#f6f7fb",
     surface: "#ffffff",
-    surfaceHover: "#f0f2f5",
-    inset: "#eceef1",
-    text: "#1d2129",
-    textMuted: "#697079",
-    border: "#dfe3e8",
-    accent: "#3d6ffe",
-    accentSoft: "#e3ecff",
-    danger: "#d0454c",
-    success: "#2f9e63",
+    surfaceHover: "#f3f4fa",
+    inset: "#eef0f7",
+    text: "#2b2e38",
+    textMuted: "#7c8194",
+    border: "#e5e8f2",
+    accent: "#8b7cf6",
+    accentSoft: "#efecfe",
+    danger: "#e07a8b",
+    success: "#54b48c",
   },
   spacing: {
     xs: 4,
@@ -29,9 +30,9 @@ export const tokens = {
     xxl: 36,
   },
   radius: {
-    sm: 6,
-    md: 10,
-    lg: 14,
+    sm: 8,
+    md: 12,
+    lg: 16,
     full: 999,
   },
   typography: {
@@ -41,7 +42,7 @@ export const tokens = {
     sizeMd: 14,
     sizeLg: 16,
     sizeXl: 22,
-    sizeTitle: 32,
+    sizeTitle: 30,
   },
   zIndex: {
     base: 0,
@@ -58,37 +59,48 @@ export const tokens = {
     heightSm: 28,
     heightMd: 34,
     paddingX: 14,
-    focusRing: "0 0 0 2px rgba(61, 111, 254, 0.35)",
+    focusRing: "0 0 0 3px rgba(139, 124, 246, 0.28)",
     disabledOpacity: 0.45,
   },
   surface: {
     page: "var(--color-background)",
     card: "var(--color-surface)",
-    overlay: "rgba(29, 33, 41, 0.4)",
+    overlay: "rgba(43, 46, 56, 0.4)",
+  },
+  shadow: {
+    sm: "0 1px 2px rgba(43, 46, 56, 0.06)",
+    md: "0 2px 10px rgba(43, 46, 56, 0.08)",
+    lg: "0 12px 32px rgba(43, 46, 56, 0.14)",
   },
 } as const;
 
 export type Tokens = typeof tokens;
 
-/// M11 §222：dark 主题覆盖（仅 color/surface 类；其余 token 与 light 共享）。
+/// M11 §222：dark 主题覆盖（柔和深色：低对比灰蓝底 + 柔紫 accent；
+/// 仅 color/surface/shadow 类，其余 token 与 light 共享）。
 export const darkColorOverrides = {
   color: {
-    background: "#16181d",
-    surface: "#1f2329",
-    surfaceHover: "#262b33",
-    inset: "#2a3038",
-    text: "#e8eaed",
-    textMuted: "#9aa0a8",
-    border: "#343a44",
-    accent: "#5b8cff",
-    accentSoft: "#1c2a4a",
-    danger: "#e0676d",
-    success: "#4cbf80",
+    background: "#131419",
+    surface: "#1b1d24",
+    surfaceHover: "#22252e",
+    inset: "#23262f",
+    text: "#e7e9f2",
+    textMuted: "#9298ab",
+    border: "#2c303b",
+    accent: "#a296ff",
+    accentSoft: "#2a2647",
+    danger: "#ec8a97",
+    success: "#6cc9a2",
   },
   surface: {
     page: "var(--color-background)",
     card: "var(--color-surface)",
     overlay: "rgba(0, 0, 0, 0.55)",
+  },
+  shadow: {
+    sm: "0 1px 2px rgba(0, 0, 0, 0.4)",
+    md: "0 2px 10px rgba(0, 0, 0, 0.45)",
+    lg: "0 12px 32px rgba(0, 0, 0, 0.6)",
   },
 } as const;
 
