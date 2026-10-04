@@ -799,3 +799,40 @@ Known Limitations:
 
 - max_steps=32（§75 v1 限额）——100 步工作流被 validation 拒绝
 - Named-tz/参数绑定/工作流专属 run 视图仍为（上）遗留限制（DEFERRED）
+
+## M11 Polish（上）
+
+Status: COMPLETE
+
+Implemented:
+
+- Command Palette（§15-§24）：前端 CommandRegistry 扩展 metadata
+  （category/keywords/shortcut §17-§18）；确定性排序 exact > prefix >
+  token > keyword > fuzzy，tie-break category→label→id（§20，纯函数
+  commandSearch + 8 测试）；Palette UI 键盘 ↑↓/Enter/Escape + 焦点恢复
+  + 空结果（clear search §22）+ 执行错误呈现（§23）+ 语义 button/close
+  按钮（§89/§94）；Mod+K 经 ShortcutRegistry（§51-§55 scope/upsert 冲突
+  检查）
+- Favorites（§34-§42）：AppConfig.favorites 持久化（type+id 引用，无
+  冗余 label §37；stale 安全过滤 §38；数组序 §39）；首页收藏区（view
+  跳转/移除）+ palette 可发现；无云无同步（§36）
+- Recent Operations（§43-§49）：首页 Recent = M2 History 最新条目
+  （真实数据非 fake；type/summary/status/timestamp §45）；"Open history"
+  动作（§47）；History=可恢复详情 / Recent=快速重访 边界保持（§44）
+- 导航命令注册（§16）：12 个 view 导航 + 语言切换（自包含 store 读写 +
+  setAppConfig 持久化）；不注册不存在的功能（§16）
+- i18n：全部新增文案走 zh/en 资源（§97-§98 无硬编码）
+
+Quality:
+
+- Frontend gates: PASS（typecheck；lint；vitest 31 = 23+8 新增）
+- Rust gates: PASS（clippy/fmt/check；config.rs 扩展后 check 通过）
+- 真窗口冒烟：见收口记录
+
+Known Limitations:
+
+- Redo / Theme 切换 / Open Settings 等未实现能力未注册进 palette
+  （§16 不注册不存在功能）；theme 字段存在但 UI 无切换入口
+- Workflow favorite 点击 = 跳转 workflow 页（Library 打开具体定义），
+  未做 deep-open（v1 简化）
+- 全局热键（§56）、全文内容搜索（§59）明确不做
