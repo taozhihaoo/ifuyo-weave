@@ -30,8 +30,7 @@ pub use page_range::{PageRangeError, parse_page_ranges, split_every_n};
 pub use pdf::{
     PdfError, PdfFacts, PdfMergePlan, Rotation, execute_extract_pages, execute_merge,
     execute_reorder, execute_rotate, execute_split_every_n, inspect as pdf_inspect, plan_merge,
-    rotate_pdf_bytes,
-    split_output_name, validate_reorder,
+    rotate_pdf_bytes, split_output_name, validate_reorder,
 };
 
 use std::path::Path;

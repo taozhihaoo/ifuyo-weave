@@ -105,6 +105,8 @@ fn stage_name(stage: &StageSpec) -> String {
         StageSpec::ImageResize { .. } => "image_resize".into(),
         StageSpec::Encode { format, .. } => format!("encode:{format}"),
         StageSpec::Export { .. } => "export".into(),
+        StageSpec::DocumentInspect => "document_inspect".into(),
+        StageSpec::PdfRotate { degrees, .. } => format!("pdf_rotate:{degrees}"),
     }
 }
 
@@ -341,6 +343,60 @@ fn run_stage(
                 out_path.to_string_lossy().into_owned(),
             ));
             Ok(Some(ItemPayload::Bytes(bytes)))
+        }
+        StageSpec::DocumentInspect => {
+            // M8 §113：只读检查——不改负载；关键事实进 stage 日志
+            let facts = weave_documents::inspect_document(
+                &ctx.source_path,
+                &weave_documents::DocumentResourceLimits::default(),
+            );
+            let pages = match facts.pages.as_ref() {
+                Some(weave_documents::Field::Known(n)) => n.to_string(),
+                Some(weave_documents::Field::Estimated(n)) => format!("~{n}"),
+                _ => "unknown".into(),
+            };
+            ctx.stage_log.push((
+                "document_inspect".into(),
+                format!(
+                    "{} pages={pages} size={}",
+                    facts.format.as_str(),
+                    facts.size
+                ),
+            ));
+            Ok(Some(ctx.payload.clone()))
+        }
+        StageSpec::PdfRotate { degrees, pages } => {
+            let bytes = match &ctx.payload {
+                ItemPayload::Bytes(b) => b.clone(),
+                other => {
+                    return Err(StageError::new(
+                        "Unsupported",
+                        format!(
+                            "PdfRotate requires bytes payload, got {}",
+                            other.type_name()
+                        ),
+                    ));
+                }
+            };
+            // 内存 rotate 走 weave-documents 域函数（§58/§218：无第二套 PDF 逻辑）
+            let (out_bytes, _total, _rotated) = weave_documents::rotate_pdf_bytes(
+                &bytes,
+                *degrees as i64,
+                pages,
+                &weave_documents::DocumentResourceLimits::default(),
+            )
+            .map_err(|e| {
+                StageError::new(
+                    match e.code {
+                        "pdf.badRange" | "pdf.badRotation" | "pdf.tooManyPages" => "Validation",
+                        "pdf.encrypted" => "Unsupported",
+                        _ => "Decode",
+                    },
+                    format!("{}: {}", e.code, e.message),
+                )
+            })?;
+            ctx.current_ext = "pdf".into();
+            Ok(Some(ItemPayload::Bytes(out_bytes)))
         }
     }
 }

@@ -14,6 +14,8 @@ pub mod state;
 #[cfg(test)]
 mod contract_tests;
 #[cfg(test)]
+mod document_stage_tests;
+#[cfg(test)]
 mod engine_fault_tests;
 #[cfg(test)]
 mod engine_tests;

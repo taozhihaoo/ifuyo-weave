@@ -514,7 +514,7 @@ pub fn rotate_pdf_bytes(
             return Err(PdfError::new(
                 "pdf.badRotation",
                 format!("rotation must be 90/180/270, got {other}"),
-            ))
+            ));
         }
     };
     let mut doc = Document::load_mem(bytes)

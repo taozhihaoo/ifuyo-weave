@@ -119,6 +119,11 @@ pub enum StageSpec {
         destination_dir: PathBuf,
         overwrite: bool,
     },
+    /// M8（上 §113）：只读文档事实——不改负载，结果进 stage 日志。
+    DocumentInspect,
+    /// M8（上 §25/§58）：PDF 页旋转（/Rotate 元数据语义）。degrees ∈
+    /// {90,180,270}；pages = 页范围串（空 = 全部页）。
+    PdfRotate { degrees: f64, pages: String },
 }
 
 /// 线性流水线（§11：0..N Filter + 0..N Transform + 1 Export）。
@@ -196,6 +201,16 @@ impl Pipeline {
                     PayloadType::Image
                 }
                 StageSpec::Export { .. } => current,
+                // M8：inspect 任意负载（只读旁路）；rotate 要求 Bytes ⇒ Bytes
+                StageSpec::DocumentInspect => current,
+                StageSpec::PdfRotate { .. } => {
+                    if current != PayloadType::Bytes {
+                        return Err(format!(
+                            "stage {i}: PdfRotate requires Bytes payload, got {current:?}"
+                        ));
+                    }
+                    PayloadType::Bytes
+                }
             };
             current = next;
         }
