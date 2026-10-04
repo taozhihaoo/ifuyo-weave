@@ -498,6 +498,81 @@ impl Rotation {
     }
 }
 
+/// 内存版 rotate（M7 batch 适配面，§58：批量经同一域函数）：bytes ⇒
+/// rotate ⇒ 重解析校验页数 ⇒ bytes。失败一律结构化 PdfError。
+pub fn rotate_pdf_bytes(
+    bytes: &[u8],
+    degrees: i64,
+    ranges: &str,
+    limits: &DocumentResourceLimits,
+) -> Result<(Vec<u8>, u64, Vec<u64>), PdfError> {
+    let rotation = match degrees {
+        90 => Rotation::Deg90,
+        180 => Rotation::Deg180,
+        270 => Rotation::Deg270,
+        other => {
+            return Err(PdfError::new(
+                "pdf.badRotation",
+                format!("rotation must be 90/180/270, got {other}"),
+            ))
+        }
+    };
+    let mut doc = Document::load_mem(bytes)
+        .map_err(|e| PdfError::new("pdf.malformed", format!("parse failed: {e}")))?;
+    if doc.is_encrypted() {
+        return Err(PdfError::new(
+            "pdf.encrypted",
+            "encrypted PDF rotate is not supported",
+        ));
+    }
+    let total = doc.get_pages().len() as u64;
+    if total > limits.max_pages {
+        return Err(PdfError::new(
+            "pdf.tooManyPages",
+            format!("{total} pages over limit {}", limits.max_pages),
+        ));
+    }
+    let target: Vec<u64> = if ranges.trim().is_empty() {
+        (1..=total).collect()
+    } else {
+        crate::page_range::parse_page_ranges(ranges, Some(total))
+            .map_err(|e| PdfError::new("pdf.badRange", e.to_string()))?
+    };
+    let target_set: std::collections::HashSet<u64> = target.iter().copied().collect();
+    for (index, id) in doc.get_pages() {
+        if !target_set.contains(&(index as u64)) {
+            continue;
+        }
+        let dict = doc
+            .get_object_mut(id)
+            .and_then(|o| o.as_dict_mut())
+            .map_err(|e| PdfError::new("pdf.malformed", format!("page {index}: {e}")))?;
+        let current = dict
+            .get(b"Rotate")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0);
+        let next = (current + rotation.degrees()).rem_euclid(360);
+        dict.set("Rotate", Object::Integer(next));
+    }
+    let mut out_bytes = Vec::new();
+    doc.save_to(&mut out_bytes)
+        .map_err(|e| PdfError::new("pdf.writeFailed", e.to_string()))?;
+    // §27 输出校验：重解析 + 页数一致
+    let check = Document::load_mem(&out_bytes)
+        .map_err(|e| PdfError::new("pdf.outputEmpty", format!("reparse failed: {e}")))?;
+    if check.get_pages().len() as u64 != total {
+        return Err(PdfError::new(
+            "pdf.outputPageMismatch",
+            format!(
+                "output has {} pages, expected {total}",
+                check.get_pages().len()
+            ),
+        ));
+    }
+    Ok((out_bytes, total, target))
+}
+
 /// Rotate：全部页或选定页（ranges 为空 = 全部）。
 pub fn execute_rotate(
     input: &Path,
