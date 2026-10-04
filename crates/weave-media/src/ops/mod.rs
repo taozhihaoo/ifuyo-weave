@@ -421,3 +421,6 @@ pub fn exif_gps_present(bytes: &[u8], format: ImageFormat) -> bool {
 
 #[cfg(test)]
 mod ops_tests;
+
+#[cfg(test)]
+mod quality_tests;
