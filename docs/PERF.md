@@ -212,3 +212,23 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
   u32::MAX 边界）；预览有界 ≤2048 边长
 - 解压炸弹/巨型维度守卫测试：limits::tests::dimension_guard_* 与
   decode_guard_via_inspect_on_crafted_header
+
+## M7 Batch Engine（上）— 2026-10-04
+
+- 复现：`cargo test -p weave-batch --release -- --ignored --nocapture`
+  （engine_tests::perf_text_batch_1000 / perf_image_batch_100）
+- 环境：Windows 11 (10.0.26200)，x64，release 构建，用户 `%TEMP%`（NTFS）
+
+| 场景 | 结果 | 备注 |
+| --- | --- | --- |
+| text batch 1000 files（read+trim+write，逐条 Export） | **288.7 ms** | ~0.29 ms/file；每条独立 read/write，失败隔离天然成立 |
+| image batch 100 files（512×384 PNG decode + Fit 1920×1080 防放大 + PNG re-encode） | **96.8 ms** | ~0.97 ms/file；含 ImageLimits header 守卫与 PNG 无损中转 |
+
+对照 M7（上）目标：
+
+- [x] 确定性输入枚举（§55 路径字典序；快照后 per-item 顺序执行）
+- [x] 诚实进度（§30 per-item 计数经 JobTracker，无伪造百分比）
+- [x] 千文件量级不阻塞 UI（execute 在 spawn_blocking；JobTracker 进度）
+- [x] 取消语义（未开始 ⇒ Cancelled；阶段间安全点 §33/§34）
+- 峰值内存：单 item 负载驻留（Bytes/Text/Image 三态），Job 级 O(1)
+  额外；未做进程级 RSS 测量（大文件语料随（下）Journal/Resume 补测）

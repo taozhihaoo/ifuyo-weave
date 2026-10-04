@@ -389,3 +389,56 @@ Known Limitations:
 - 16-bit PNG：由 image crate 解码后转 8-bit 处理（观测如实报位深）
 - （下）范围：multi-image 批量/批量预览/per-file 结果、转换选项 UI 化、
   metadata cleaner UI、§142+ 矩阵——列入"下一步"
+
+## M7 Batch Engine（上）
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-batch crate（M0 骨架填充）：Job 状态机（Created→…→Failed 显式
+  合法迁移表 + 终态判定 §4）；输入快照 path/size/mtime（§10/§203）+
+  revalidate（ChangedSincePreview/FileMissing §204/§75）；Linear
+  Pipeline = Source + 0..N Filter + 0..N Transform + 末置唯一 Export
+  （§11-§13；DAG/分支/循环显式不实现 §12/§0.2）；Pipeline::validate
+  结构 + 类型跟踪（Bytes/Text/Image §57；TextTransform 后 PNG 无损中转
+  D51）；JobPlan 可序列化（§19 serde）
+- 执行引擎：同引擎 Preview/Execute（§20-§23；preview = dry_run 旗标，
+  Export 不落盘但碰撞照报 = Potential Failures，D52）；item 级失败
+  隔离（§25/§49 单条失败不放弃其余）；Filter 拒绝 ⇒ Skipped（§14
+  Rejected ≠ Failed）；协作取消（§32-§34 未开始/阶段间安全点 ⇒
+  Cancelled）；诚实进度 per-item 计数（§30）；稳定 ItemId = item_{n}
+  （§18 快照序）；§26 Result Model 全计数
+- 变换适配（不复制第二套实现 §243）：文本 = weave_text TransformKind
+  映射（TrimLines/CaseConvert/FindReplace）；图像 = weave-media
+  inspect_bytes(ImageLimits 守卫)/resize/encode_image（PNG 无损中转）
+- IPC（§87-§90）：batch_preview（同步模拟）+ batch_execute（任务化，
+  任务内 §75 快照重校验 ⇒ ChangedSincePreview Job Failed；进度经
+  JobTracker sink；取消复用 cancel_job）；DTO 镜像 StageSpec/TextOpSpec
+  （specta tag=type；适配层只投影不隐式转换 §58）
+- UI：Batch 页（§86 不承载引擎逻辑）——三条预设 Linear 管线（文本
+  trim / trim+lowercase / 图片 Fit1920→PNG）+ 输入清单 + 目标目录 +
+  覆盖/继续开关 + Preview/Execute/Cancel + per-item 结果表（D53）；
+  i18n zh-CN/en
+- 决策：D51 负载模型/PNG 中转、D52 同引擎 dry-run Preview、D53 预设
+  管线 UI、D54 （上）不新增持久化（§91；Journal/Resume/Pause/Retry
+  全列（下））
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-batch 12 测试 +
+  workspace 全绿）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- PERF 实测：text 1000 files 288.7 ms；image 100 files 96.8 ms
+  （docs/PERF.md M7 节）
+
+Known Limitations:
+
+- Job Journal/崩溃恢复/Resume/Retry/Pause IPC 未做（§40-§42/§90 部分
+  ——M7（下）主范围，D54）
+- 取消经 cancel_job 生效于未开始条目与阶段边界；单阶段内部（如大图
+  decode）不可中断
+- Preview 对图像执行真实解码+resize（同引擎 §23 的代价）；超大清单
+  预览耗时线性（v1 无预览采样）
+- Export 命名 = 同名.新扩展名（§76 v1）；无冲突重命名策略（§77-§79
+  列（下））

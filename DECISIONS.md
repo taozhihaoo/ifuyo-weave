@@ -408,3 +408,48 @@ DataLimits：输入 32 MiB / 内存 500k 行 / 每页 1000 行 / preview 采样
 ⇒ `data.destinationExists` 拒绝；覆盖源文件须走 M4 TextTransform 管线
 ——TOCTOU/备份/原子替换/历史/Undo 全套复用，§72-§75）； ridden via
 TextTransform Plan ⇒ 历史记录与撤销零成本复用（§93/§114 反向同源）。
+
+## D51 — Batch 负载模型与 Linear Pipeline 形态（§11–§13/§57/§58/§63）
+
+weave-batch 的流水线 = Source + 0..N Filter + 0..N Transform + 恰一个
+末置 Export（Linear Only，§12 明确禁止 DAG/分支/循环/子工作流——M10
+Workflow UI 也不得偷渡）。负载为三态精简集 `ItemPayload =
+Bytes/Text/Image`（§57 Input/OutputType 精简；String/DynamicImage 之外
+不引入第五种类型）。类型跟踪在 `Pipeline::validate()`（结构 + 类型兼容
+静态校验，§56/§57）：Bytes 为通用中转；TextTransform 要求 Text/Bytes
+（Bytes ⇒ 隐含 UTF-8 解码，非 UTF-8 ⇒ Decode 失败该条 Failed）；Image
+中转统一 PNG 无损重编码（Resize 后 current_ext=png，最终格式由 Encode
+决定——不透传原始字节）。适配层（IPC DTO→StageSpec）只做投影不做隐式
+转换（§58）：格式串非法/目录不存在等在计划构建期 fail-fast。
+
+## D52 — Preview = 同引擎 dry-run（§20–§23）
+
+Preview 不写"第二套模拟器"：`preview_plan` 与 `execute_plan` 共享
+`run_job`，唯一差异是 Export 阶段 `dry_run` 旗标——跳过 `fs::write`，
+但碰撞检查照常执行（目标已存在且未开覆盖 ⇒ 该条 Failed(Collision)，
+即 §22 Potential Failures）；产物字节数取内存负载长度（Execute 取落盘
+stat）。这保证 §23 "Preview 应尽可能使用与 Execute 相同的 domain
+transformation" 结构性成立（图像预览就是真解码真 resize），同时 §21
+No destructive mutation 天然满足（同函数不可能一边写一边不写）。
+JobResult.preview 布尔标记结果来源，UI 不自行推断。
+
+## D53 — M7（上）Batch UI = 预设管线（§86/§0.2）
+
+Batch 页 v1 提供三条内置 Linear 管线预设（文本 trim / trim+lowercase /
+图片 Fit 1920×1080→PNG），不做自由阶段编排器——§0.2 明确禁止复杂 DAG
+编辑器/可视化节点编辑器，且 §86 要求 UI 不承载引擎逻辑：UI 只产出
+JobPlan DTO 投影 + 呈现 Result Model（per-item 表 + §26 计数）。
+Preview 按钮 = `batch_preview`（同步、§21 无副作用）；Execute =
+`batch_execute`（任务化，job_id 经既有 `get_job` 400ms 轮询、
+`cancel_job` 取消——复用 M1 JobTracker，§87 bounded/structured/
+cancelable 满足；进度 = per-item 已完成计数，不伪造百分比 §30）。
+
+## D54 — M7（上）不新增持久化与队列（§91/§92）
+
+Job Journal/崩溃恢复/Resume（§40-§42/§92/§93）**全部留在 M7（下）**：
+（上）阶段审计结论是现有 History（weave-history）+ JobTracker 内存态
+足以支撑 Preview/Execute 闭环，不因 Batch Engine 默认加 SQLite
+（§91 明示）。Execute 前重校验快照（§75：size+mtime ⇒
+ChangedSincePreview/FileMissing ⇒ Job Failed）在（上）以重建快照 +
+revalidate_snapshot 实现；崩溃后 Job 不复活（内存态随进程消失）——
+（下）以 Journal 落盘补齐。Pause/Retry/Resume IPC 同（下）。

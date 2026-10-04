@@ -287,3 +287,89 @@ fn preview_runs_same_engine_without_writing() {
             .starts_with("Collision:")
     );
 }
+
+/// PERF（charter #68：真实测量）。默认忽略，`cargo test -p weave-batch
+/// --release -- --ignored --nocapture` 运行；数字记入 docs/PERF.md。
+#[test]
+#[ignore = "perf: release 手动运行"]
+fn perf_text_batch_1000() {
+    use std::time::Instant;
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let inputs: Vec<PathBuf> = (0..1000)
+        .map(|i| {
+            let p = dir.path().join(format!("f{i:04}.txt"));
+            write_text(&p, "  line one  
+  line two  
+");
+            p
+        })
+        .collect();
+    let pipeline = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::TextTransform {
+                operations: vec![TextOpSpec::TrimLines],
+            },
+            StageSpec::Encode {
+                format: "txt".into(),
+                quality: None,
+            },
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: false,
+            },
+        ],
+    };
+    let plan = build_job_plan(inputs, pipeline, dest, true, false).expect("plan");
+    let t0 = Instant::now();
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
+    let dt = t0.elapsed();
+    assert_eq!(result.succeeded, 1000);
+    eprintln!("PERF text batch 1000 files (read+trim+write): {dt:?}");
+}
+
+/// PERF：100 张 512×384 PNG → Fit 1920×1080（防放大⇒原尺寸）+ PNG 重编码。
+#[test]
+#[ignore = "perf: release 手动运行"]
+fn perf_image_batch_100() {
+    use std::time::Instant;
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let img = image::DynamicImage::new_rgba8(512, 384);
+    let inputs: Vec<PathBuf> = (0..100)
+        .map(|i| {
+            let p = dir.path().join(format!("img{i:03}.png"));
+            img.save_with_format(&p, image::ImageFormat::Png)
+                .expect("save png");
+            p
+        })
+        .collect();
+    let pipeline = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::ImageResize {
+                width: 1920,
+                height: 1080,
+                mode: "fit".into(),
+                prevent_upscale: true,
+            },
+            StageSpec::Encode {
+                format: "png".into(),
+                quality: None,
+            },
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: false,
+            },
+        ],
+    };
+    let plan = build_job_plan(inputs, pipeline, dest, true, false).expect("plan");
+    let t0 = Instant::now();
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
+    let dt = t0.elapsed();
+    assert_eq!(result.succeeded, 100);
+    eprintln!("PERF image batch 100 files (decode+fit-resize+png-encode): {dt:?}");
+}

@@ -54,7 +54,7 @@ weave-app (src-tauri)
 | weave-text | 文本工具（M4） | 骨架 |
 | weave-data | CSV / JSON / TSV（M5） | 骨架 |
 | weave-media | 图片（M6） | 骨架 |
-| weave-batch | 统一批处理引擎（M7） | 骨架 |
+| weave-batch | 统一批处理引擎（M7）：JobPlan/Preview/Execute | ✅ M7（上） |
 | weave-documents | PDF / Office（M8） | 骨架 |
 | weave-history | 操作历史（M2+） | 骨架 |
 | weave-search | 工具/命令搜索（M11） | 骨架 |
@@ -169,3 +169,14 @@ Unit（weave-core / weave-app tests/）
 
 前端测试：vitest + @testing-library/react（jsdom）；IPC 以 mock 边界做单元测试，
 真实链路由运行时冒烟验证——mock 只用于测试隔离，不冒充成功（M0 §9.2）。
+
+## Batch Engine 边界（M7 上）
+
+领域逻辑全部在 weave-batch：Job 状态机（显式合法迁移表）、输入快照
+（path/size/mtime + ChangedSincePreview 重校验）、Linear Pipeline 校验
+（结构 + 类型跟踪）、同引擎 Preview（dry-run Export）/Execute、item 级
+失败隔离与协作取消。src-tauri 只做 DTO 投影（batch_service）与任务化
+（JobTracker + get_job/cancel_job 复用，无第二套任务管道）。变换实现
+复用既有适配器：文本 = weave_text TransformKind，图像 = weave-media
+inspect/resize/encode（含 ImageLimits 守卫）——不复制第二份 I/O 或
+编解码层。持久化（Journal）与 Resume/Retry 语义属 M7（下）。
