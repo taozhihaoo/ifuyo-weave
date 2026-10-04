@@ -873,3 +873,8 @@ Known Limitations:
   unlisten 模式），无新增泄漏面；未做自动化泄漏检测
 - 多文件 drop 的"Common Actions"聚合（§31）未做——当前 drop 取首文件
   检测（KNOWN LIMITATION）
+- tauri build: PASS（4.67 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — Theme 三态循环（system→
+  light→dark，dark bg=#16181d 全局生效 + config 持久化 "theme":"dark"
+  §222-§224）；Quick Drop 建议（drop png ⇒ 首页"建议工具：图片"按钮
+  §25-§28）；console 零错误
