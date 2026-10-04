@@ -137,6 +137,8 @@ pub struct DataPageDto {
     pub rows: Vec<Vec<String>>,
     pub row_ids: Vec<String>,
     pub total_rows: f64,
+    /// 底表全行数（§176 N of M 的 M——视图过滤后 total_rows 是 N）。
+    pub base_rows: f64,
     pub offset: f64,
     pub diagnostics: Vec<DataDiagnosticDto>,
 }
@@ -215,6 +217,7 @@ fn page_of(
         rows,
         row_ids,
         total_rows: indices.len() as f64,
+        base_rows: session.table.row_count() as f64,
         offset: start as f64,
         diagnostics,
     }

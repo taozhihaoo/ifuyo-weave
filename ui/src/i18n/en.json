@@ -256,5 +256,9 @@
   "data.exportPath": "Export path",
   "data.export": "Export",
   "data.exporting": "Exporting…",
-  "data.exported": "Exported to {path} (undoable in History)"
+  "data.exported": "Exported to {path} (undoable in History)",
+  "data.exportScope": "Export scope",
+  "data.exportScopeLabel": "Exporting {selected} of {total} rows",
+  "data.scope.all": "All rows",
+  "data.scope.view": "Current view rows"
 }

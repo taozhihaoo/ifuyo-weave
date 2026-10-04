@@ -256,5 +256,9 @@
   "data.exportPath": "导出路径",
   "data.export": "导出",
   "data.exporting": "导出中…",
-  "data.exported": "已导出到 {path}（可在历史记录撤销）"
+  "data.exported": "已导出到 {path}（可在历史记录撤销）",
+  "data.exportScope": "导出范围",
+  "data.exportScopeLabel": "将导出 {selected} / {total} 行",
+  "data.scope.all": "全部行",
+  "data.scope.view": "当前视图行"
 }

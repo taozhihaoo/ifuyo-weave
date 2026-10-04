@@ -495,9 +495,8 @@ export function DataPanel({ onOperationDone }: { onOperationDone: () => void }) 
               <div style={rowStyle}>
                 <span style={{ fontSize: "var(--typography-size-sm)" }}>
                   {t("data.exportScopeLabel", {
-                    selected:
-                      exportScope === "view" ? (page.totalRows ?? 0) : pageTotal(),
-                    total: pageTotal(),
+                    selected: exportScope === "view" ? (page.totalRows ?? 0) : pageTotal(),
+                    total: page.baseRows ?? pageTotal(),
                   })}
                 </span>
               </div>

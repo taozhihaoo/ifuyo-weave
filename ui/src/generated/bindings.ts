@@ -155,6 +155,8 @@ export type DataPageDto = {
 	rows: string[][],
 	rowIds: string[],
 	totalRows: number | null,
+	/**  底表全行数（§176 N of M 的 M——视图过滤后 total_rows 是 N）。 */
+	baseRows: number | null,
 	offset: number | null,
 	diagnostics: DataDiagnosticDto[],
 };
