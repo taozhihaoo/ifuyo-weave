@@ -4410,6 +4410,17 @@ dependencies = [
 [[package]]
 name = "weave-batch"
 version = "0.1.0"
+dependencies = [
+ "image",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "weave-core",
+ "weave-files",
+ "weave-media",
+ "weave-text",
+]
 
 [[package]]
 name = "weave-core"
