@@ -685,11 +685,11 @@ function App() {
       ) : null}
 
       {view === "tools" && inspection ? (
-        <div style={rowStyle} role="status">
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }} role='status'>
           <span style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
             {t("quickDrop.suggestions")}
           </span>
-          {suggestionsFor(inspection.kind, inspection.extension).map((viewId) => (
+          {suggestionsFor(inspection.kind, inspection.extension ?? '').map((viewId) => (
             <button
               key={viewId}
               type="button"
