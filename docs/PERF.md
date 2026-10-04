@@ -198,3 +198,17 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
 - [x] Regex 安全 = 引擎线性性质（§140）
 - [x] Compare 超窗降级 + P1 修复锚点 102 ms（M4 节）
 - 峰值内存：会话 O(输入) + 视图索引向量；未做进程级 RSS 测量
+
+## M6 Image — 2026-10-04
+
+- 复现：weave-media 单元测试（含真实编解码 roundtrip）；专项 bench 列入
+  M6（下）§157–§161
+- 关键路径实测（测试内计时口径，release 构建）：
+  - PNG decode 64×32 → inspect：<1 ms
+  - PNG→JPEG 重编码（quality 95）：<5 ms
+  - WebP lossless roundtrip（16×16）：<5 ms
+- 内存模型：解码前 header 守卫（max_dimension 16384 / max_pixels 80M /
+  decoded 256 MiB 预算），炸弹头直接拒绝（测试：12000×12000 与
+  u32::MAX 边界）；预览有界 ≤2048 边长
+- 解压炸弹/巨型维度守卫测试：limits::tests::dimension_guard_* 与
+  decode_guard_via_inspect_on_crafted_header

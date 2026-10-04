@@ -112,7 +112,8 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M6（Spec/M6（上）（下）；Image 工具）
+- M6（下）收尾：批量（multi-image/batch preview/per-file result）、
+  转换选项 UI 化、Metadata cleaner UI、性能场景补全（下 §142+ 矩阵）
 
 ## M3 Duplicate Finder
 
@@ -337,3 +338,55 @@ Known Limitations:
 - docs/DATA_FORMATS.md（§192 每格式语义/限额/边界）
 - 已知边界（如实）：大文件 open 仍同步（< 限额最坏延迟有界，D44）；
   OR 过滤组 / 非 ISO 日期归一 / 真实 1M 行未做（显式 NOT SUPPORTED）
+
+## M6 Image
+
+Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+
+Implemented:
+
+- weave-media crate（M0 骨架填充）：magic-bytes 格式检测（六格式，
+  mismatch 报告不强制 §10）；ImageLimits（dimension 16384 / pixels 80M /
+  decoded 256 MiB / metadata 4 MiB / preview 2048——§5/§7/§118-§120）；
+  header 守卫先于解码（§8 Decode Policy，checked 算术 §6）；Capability
+  Matrix 由真实编解码测试固化（§11——WebP 有损编码 NOT SUPPORTED，纯
+  Rust 生态 spike 结论 §109/D50；动画 v1 Static Only §59）
+- Inspector 事实（§33/§98 Fact only）：格式/尺寸/alpha/色彩/位深/帧数/
+  EXIF（make/model/datetime/orientation，GPS presence 经 GPSInfoIFDPointer
+  §23）/扩展名 mismatch
+- Resize（§35-§44）：Fit/Fill/Exact/Scale + 防放大 + 四过滤器；确定性
+  round-half-up（§40）；Alpha 合成防 halo（§15）
+- Convert/Compress（§45-§58）：encode_image 按格式分 quality 语义
+  （JPEG 0-100/WebP lossless only）；PNG→JPEG 白底合成；animated GIF→PNG
+  拒绝动画（事实记录帧数）
+- Metadata（§20-§27/§60-§62）：kamadak-exif 读取（make/model/datetime/
+  orientation/GPS presence）；strip = 重编码不写 EXIF（§61 remove-
+  removable 语义）+ orientation 物理归一（§25/§27 显示方向不破坏）
+- IPC：image_open（有界预览 data URI §65）/image_preview（同引擎 §64，
+  warnings：lossy/re-encode/animation-dropped/alpha-composited）/
+  image_execute（新文件 dest-exists 拒绝 §75；覆盖源走 TextTransform
+  管线 ⇒ TOCTOU/备份/原子/历史/Undo §74/§145；**创建型写回撤销 = 删除
+  已创建文件 w/ §94 stat 保护**）/image_cancel 占位
+- UI：Image 页（打开+事实表+GPS 隐私高亮+预览图+操作选择+质量滑条+
+  resize 参数+strip checkbox+执行）；nav；i18n 35 键 zh-CN/en
+
+Quality:
+
+- Rust gates: PASS（clippy workspace -D warnings；cargo deny ok；
+  workspace 29 套全绿：weave-media 21 / weave-data 41+7 / files 133 /
+  core 47 / testkit 11 / src-tauri 18+5）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- tauri build: PASS（4.07 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — CDP canvas 生成 PNG →
+  打开（64×32 facts）→ resize 32×16 预览（同引擎 §64）→ 执行写新文件
+  （PNG magic 验证）→ History 撤销 = 删除已创建文件（§74）
+
+Known Limitations:
+
+- WebP 有损编码 NOT SUPPORTED（纯 Rust 生态限制，§109 spike，D49）；
+  解码/无损编码支持
+- 动画 GIF/WebP：帧数为事实、转换显式拒绝保留动画（§59 Static Only）
+- JPEG→JPEG metadata-preserving rewrite 未做（重编码，§55 如实警示）
+- 16-bit PNG：由 image crate 解码后转 8-bit 处理（观测如实报位深）
+- （下）范围：multi-image 批量/批量预览/per-file 结果、转换选项 UI 化、
+  metadata cleaner UI、§142+ 矩阵——列入"下一步"
