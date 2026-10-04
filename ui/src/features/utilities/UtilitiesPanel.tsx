@@ -500,7 +500,11 @@ function TimestampTool() {
         </button>
         <button
           type="button"
-          onClick={() => timestampNow().then(setNow).catch(() => setNow(null))}
+          onClick={() => {
+            timestampNow()
+              .then(setNow)
+              .catch(() => setNow(null));
+          }}
           style={boxStyle}
         >
           {t("utilities.timestamp.now")}
