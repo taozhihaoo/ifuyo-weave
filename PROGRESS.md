@@ -711,3 +711,8 @@ Known Limitations:
   未重复内嵌——从 Inspector 进入（§5/§28 复用决策不变）
 - 文件 checksum 为同步命令（流式毫秒级；任务化列 M10 工作流批次）
 - 多文件批量 checksum UI 列（下）后续（域 API 已批量就绪）
+- tauri build: PASS（4.59 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — Hash 工具内文件 Checksum
+  （真实 fixture CRC32 值呈现）→ 导出 CSV（盘侧文件 + RFC 4180 内容
+  断言 + digest 在行内）→ 二次导出 output-first 拒绝 → History 撤销 =
+  删除导出报告；console 零错误
