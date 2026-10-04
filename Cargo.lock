@@ -4723,6 +4723,7 @@ dependencies = [
  "weave-media",
  "weave-testkit",
  "weave-text",
+ "weave-utilities",
 ]
 
 [[package]]

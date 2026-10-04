@@ -32,6 +32,18 @@ pub enum TextHashAlgorithm {
 }
 
 impl TextHashAlgorithm {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Md5 => "MD5",
+            Self::Sha1 => "SHA-1",
+            Self::Sha224 => "SHA-224",
+            Self::Sha256 => "SHA-256",
+            Self::Sha384 => "SHA-384",
+            Self::Sha512 => "SHA-512",
+            Self::Blake3 => "BLAKE3",
+        }
+    }
+
     pub fn parse(id: &str) -> Option<Self> {
         Some(match id.to_ascii_lowercase().as_str() {
             "md5" => Self::Md5,

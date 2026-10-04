@@ -26,6 +26,7 @@ pub mod state;
 pub mod text_dto;
 pub mod text_service;
 pub mod tools;
+pub mod utilities_service;
 
 use tauri::Manager;
 use tauri_specta::{Builder, collect_commands};
@@ -84,6 +85,23 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         document_service::pdf_extract_execute,
         document_service::pdf_rotate_execute,
         document_service::pdf_split_every_n_execute,
+        utilities_service::utilities_hash_text,
+        utilities_service::utilities_hash_algorithms,
+        utilities_service::utilities_checksum,
+        utilities_service::utilities_base64_encode,
+        utilities_service::utilities_base64_decode,
+        utilities_service::utilities_uuid_generate,
+        utilities_service::utilities_uuid_validate,
+        utilities_service::utilities_timestamp_convert,
+        utilities_service::utilities_timestamp_now,
+        utilities_service::utilities_url_encode,
+        utilities_service::utilities_url_decode,
+        utilities_service::utilities_url_parse,
+        utilities_service::utilities_regex_find,
+        utilities_service::utilities_regex_replace,
+        utilities_service::utilities_regex_capabilities,
+        utilities_service::utilities_color_convert,
+        utilities_service::utilities_color_contrast,
     ])
 }
 

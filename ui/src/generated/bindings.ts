@@ -130,6 +130,24 @@ export const commands = {
 	pdfRotateExecute: (input: string, degrees: number | null, ranges: string, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_rotate_execute", { input, degrees, ranges, destinationDir })),
 	/**  §23：Split Every N（确定性 part 命名 §28）。 */
 	pdfSplitEveryNExecute: (input: string, n: number | null, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_split_every_n_execute", { input, n, destinationDir })),
+	utilitiesHashText: (text: string, algorithmId: string, upper: boolean) => typedError<TextHashResultDto, IpcError>(__TAURI_INVOKE("utilities_hash_text", { text, algorithmId, upper })),
+	/**  TextHashAlgorithm 无 as_str —— 借矩阵 id。 */
+	utilitiesHashAlgorithms: () => __TAURI_INVOKE<HashAlgorithmInfoDto[]>("utilities_hash_algorithms"),
+	utilitiesChecksum: (text: string, algorithmId: string) => typedError<string, IpcError>(__TAURI_INVOKE("utilities_checksum", { text, algorithmId })),
+	utilitiesBase64Encode: (text: string, encodingId: string, alphabetId: string, omitPadding: boolean) => typedError<string, IpcError>(__TAURI_INVOKE("utilities_base64_encode", { text, encodingId, alphabetId, omitPadding })),
+	utilitiesBase64Decode: (input: string, alphabetId: string, lenient: boolean) => typedError<Base64DecodeResultDto, IpcError>(__TAURI_INVOKE("utilities_base64_decode", { input, alphabetId, lenient })),
+	utilitiesUuidGenerate: (version: string, count: number | null, format: string) => typedError<UuidInfoDto[], IpcError>(__TAURI_INVOKE("utilities_uuid_generate", { version, count, format })),
+	utilitiesUuidValidate: (input: string) => typedError<UuidInfoDto, IpcError>(__TAURI_INVOKE("utilities_uuid_validate", { input })),
+	utilitiesTimestampConvert: (input: string, unit: string | null, offsetMinutes: number | null) => typedError<TimestampConversionDto, IpcError>(__TAURI_INVOKE("utilities_timestamp_convert", { input, unit, offsetMinutes })),
+	utilitiesTimestampNow: () => __TAURI_INVOKE<TimestampConversionDto>("utilities_timestamp_now"),
+	utilitiesUrlEncode: (mode: string, input: string) => typedError<string, IpcError>(__TAURI_INVOKE("utilities_url_encode", { mode, input })),
+	utilitiesUrlDecode: (mode: string, input: string, lenient: boolean) => typedError<string, IpcError>(__TAURI_INVOKE("utilities_url_decode", { mode, input, lenient })),
+	utilitiesUrlParse: (input: string) => typedError<UrlPartDto, IpcError>(__TAURI_INVOKE("utilities_url_parse", { input })),
+	utilitiesRegexFind: (pattern: string, input: string, flags: RegexFlagDto) => typedError<RegexMatchDto[], IpcError>(__TAURI_INVOKE("utilities_regex_find", { pattern, input, flags })),
+	utilitiesRegexReplace: (pattern: string, input: string, replacement: string, flags: RegexFlagDto) => typedError<RegexReplaceResultDto, IpcError>(__TAURI_INVOKE("utilities_regex_replace", { pattern, input, replacement, flags })),
+	utilitiesRegexCapabilities: () => __TAURI_INVOKE<RegexCapabilityDto[]>("utilities_regex_capabilities"),
+	utilitiesColorConvert: (input: ColorRequestDto) => typedError<ColorResultDto, IpcError>(__TAURI_INVOKE("utilities_color_convert", { input })),
+	utilitiesColorContrast: (hexA: string, hexB: string) => typedError<number | null, IpcError>(__TAURI_INVOKE("utilities_color_contrast", { hexA, hexB })),
 };
 
 /* Types */
@@ -147,6 +165,15 @@ export type AppInfo = {
 	site: string,
 	version: string,
 	environment: string,
+};
+
+export type Base64DecodeResultDto = {
+	/**  解码字节的 hex（二进制安全呈现）。 */
+	bytesHex: string,
+	/**  lossy UTF-8 预览（二进制内容可能不可读——如实）。 */
+	textPreview: string,
+	byteCount: number | null,
+	warnings: string[],
 };
 
 export type BatchFileResultDto = {
@@ -254,6 +281,26 @@ export type ClassificationDto = {
 	category: string,
 	evidence: string,
 	mime: string | null,
+};
+
+export type ColorRequestDto = { kind: "hex"; value: string } | { kind: "rgb"; r: number | null; g: number | null; b: number | null; a: number | null } | { kind: "hsl"; h: number | null; s: number | null; l: number | null; a: number | null } | { kind: "hsv"; h: number | null; s: number | null; v: number | null; a: number | null } | { kind: "hwb"; h: number | null; w: number | null; b: number | null; a: number | null };
+
+export type ColorResultDto = {
+	/**  大写 HEX（§85/§104 展示归一；alpha < 1 时 8 位）。 */
+	hex: string,
+	r: number | null,
+	g: number | null,
+	b: number | null,
+	a: number | null,
+	h: number | null,
+	sHsl: number | null,
+	l: number | null,
+	sHsv: number | null,
+	v: number | null,
+	/**  §88 WCAG 对白底对比度。 */
+	contrastOnWhite: number | null,
+	/**  §88 WCAG 对黑底对比度。 */
+	contrastOnBlack: number | null,
 };
 
 export type ColumnProfileDto = {
@@ -554,12 +601,23 @@ export type FormatOutcomeDto = {
 	changed: boolean,
 };
 
+export type HashAlgorithmInfoDto = {
+	id: string,
+	name: string,
+	securityNote: string | null,
+};
+
 export type HashResultDto = {
 	algorithm: string,
 	digestHex: string | null,
 	bytesProcessed: number | null,
 	durationMs: number | null,
 	status: string,
+};
+
+export type HashWarningDto = {
+	code: string,
+	message: string,
 };
 
 export type HistoryEntryDto = {
@@ -768,6 +826,34 @@ export type RecycleSelectionDto = {
 	recyclePaths: string[],
 };
 
+export type RegexCapabilityDto = {
+	feature: string,
+	status: string,
+	note: string,
+};
+
+export type RegexFlagDto = {
+	caseInsensitive: boolean,
+	multiLine: boolean,
+	dotMatchesNewline: boolean,
+	ignoreWhitespace: boolean,
+};
+
+export type RegexMatchDto = {
+	full: string,
+	start: number | null,
+	end: number | null,
+	line: number | null,
+	column: number | null,
+	groups: (string | null)[],
+	namedGroups: ([string, string])[],
+};
+
+export type RegexReplaceResultDto = {
+	output: string,
+	count: number | null,
+};
+
 export type RenameRuleDto = { type: "prefix"; text: string } | { type: "suffix"; text: string } | { type: "replace"; find: string; replace_with: string } | { type: "regexReplace"; pattern: string; replacement: string } | { type: "counter"; start: number | null; step: number | null; width: number | null } | { type: "date"; field: string; format: string } | { type: "case"; form: string } | { type: "extension"; new_extension: string } | { type: "template"; template: string };
 
 export type ResizeOptionsDto = {
@@ -871,6 +957,20 @@ export type TextDocumentDto = {
 	endsWithNewline: boolean,
 };
 
+export type TextHashResultDto = {
+	algorithm: string,
+	bytesProcessed: number | null,
+	digestHex: string,
+	warnings: HashWarningDto[],
+};
+
+export type TimestampConversionDto = {
+	unixSeconds: number | null,
+	utcRfc3339: string,
+	withOffset: string | null,
+	detectedUnit: string | null,
+};
+
 export type ToolDescriptorDto = {
 	id: string,
 	category: string,
@@ -914,6 +1014,24 @@ export type UndoReportDto = {
 	restored: number | null,
 	conflicts: number | null,
 	leakedTemps: number | null,
+};
+
+export type UrlPartDto = {
+	scheme: string,
+	userinfo: string | null,
+	host: string,
+	port: number | null,
+	path: string,
+	query: string | null,
+	fragment: string | null,
+	queryPairs: ([string, string])[],
+};
+
+export type UuidInfoDto = {
+	value: string,
+	canonical: string,
+	version: string,
+	variant: string,
 };
 
 /* Tauri Specta runtime */

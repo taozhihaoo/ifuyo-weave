@@ -16,9 +16,15 @@ pub mod url_tool;
 pub mod uuid_tool;
 
 pub use base64::{Base64Alphabet, Base64DecodeLimits, Base64Padding, base64_decode, base64_encode};
-pub use checksum::{ChecksumAlgorithm, adler32, crc32_iso_hdlc, crc32c};
-pub use color::{ColorHsl, ColorHsv, ColorHwb, ColorInput, ColorRgb, color_contrast, parse_color};
-pub use hash::{HashAlgorithmInfo, TextHashAlgorithm, TextHashResult, hash_text};
+pub use checksum::{ChecksumAlgorithm, adler32, checksum_bytes, crc32_iso_hdlc, crc32c};
+pub use color::{
+    ColorHsl, ColorHsv, ColorHwb, ColorInput, ColorRgb, color_contrast, parse_color, parse_hex,
+    rgb_to_hsl, rgb_to_hsv, to_hex,
+};
+pub use hash::{
+    HashAlgorithmInfo, TextHashAlgorithm, TextHashResult, hash_algorithm_matrix, hash_text,
+    require_algorithm,
+};
 pub use regex_tool::{
     RegexFlag, RegexLimits, RegexMatchInfo, regex_capability_matrix, regex_find, regex_replace,
 };
@@ -26,7 +32,8 @@ pub use timestamp::{
     Clock, SystemClock, TimestampConversion, TimestampUnit, now_utc, parse_timestamp,
 };
 pub use url_tool::{
-    UrlPart, url_decode_component, url_encode_component, url_encode_query, url_parse,
+    UrlPart, url_decode_component, url_decode_query, url_encode_component, url_encode_query,
+    url_parse,
 };
 pub use uuid_tool::{
     UuidBatchLimits, UuidFormat, UuidInfo, UuidVersion, uuid_generate, uuid_validate,
