@@ -8,6 +8,7 @@ import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
 import { TextPanel } from "../features/text/TextPanel";
 import { DataPanel } from "../features/data/DataPanel";
 import { ImagePanel } from "../features/image/ImagePanel";
+import { DocumentsPanel } from "../features/documents/DocumentsPanel";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
@@ -45,7 +46,16 @@ function App() {
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
   const [view, setView] = useState<
-    "tools" | "rename" | "organizer" | "duplicates" | "text" | "data" | "image" | "batch" | "history"
+    | "tools"
+    | "rename"
+    | "organizer"
+    | "duplicates"
+    | "text"
+    | "data"
+    | "image"
+    | "batch"
+    | "documents"
+    | "history"
   >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
@@ -299,6 +309,7 @@ function App() {
             "data",
             "image",
             "batch",
+            "documents",
             "history",
           ] as const
         ).map((v) => (
@@ -417,6 +428,10 @@ function App() {
 
       {view === "batch" ? (
         <BatchPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "documents" ? (
+        <DocumentsPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "history" ? (

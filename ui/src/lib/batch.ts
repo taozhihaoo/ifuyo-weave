@@ -153,7 +153,7 @@ export function batchJobsList(): Promise<BatchJobListItemView[]> {
 }
 
 /** 内置管线（§11 Linear Only；UI 只做配置投影，不承载引擎逻辑 §86）。 */
-export type BatchPreset = "textTrim" | "textReplace" | "imageResizePng";
+export type BatchPreset = "textTrim" | "textReplace" | "imageResizePng" | "pdfRotate90";
 
 export function buildStages(
   preset: BatchPreset,
@@ -189,6 +189,18 @@ export function buildStages(
           operations: [{ type: "trimLines" }, { type: "lowercase" }],
         },
         { type: "encode", format: "txt", quality: null },
+        exportStage,
+      ];
+    case "pdfRotate90":
+      return [
+        { type: "source" },
+        {
+          type: "filter",
+          extensions_in: ["pdf"],
+          max_bytes: null,
+        },
+        { type: "documentInspect" },
+        { type: "pdfRotate", degrees: 90, pages: "" },
         exportStage,
       ];
     case "imageResizePng":

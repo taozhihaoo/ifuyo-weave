@@ -255,6 +255,7 @@ export function BatchPanel({ onOperationDone }: { onOperationDone: () => void })
           <option value="textTrim">{t("batch.preset.textTrim")}</option>
           <option value="textReplace">{t("batch.preset.textReplace")}</option>
           <option value="imageResizePng">{t("batch.preset.imageResizePng")}</option>
+          <option value="pdfRotate90">{t("batch.preset.pdfRotate90")}</option>
         </select>
         <label style={{ fontSize: "var(--typography-size-sm)" }}>
           {t("batch.workers")}
