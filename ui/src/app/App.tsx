@@ -9,6 +9,7 @@ import { TextPanel } from "../features/text/TextPanel";
 import { DataPanel } from "../features/data/DataPanel";
 import { ImagePanel } from "../features/image/ImagePanel";
 import { DocumentsPanel } from "../features/documents/DocumentsPanel";
+import { UtilitiesPanel } from "../features/utilities/UtilitiesPanel";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
@@ -55,6 +56,7 @@ function App() {
     | "image"
     | "batch"
     | "documents"
+    | "utilities"
     | "history"
   >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
@@ -310,6 +312,7 @@ function App() {
             "image",
             "batch",
             "documents",
+            "utilities",
             "history",
           ] as const
         ).map((v) => (
@@ -433,6 +436,8 @@ function App() {
       {view === "documents" ? (
         <DocumentsPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
+
+      {view === "utilities" ? <UtilitiesPanel /> : null}
 
       {view === "history" ? (
         <HistoryPanel
