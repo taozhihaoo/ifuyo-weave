@@ -492,7 +492,18 @@ Quality:
 - Frontend gates: PASS（typecheck/lint/vitest 23）
 - PERF 实测：见 docs/PERF.md M7（下）——10k files 3.21s 线性；workers
   1→4 同结果 1.6×；取消延迟 ~3ms
-- tauri build + 真窗口冒烟（含 failure→retry、resume）：见收口记录
+- tauri build: PASS（4.07 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口，A–E 全链路）: PASS — A：批量页
+  Preview 诚实计数（5 输入 ⇒ 3/1/1，持锁文件=潜在失败）且盘侧零写入
+  （§21）→ Execute 失败隔离 3 产物落盘；B：Retry Failed ⇒ 新 job 1/1
+  成功（释放锁后）；C：6000 条任务暂停（成功 82 + 待续 5918，§143 诚实
+  pending）→ 任务清单恢复 ⇒ 5918 全成功、盘侧恰 6000；D：History 撤销
+  批量产物（创建型删除 + stat 守卫）；E：修复后闭环复核（产物删、输入
+  完好）；全程 console 零错误
+- **冒烟抓出 P0 并修复**：批量 History 事务误把输入路径记为
+  source_path——creation-undo 的删除分支指向源文件（stat 守卫意外拦下，
+  未造成实际删除）；已改为记录产物路径（与 text_service 创建型契约一致）
+  并经 phase E 复核
 
 Known Limitations:
 

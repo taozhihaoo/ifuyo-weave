@@ -525,10 +525,17 @@ pub fn batch_resume(app: tauri::AppHandle, job_id: String) -> Result<BatchJobHan
             load.corrupt_tail_lines
         ));
     }
-    if load.finish.is_some() {
+    // paused 也是 finish 行——但它就是 Resume 的合法起点（下 §143）；
+    // 真终态（completed/failed/cancelled）拒绝恢复。
+    if let Some(f) = &load.finish
+        && f.state != "paused"
+    {
         return Err(err(
             "batch.jobAlreadyFinished",
-            format!("job '{job_id}' already reached a terminal state"),
+            format!(
+                "job '{job_id}' already reached a terminal state ({})",
+                f.state
+            ),
         ));
     }
     let settled = load.settled_indices();
@@ -871,7 +878,14 @@ fn spawn_batch_task(
                     }
                     weave_history::TransactionItem {
                         item_id: i.item_id.clone(),
-                        source_path: i.source.to_string_lossy().into_owned(),
+                        // 创建型契约（同 text_service）：source_path = 已创建的
+                        // 产物路径——undo 走删除分支删的是它（stat 守卫保护），
+                        // 绝不是用户输入文件。
+                        source_path: i
+                            .output
+                            .as_ref()
+                            .map(|o| o.to_string_lossy().into_owned())
+                            .unwrap_or_default(),
                         target_path: String::new(), // 创建型记录：undo 走删除分支
                         status: weave_history::TransactionItemStatus::Executed,
                         timestamp: post_modified,
