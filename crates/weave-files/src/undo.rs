@@ -118,7 +118,9 @@ pub fn undo_transaction(
                 }
             }
             TransactionItemStatus::Executed => {
-                if transaction.kind == OperationKind::TextTransform {
+                if transaction.kind == OperationKind::TextTransform
+                    || transaction.kind == OperationKind::BatchExecute
+                {
                     // M4 §94：文本覆盖写的原位**必然**被占（写回即覆盖）——
                     // 专用还原：校验当前 stat == 事务记录的写后状态（用户
                     // 未再改动）⇒ 备份 rename 覆盖原位；否则 UndoConflict。

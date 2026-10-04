@@ -40,6 +40,8 @@ pub struct ItemContext {
     pub payload: ItemPayload,
     /// 当前编码扩展名（Encode 阶段更新；Export 命名依据，§76）。
     pub current_ext: String,
+    /// Export 目标在执行前已存在（覆盖写）——History 撤销策略依据（下 C3）。
+    pub output_replaced: bool,
     /// 阶段日志（§28 stage diagnostics 摘要）。
     pub stage_log: Vec<(String, String)>,
 }

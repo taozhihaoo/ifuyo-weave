@@ -48,6 +48,8 @@ pub struct ItemResult {
     pub error: Option<String>,
     /// 下 §142/§237：Failed 时是否可 Retry（Validation/Unsupported ⇒ 否）。
     pub retryable: bool,
+    /// 输出目标执行前已存在（覆盖写）——History 撤销策略依据。
+    pub output_replaced: bool,
     pub stage_results: Vec<StageResult>,
     pub input_bytes: u64,
     pub output_bytes: u64,
@@ -317,7 +319,8 @@ fn run_stage(
                     ),
                 ));
             }
-            if out_path.exists() && !overwrite {
+            let replaced_existing = out_path.exists();
+            if replaced_existing && !overwrite {
                 // Preview 也报告碰撞——§22 Potential Failures
                 return Err(StageError::new(
                     "Collision",
@@ -325,6 +328,7 @@ fn run_stage(
                 ));
             }
             if !dry_run {
+                ctx.output_replaced = replaced_existing;
                 std::fs::write(&out_path, &bytes)
                     .map_err(|e| StageError::new("Write", e.to_string()))?;
             }
@@ -518,6 +522,7 @@ pub fn execute_subset(
                         status: ItemStatus::Cancelled,
                         error: None,
                         retryable: false,
+                        output_replaced: false,
                         stage_results: Vec::new(),
                         input_bytes: entry.size,
                         output_bytes: 0,
@@ -545,6 +550,7 @@ fn run_one_item(
         source_path: entry.path.clone(),
         payload: ItemPayload::Bytes(Vec::new()),
         current_ext: String::new(),
+        output_replaced: false,
         stage_log: Vec::new(),
     };
     let input_bytes = entry.size;
@@ -646,6 +652,7 @@ fn run_one_item(
         status,
         error: failed.map(|e| format!("{}: {}", e.category, e.message)),
         retryable,
+        output_replaced: ctx.output_replaced,
         stage_results,
         input_bytes,
         output_bytes,

@@ -19,6 +19,8 @@ pub enum OperationKind {
     DuplicateRecycle,
     /// M4：文本工具安全写回（Formatter/Transformer Apply/Save/Overwrite）。
     TextTransform,
+    /// M7：Batch Engine 统一执行（Linear Pipeline 批量产物）。
+    BatchExecute,
 }
 
 impl OperationKind {
@@ -28,6 +30,7 @@ impl OperationKind {
             OperationKind::Move => "move",
             OperationKind::DuplicateRecycle => "duplicateRecycle",
             OperationKind::TextTransform => "textTransform",
+            OperationKind::BatchExecute => "batchExecute",
         }
     }
 }

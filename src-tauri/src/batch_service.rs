@@ -112,6 +112,8 @@ pub struct BatchJobResultDto {
     pub input_bytes: f64,
     pub output_bytes: f64,
     pub preview: bool,
+    /// 关联 History 操作（撤销入口；unavailable 时 None）。
+    pub operation_id: Option<String>,
 }
 
 /// 任务启动句柄（与 M1 hash/scan、M3 recycle 一致：get_job 轮询）。
@@ -235,6 +237,7 @@ fn job_result_dto(result: &JobResult) -> BatchJobResultDto {
         input_bytes: result.input_bytes as f64,
         output_bytes: result.output_bytes as f64,
         preview: result.preview,
+        operation_id: None,
     }
 }
 
@@ -312,14 +315,90 @@ pub fn batch_execute(
         let result = weave_batch::execute_plan(
             &plan,
             &cancel,
-            Some(&mut |done| {
+            Some(&mut |done, _desc| {
                 sink.report(&Progress::running(operation.clone(), done, Some(total)));
             }),
         );
-        app_state.jobs.finish(
-            &job_id_for_task,
-            JobOutcome::BatchExecuted(Box::new(job_result_dto(&result))),
-        );
+        // C3 §184/§246：批量产物入 History（kind=BatchExecute）。创建型产物
+        // 撤销 = 删除已创建文件（stat 守卫）；覆盖写产物无备份 ⇒ 以
+        // original_modified=None 记录，撤销时 creation-undo 守卫必报冲突
+        // （拒绝删除，绝不静默二次破坏 §185）。历史写失败 ≠ 操作失败
+        // （M2 §84）：结果照常返回，仅 undo 不可用。
+        let history_dir = crate::rename_service::resolve_history_dir(&handle).ok();
+        let mut history_ok = false;
+        if let Some(hdir) = history_dir {
+            let now = std::time::SystemTime::now();
+            let mut created = 0usize;
+            let mut replaced = 0usize;
+            let items: Vec<weave_history::TransactionItem> = result
+                .items
+                .iter()
+                .filter(|i| i.status == weave_batch::ItemStatus::Success)
+                .map(|i| {
+                    let post = i.output.as_ref().and_then(|p| std::fs::metadata(p).ok());
+                    let post_modified = post.as_ref().and_then(|m| m.modified().ok());
+                    if i.output_replaced {
+                        replaced += 1;
+                    } else {
+                        created += 1;
+                    }
+                    weave_history::TransactionItem {
+                        item_id: i.item_id.clone(),
+                        source_path: i.source.to_string_lossy().into_owned(),
+                        // 创建型记录：target 留空 ⇒ undo 走删除分支
+                        target_path: String::new(),
+                        status: weave_history::TransactionItemStatus::Executed,
+                        timestamp: post_modified,
+                        // replaced：None ⇒ undo 守卫必冲突（拒绝删除）
+                        original_size: post
+                            .as_ref()
+                            .map(|m| m.len())
+                            .filter(|_| !i.output_replaced),
+                        original_modified: post_modified.filter(|_| !i.output_replaced),
+                        original_created: None,
+                    }
+                })
+                .collect();
+            let reversible = match (created, replaced) {
+                (0, _) => weave_history::Reversibility::None,
+                (_, 0) => weave_history::Reversibility::Full,
+                _ => weave_history::Reversibility::Partial,
+            };
+            let tx = weave_history::OperationTransaction {
+                operation_id: operation.clone(),
+                kind: weave_core::prelude::OperationKind::BatchExecute,
+                status: weave_history::OperationStatus::Completed,
+                timestamp: now,
+                reversible,
+                items,
+            };
+            let entry = weave_history::HistoryEntry {
+                operation_id: operation.clone(),
+                kind: weave_core::prelude::OperationKind::BatchExecute,
+                timestamp: now,
+                summary: format!("Batch pipeline · {} outputs", result.succeeded),
+                item_count: result.total,
+                success_count: result.succeeded,
+                failed_count: result.failed,
+                skipped_count: result.skipped,
+                undoable: created > 0,
+                status: weave_history::OperationStatus::Completed,
+                input_root: None,
+                rule_summary: None,
+            };
+            history_ok = weave_history::HistoryStore::open(&hdir)
+                .and_then(|s| s.save_transaction(&tx).and_then(|_| s.upsert_entry(entry)))
+                .is_ok();
+            if !history_ok {
+                tracing::warn!(job = %job_id_for_task, "batch history persistence failed");
+            }
+        }
+        let mut dto = job_result_dto(&result);
+        dto.operation_id = Some(operation.to_string());
+        let _ = history_ok;
+        app_state
+            .jobs
+            .finish(&job_id_for_task, JobOutcome::BatchExecuted(Box::new(dto)));
     });
     drop(state_cell);
     Ok(BatchJobHandleDto {
