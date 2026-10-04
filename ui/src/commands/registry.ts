@@ -49,3 +49,9 @@ export function runCommand(id: string): void {
 export function clearCommands(): void {
   registry.clear();
 }
+
+/// M11 §17：幂等注册（App 重挂载/HMR 场景）；同 id 覆盖，不同实现以
+/// 最新为准。测试仍用 registerCommand 保留 duplicate 检测。
+export function upsertCommand(definition: CommandDefinition): void {
+  registry.set(definition.id, definition);
+}

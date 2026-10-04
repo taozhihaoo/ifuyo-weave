@@ -12,7 +12,7 @@ import { DocumentsPanel } from "../features/documents/DocumentsPanel";
 import { UtilitiesPanel } from "../features/utilities/UtilitiesPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
-import { registerCommand } from "../commands/registry";
+import { upsertCommand } from "../commands/registry";
 import { registerShortcut, dispatchShortcut } from "../lib/shortcuts";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
@@ -96,7 +96,7 @@ function App() {
       ["history", "nav.history", "history undo 历史"],
     ];
     for (const [viewId, labelKey, keywords] of views) {
-      registerCommand({
+      upsertCommand({
         id: `navigation.${viewId}`,
         labelKey,
         category: "navigation",
@@ -104,7 +104,7 @@ function App() {
         run: () => setView(viewId as typeof view),
       });
     }
-    registerCommand({
+    upsertCommand({
       id: "app.toggle-language",
       labelKey: "app.language",
       category: "settings",
