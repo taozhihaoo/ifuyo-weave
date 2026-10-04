@@ -290,5 +290,14 @@
   "image.destPath": "目标路径",
   "image.execute": "执行（写盘）",
   "image.executed": "已执行 · 可在历史记录撤销",
-  "image.stripAll": "剥离元数据"
+  "image.stripAll": "剥离元数据",
+  "image.batch.title": "批量处理（同操作 × 多文件）",
+  "image.batch.hint": "每行一个输入路径；输出写入目标目录（同名 .webp 等）",
+  "image.batch.inputs": "输入文件列表",
+  "image.batch.inputsHint": "C:\\path\u0007.jpg\nC:\\path\b.png",
+  "image.batch.destDir": "输出目录",
+  "image.batch.overwrite": "覆盖已存在输出",
+  "image.batch.run": "批量执行",
+  "image.batch.noInputs": "请至少输入一个输入文件路径",
+  "image.batch.summary": "共 {total} · 成功 {succeeded} · 失败 {failed} · 取消 {cancelled}"
 }

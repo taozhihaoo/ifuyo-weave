@@ -290,5 +290,14 @@
   "image.destPath": "Destination path",
   "image.execute": "Execute (write)",
   "image.executed": "Executed · undoable in History",
-  "image.stripAll": "Strip metadata"
+  "image.stripAll": "Strip metadata",
+  "image.batch.title": "Batch (same op × multiple files)",
+  "image.batch.hint": "One input path per line; output goes to destination dir (same-stem .webp etc.)",
+  "image.batch.inputs": "Input files",
+  "image.batch.inputsHint": "C:\\path\u0007.jpg\nC:\\path\b.png",
+  "image.batch.destDir": "Output directory",
+  "image.batch.overwrite": "Overwrite existing outputs",
+  "image.batch.run": "Run batch",
+  "image.batch.noInputs": "Enter at least one input file path",
+  "image.batch.summary": "{total} total · {succeeded} succeeded · {failed} failed · {cancelled} cancelled"
 }

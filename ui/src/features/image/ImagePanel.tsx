@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { ImageBatchPanel } from "./ImageBatchPanel";
 import { useT } from "../../i18n";
 import {
   imageExecute,
@@ -373,6 +374,7 @@ export function ImagePanel({ onOperationDone }: { onOperationDone: () => void })
           ) : null}
         </>
       ) : null}
+          <ImageBatchPanel onOperationDone={() => {}} />
     </section>
   );
 }
