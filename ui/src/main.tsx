@@ -6,7 +6,7 @@ import { applyTokens } from "./design/applyTokens";
 import "./design/global.css";
 import { bootstrapApp } from "./lib/bootstrap";
 
-applyTokens();
+applyTokens("light");
 registerBuiltinCommands();
 void bootstrapApp();
 

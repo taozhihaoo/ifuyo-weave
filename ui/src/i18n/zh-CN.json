@@ -528,5 +528,9 @@
   "palette.placeholder": "搜索命令…（↑↓ 选择，Enter 执行，Esc 关闭）",
   "palette.noResults": "没有匹配的命令",
   "palette.clearSearch": "清除搜索",
-  "palette.close": "关闭"
+  "palette.close": "关闭",
+  "app.theme": "主题",
+  "app.themeName.system": "主题：跟随系统",
+  "app.themeName.light": "主题：浅色",
+  "app.themeName.dark": "主题：深色"
 }

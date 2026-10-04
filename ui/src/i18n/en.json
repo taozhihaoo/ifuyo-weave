@@ -528,5 +528,9 @@
   "palette.placeholder": "Search commands… (↑↓ select, Enter run, Esc close)",
   "palette.noResults": "No matching commands",
   "palette.clearSearch": "Clear search",
-  "palette.close": "Close"
+  "palette.close": "Close",
+  "app.theme": "Theme",
+  "app.themeName.system": "Theme: System",
+  "app.themeName.light": "Theme: Light",
+  "app.themeName.dark": "Theme: Dark"
 }

@@ -1,11 +1,25 @@
 import { commands } from "../generated/bindings";
 import { isLocale } from "../i18n";
+import { applyTokens, type AppliedTheme } from "../design/applyTokens";
 import { useAppStore, type Locale, type Theme } from "../stores/appStore";
 
 const THEMES: readonly Theme[] = ["system", "light", "dark"] as const;
 
 function asTheme(value: string): Theme {
   return (THEMES as readonly string[]).includes(value) ? (value as Theme) : "system";
+}
+
+/// M11 §222/§223：解析 system（跟随 prefers-color-scheme）并应用 tokens。
+export function applyTheme(theme: Theme): void {
+  const resolved: AppliedTheme =
+    theme === "dark"
+      ? "dark"
+      : theme === "light"
+        ? "light"
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+  applyTokens(resolved);
 }
 
 /**
@@ -36,7 +50,9 @@ export async function bootstrapApp(): Promise<void> {
       ? (config.data.language as Locale)
       : "zh-CN";
     useAppStore.getState().setLocale(locale);
-    useAppStore.getState().setTheme(asTheme(config.data.theme ?? "system"));
+    const theme = asTheme(config.data.theme ?? "system");
+    useAppStore.getState().setTheme(theme);
+    applyTheme(theme);
     // M11 §34/§38：收藏加载；启动时清理失效引用（§38 stale → remove safely）
     const favorites = (config.data.favorites ?? []).filter(
       (f) => f.kind === "view" || f.kind === "workflow",
@@ -47,6 +63,22 @@ export async function bootstrapApp(): Promise<void> {
   } else {
     useAppStore.getState().setError(config.error);
   }
+}
+
+/** M11 §223 theme 持久化 + 应用（§224 fallback = system）。 */
+export async function persistTheme(theme: Theme): Promise<void> {
+  const current = useAppStore.getState();
+  const result = await commands.setAppConfig({
+    version: 1,
+    language: current.locale,
+    theme,
+    favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
+  });
+  if (result.status === "error") {
+    useAppStore.getState().setError(result.error);
+    return;
+  }
+  applyTheme(theme);
 }
 
 /** M11 §40 收藏持久化（AppConfig.favorites；失败经 store 错误呈现）。 */

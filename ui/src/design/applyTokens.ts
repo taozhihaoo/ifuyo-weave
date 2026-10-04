@@ -3,7 +3,7 @@
  * token 名 camelCase → kebab-case：`color.textMuted` → `--color-text-muted`。
  */
 
-import { tokens } from "./tokens";
+import { darkColorOverrides, tokens } from "./tokens";
 
 function toKebab(key: string): string {
   return key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
@@ -19,9 +19,15 @@ export function flattenTokens(node: unknown, prefix: string, out: Record<string,
   }
 }
 
-export function applyTokens(): void {
+export type AppliedTheme = "light" | "dark";
+
+/// M11 §222：按主题应用 tokens。dark = light 基础 + color/surface 覆盖。
+export function applyTokens(theme: AppliedTheme = "light"): void {
   const cssVars: Record<string, string> = {};
   flattenTokens(tokens, "", cssVars);
+  if (theme === "dark") {
+    flattenTokens(darkColorOverrides, "", cssVars);
+  }
   const root = document.documentElement;
   for (const [name, value] of Object.entries(cssVars)) {
     root.style.setProperty(name, value);

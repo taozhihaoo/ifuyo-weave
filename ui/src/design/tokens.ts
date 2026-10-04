@@ -69,3 +69,27 @@ export const tokens = {
 } as const;
 
 export type Tokens = typeof tokens;
+
+/// M11 §222：dark 主题覆盖（仅 color/surface 类；其余 token 与 light 共享）。
+export const darkColorOverrides = {
+  color: {
+    background: "#16181d",
+    surface: "#1f2329",
+    surfaceHover: "#262b33",
+    inset: "#2a3038",
+    text: "#e8eaed",
+    textMuted: "#9aa0a8",
+    border: "#343a44",
+    accent: "#5b8cff",
+    accentSoft: "#1c2a4a",
+    danger: "#e0676d",
+    success: "#4cbf80",
+  },
+  surface: {
+    page: "var(--color-background)",
+    card: "var(--color-surface)",
+    overlay: "rgba(0, 0, 0, 0.55)",
+  },
+} as const;
+
+export type ThemeName = "light" | "dark";

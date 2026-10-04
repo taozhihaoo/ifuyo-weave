@@ -14,6 +14,7 @@ import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
 import { registerShortcut, dispatchShortcut } from "../lib/shortcuts";
+import { persistTheme } from "../lib/bootstrap";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
@@ -22,7 +23,7 @@ import { ScanPanel } from "../features/files/ScanPanel";
 import { commands } from "../generated/bindings";
 import { useT } from "../i18n";
 import { isTerminalState, pollJob } from "../lib/jobs";
-import { useAppStore, type Locale } from "../stores/appStore";
+import { useAppStore, type Locale, type Theme } from "../stores/appStore";
 
 const SEP = String.fromCharCode(92); // path separator on Windows
 
@@ -42,6 +43,7 @@ function App() {
     ipcStatus,
     lastError,
     locale,
+    theme,
     inspection,
     inspectError,
     scanJob,
@@ -408,6 +410,19 @@ function App() {
         ) : null}
         <button type="button" onClick={toggleLocale} style={buttonStyle}>
           {locale === "zh-CN" ? "English" : "中文"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const next: Theme =
+              theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+            useAppStore.getState().setTheme(next);
+            void persistTheme(next);
+          }}
+          style={buttonStyle}
+          aria-label={t("app.theme")}
+        >
+          {t(`app.themeName.${theme}`)}
         </button>
       </header>
 
