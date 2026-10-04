@@ -112,6 +112,21 @@ export const commands = {
 	batchRetryFailed: (jobId: string) => typedError<BatchJobHandleDto, IpcError>(__TAURI_INVOKE("batch_retry_failed", { jobId })),
 	/**  Job 清单（下 §183）：journal 事实源 + 内存活动态合并。 */
 	batchJobsList: () => typedError<BatchJobListItemDto[], IpcError>(__TAURI_INVOKE("batch_jobs_list")),
+	/**
+	 *  只读检查（§12/§64：不改原文件；解析失败 = facts 内诊断，非 Err——
+	 *  Err 仅保留给路径级失败）。
+	 */
+	documentInspect: (path: string) => typedError<DocumentFacts, IpcError>(__TAURI_INVOKE("document_inspect", { path })),
+	/**  §19：Merge Preview（每输入页数 + 总页数 + 顺序）。 */
+	pdfMergePreview: (inputs: string[]) => typedError<PdfMergePlan, IpcError>(__TAURI_INVOKE("pdf_merge_preview", { inputs })),
+	/**  §18/§20/§74：有序合并（单一逻辑操作；输出 = 首输入 stem.merged.pdf）。 */
+	pdfMergeExecute: (inputs: string[], destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_merge_execute", { inputs, destinationDir })),
+	/**  §21/§22：按页范围导出（新文件 {stem}.extract.pdf）。 */
+	pdfExtractExecute: (input: string, ranges: string, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_extract_execute", { input, ranges, destinationDir })),
+	/**  §25-§26：页旋转（/Rotate 元数据语义；新文件 {stem}.rotated.pdf）。 */
+	pdfRotateExecute: (input: string, degrees: number | null, ranges: string, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_rotate_execute", { input, degrees, ranges, destinationDir })),
+	/**  §23：Split Every N（确定性 part 命名 §28）。 */
+	pdfSplitEveryNExecute: (input: string, n: number | null, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_split_every_n_execute", { input, n, destinationDir })),
 };
 
 /* Types */
@@ -215,7 +230,11 @@ export type BatchResultDto = {
 /**  Pipeline 阶段（镜像 weave_batch::StageSpec；Linear Only，§11-§13）。 */
 export type BatchStageDto = { type: "source" } | { type: "filter"; extensions_in: string[]; max_bytes: number | null } | { type: "textTransform"; operations: BatchTextOpDto[] } | { type: "imageResize"; width: number | null; height: number | null; mode: string; prevent_upscale: boolean } | { type: "encode"; 
 /**  png | jpeg | webp | bmp | tiff | txt */
-format: string; quality: number | null } | { type: "export"; destination_dir: string; overwrite: boolean };
+format: string; quality: number | null } | { type: "export"; destination_dir: string; overwrite: boolean } | 
+/**  M8：只读文档事实（§113）。 */
+{ type: "documentInspect" } | 
+/**  M8：PDF 页旋转（§25/§58）。 */
+{ type: "pdfRotate"; degrees: number | null; pages: string };
 
 /**  阶段结果（§28）。 */
 export type BatchStageOutcomeDto = {
@@ -363,6 +382,61 @@ export type DiffStatsDto = {
 	equal: number | null,
 };
 
+/**  DocumentDiagnostic（§97）。 */
+export type DocumentDiagnostic = {
+	/**  info | warning | error */
+	severity: string,
+	code: string,
+	message: string,
+	/**  可选上下文（part 名/页码等；不泄露绝对临时路径 §99）。 */
+	context: string | null,
+	/**  recoverable | fatal */
+	recoverability: string,
+};
+
+/**  结构化 DocumentFacts（§11/§13）。 */
+export type DocumentFacts = {
+	format: DocumentFormat,
+	detectionReason: string,
+	extensionMismatch: boolean,
+	size: number | null,
+	/**  PDF：页数 / 加密 / PDF 版本（§16 只报库真实暴露的字段）。 */
+	pages: Field<number | null> | null,
+	encrypted: Field<boolean> | null,
+	pdfVersion: Field<string> | null,
+	/**  页面尺寸列表（pt，[w,h]）——有界：最多前 64 页（§100）。 */
+	pageSizes: Field<([(number | null), (number | null)])[]> | null,
+	/**  Office：工作簿/幻灯片层事实。 */
+	sheets: Field<SheetFact[]> | null,
+	slides: Field<SlideFact[]> | null,
+	/**  Office core properties（§32：只报真实解析值）。 */
+	metadata: ([string, string])[],
+	statistics: DocumentStatistics,
+	/**  §79：处理语义相关的元数据事实由操作层补充；inspect 只报告。 */
+	warnings: string[],
+	diagnostics: DocumentDiagnostic[],
+};
+
+/**  文档格式（§10：只有实际能力能判断的才加入枚举）。 */
+export type DocumentFormat = "pdf" | "docx" | "xlsx" | "pptx" | "txt" | "markdown" | 
+/**  合法容器但不是 Weave 支持的文档类型（如纯 zip/rtf）。 */
+"unsupported" | 
+/**  结构损坏（签名存在但解析失败——由 inspect 层细分）。 */
+"malformed" | "unknown";
+
+/**  文档统计（§34：标注 Exact/Approximate）。 */
+export type DocumentStatistics = {
+	/**  Exact：解析器逐个计数的字段。 */
+	paragraphs: Field<number | null> | null,
+	headings: Field<number | null> | null,
+	tables: Field<number | null> | null,
+	images: Field<number | null> | null,
+	hyperlinks: Field<number | null> | null,
+	/**  §34：word count 必须标 Approximate（whitespace split ≠ Word 统计）。 */
+	words: Field<number | null> | null,
+	characters: Field<number | null> | null,
+};
+
 /**  重复组内单个文件条目（M3 §33）。 */
 export type DuplicateFileEntryDto = {
 	fileId: string,
@@ -424,6 +498,15 @@ export type ExtractResultDto = {
 	uniqueCount: number | null,
 	truncated: boolean,
 };
+
+/**  字段三态（§11：解析失败 ≠ 0——绝不让 0 同时表示"零页"与"解析失败"）。 */
+export type Field<T> = { state: "known"; value: T } | 
+/**  库未暴露 / 文档不含该字段。 */
+{ state: "unknown" } | 
+/**  该格式/能力不支持此字段。 */
+{ state: "unavailable" } | 
+/**  近似值（如 word count 非精确 §34）。 */
+{ state: "estimated"; value: T };
 
 export type FileInspectionDto = {
 	status: string,
@@ -614,6 +697,22 @@ export type OrganizerRuleDto = {
 	targetFolder: string,
 };
 
+/**  Merge 计划（§18/§19：有序、确定性、预览可显示每输入页数）。 */
+export type PdfMergePlan = {
+	/**  有序输入（确定性顺序 = 数组顺序）。 */
+	inputs: string[],
+	/**  每输入页数（与 inputs 同序）。 */
+	inputPageCounts: (number | null)[],
+	outputPageCount: number | null,
+};
+
+/**  通用产物结果（§72：Created Outputs + Diagnostics）。 */
+export type PdfOperationResultDto = {
+	outputs: string[],
+	pageCounts: (number | null)[],
+	warnings: string[],
+};
+
 export type PlanDto = {
 	operationId: string,
 	kind: string,
@@ -705,6 +804,32 @@ export type ScanReportDto = {
 	errorsTruncated: boolean,
 	limited: boolean,
 	limitedReason: string | null,
+};
+
+/**  XLSX Sheet 事实（§40-§44）。 */
+export type SheetFact = {
+	name: string,
+	/**  visible | hidden | veryHidden（§44：库能区分才区分）。 */
+	visibility: string,
+	/**  §41：dimension 声明范围 ≠ populated cell 数——两者都报。 */
+	dimension: string | null,
+	populatedCells: number | null,
+	rowCount: number | null,
+	columnCount: number | null,
+	formulaCells: number | null,
+	mergedCells: number | null,
+};
+
+/**  PPTX Slide 事实（§48-§49）。 */
+export type SlideFact = {
+	index: number | null,
+	hidden: boolean,
+	/**  有文本占位的 slide（§50：文本提取 ≠ 视觉渲染）。 */
+	hasText: boolean,
+	textChars: number | null,
+	imageCount: number | null,
+	shapeCount: number | null,
+	hasNotes: boolean | null,
 };
 
 export type SortSpecDto = {

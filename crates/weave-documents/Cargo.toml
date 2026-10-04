@@ -10,13 +10,14 @@ lopdf = "0.45"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 quick-xml = "0.38"
 serde = { workspace = true, features = ["derive"] }
+specta = { version = "=2.0.0-rc.25", optional = true, features = ["derive"] }
 weave-core = { path = "../weave-core" }
 
 [dev-dependencies]
 tempfile = "3"
 
-lopdf = "0.45"
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+[features]
+specta = ["dep:specta"]
 
 [lints]
 workspace = true

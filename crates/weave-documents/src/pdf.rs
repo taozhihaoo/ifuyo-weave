@@ -4,6 +4,8 @@
 //! §25：rotate = **页面 /Rotate 元数据**语义（非内容重渲染）——预览如实说明。
 //! §27：任何写出的 PDF 必须通过 output validation（可解析 + 页数符合预期）。
 
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -51,6 +53,7 @@ fn load(path: &Path, limits: &DocumentResourceLimits) -> PdfResult<Document> {
 
 /// PDF inspect 事实（§16：只报 lopdf 真实暴露的字段）。
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PdfFacts {
     pub page_count: u64,
@@ -162,13 +165,14 @@ fn read_metadata(doc: &Document) -> Vec<(String, String)> {
 
 /// Merge 计划（§18/§19：有序、确定性、预览可显示每输入页数）。
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PdfMergePlan {
     /// 有序输入（确定性顺序 = 数组顺序）。
     pub inputs: Vec<std::path::PathBuf>,
     /// 每输入页数（与 inputs 同序）。
-    pub input_page_counts: Vec<u64>,
-    pub output_page_count: u64,
+    pub input_page_counts: Vec<f64>,
+    pub output_page_count: f64,
 }
 
 /// Merge 预览数据（§19：不能只显示 "Ready to merge"）。
@@ -195,10 +199,10 @@ pub fn plan_merge(
         let facts = inspect(path, limits)?;
         counts.push(facts.page_count);
     }
-    let total: u64 = counts.iter().sum();
+    let total: f64 = counts.iter().map(|c| *c as f64).sum();
     Ok(PdfMergePlan {
         inputs: inputs.to_vec(),
-        input_page_counts: counts,
+        input_page_counts: counts.iter().map(|c| *c as f64).collect(),
         output_page_count: total,
     })
 }
@@ -218,7 +222,7 @@ pub fn execute_merge(
     for src in &docs[1..] {
         append_document(&mut merged, src)?;
     }
-    let result = write_and_validate(&mut merged, output, plan.output_page_count, limits)?;
+    let result = write_and_validate(&mut merged, output, plan.output_page_count as u64, limits)?;
     // §80：元数据 = 首输入（merged 继承 docs[0]，克隆即首输入 Info）——显式记录
     Ok((
         result,
@@ -481,6 +485,7 @@ pub fn execute_reorder(
 /// §25：rotate = 页面 **/Rotate 元数据**（90/180/270；非内容重渲染——
 /// §26 预览必须如实说明）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub enum Rotation {
     Deg90,
@@ -645,7 +650,7 @@ pub fn write_and_validate(
 
 /// Field 视图辅助：把 PdfFacts 映射进统一 DocumentFacts 的 PDF 段。
 impl PdfFacts {
-    pub fn pages_field(&self) -> Field<u64> {
-        Field::Known(self.page_count)
+    pub fn pages_field(&self) -> Field<f64> {
+        Field::Known(self.page_count as f64)
     }
 }

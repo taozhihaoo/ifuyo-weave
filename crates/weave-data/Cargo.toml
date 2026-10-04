@@ -6,7 +6,7 @@ license.workspace = true
 description = "Structured data tools: CSV / JSON / TSV (M5)."
 
 [dependencies]
-specta = { version = "=2.0.0-rc.25", optional = true }
+specta = { version = "=2.0.0-rc.25", optional = true, features = ["derive"] }
 weave-core = { path = "../weave-core" }
 weave-text = { path = "../weave-text" }
 csv = "1.4"

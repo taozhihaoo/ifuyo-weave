@@ -23,6 +23,7 @@ weave-text = { path = "../crates/weave-text" }
 weave-data = { path = "../crates/weave-data", features = ["specta"] }
 weave-media = { path = "../crates/weave-media" }
 weave-batch = { path = "../crates/weave-batch" }
+weave-documents = { path = "../crates/weave-documents", features = ["specta"] }
 csv = "1.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
 encoding_rs = { workspace = true }

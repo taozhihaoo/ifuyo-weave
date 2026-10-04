@@ -104,6 +104,13 @@ pub enum BatchStageDto {
         destination_dir: String,
         overwrite: bool,
     },
+    /// M8：只读文档事实（§113）。
+    DocumentInspect,
+    /// M8：PDF 页旋转（§25/§58）。
+    PdfRotate {
+        degrees: f64,
+        pages: String,
+    },
 }
 
 /// 批处理选项（§19 JobPlan 的 IPC 投影；下 §211 默认语义由 UI 层给默认值）。
@@ -256,6 +263,11 @@ fn stage_spec(stage: &BatchStageDto) -> Result<StageSpec, IpcError> {
                 overwrite: *overwrite,
             }
         }
+        BatchStageDto::DocumentInspect => StageSpec::DocumentInspect,
+        BatchStageDto::PdfRotate { degrees, pages } => StageSpec::PdfRotate {
+            degrees: *degrees,
+            pages: pages.clone(),
+        },
     })
 }
 
@@ -798,6 +810,11 @@ fn stage_to_dto(stage: &StageSpec) -> BatchStageDto {
             destination_dir: destination_dir.to_string_lossy().into_owned(),
             overwrite: *overwrite,
         },
+        StageSpec::DocumentInspect => BatchStageDto::DocumentInspect,
+        StageSpec::PdfRotate { degrees, pages } => BatchStageDto::PdfRotate {
+            degrees: *degrees,
+            pages: pages.clone(),
+        },
     }
 }
 
@@ -854,88 +871,32 @@ fn spawn_batch_task(
                 sink.report(&Progress::running(operation.clone(), done, Some(total)));
             }),
         );
-        // C3 §184/§246：批量产物入 History（kind=BatchExecute）。创建型产物
-        // 撤销 = 删除已创建文件（stat 守卫）；覆盖写产物无备份 ⇒ 以
-        // original_modified=None 记录，撤销时守卫必报冲突（拒绝删除，§185）。
-        // 历史写失败 ≠ 操作失败（M2 §84）。
-        let history_dir = crate::rename_service::resolve_history_dir(&handle).ok();
-        let mut history_ok = false;
-        if let Some(hdir) = history_dir {
-            let now = std::time::SystemTime::now();
-            let mut created = 0usize;
-            let mut replaced = 0usize;
-            let items: Vec<weave_history::TransactionItem> = result
-                .items
-                .iter()
-                .filter(|i| i.status == weave_batch::ItemStatus::Success)
-                .map(|i| {
-                    let post = i.output.as_ref().and_then(|p| std::fs::metadata(p).ok());
-                    let post_modified = post.as_ref().and_then(|m| m.modified().ok());
-                    if i.output_replaced {
-                        replaced += 1;
-                    } else {
-                        created += 1;
-                    }
-                    weave_history::TransactionItem {
-                        item_id: i.item_id.clone(),
-                        // 创建型契约（同 text_service）：source_path = 已创建的
-                        // 产物路径——undo 走删除分支删的是它（stat 守卫保护），
-                        // 绝不是用户输入文件。
-                        source_path: i
-                            .output
-                            .as_ref()
-                            .map(|o| o.to_string_lossy().into_owned())
-                            .unwrap_or_default(),
-                        target_path: String::new(), // 创建型记录：undo 走删除分支
-                        status: weave_history::TransactionItemStatus::Executed,
-                        timestamp: post_modified,
-                        original_size: post
-                            .as_ref()
-                            .map(|m| m.len())
-                            .filter(|_| !i.output_replaced),
-                        original_modified: post_modified.filter(|_| !i.output_replaced),
-                        original_created: None,
-                    }
-                })
-                .collect();
-            let reversible = match (created, replaced) {
-                (0, _) => weave_history::Reversibility::None,
-                (_, 0) => weave_history::Reversibility::Full,
-                _ => weave_history::Reversibility::Partial,
-            };
-            let tx = weave_history::OperationTransaction {
-                operation_id: operation.clone(),
-                kind: weave_core::prelude::OperationKind::BatchExecute,
-                status: weave_history::OperationStatus::Completed,
-                timestamp: now,
-                reversible,
-                items,
-            };
-            let entry = weave_history::HistoryEntry {
-                operation_id: operation.clone(),
-                kind: weave_core::prelude::OperationKind::BatchExecute,
-                timestamp: now,
-                summary: format!("Batch pipeline · {} outputs", result.succeeded),
-                item_count: result.total,
-                success_count: result.succeeded,
-                failed_count: result.failed,
-                skipped_count: result.skipped,
-                undoable: created > 0,
-                status: weave_history::OperationStatus::Completed,
-                input_root: None,
-                rule_summary: None,
-            };
-            history_ok = weave_history::HistoryStore::open(&hdir)
-                .and_then(|s| s.save_transaction(&tx).and_then(|_| s.upsert_entry(entry)))
-                .is_ok();
-            if !history_ok {
-                tracing::warn!(job = %tracker_job_id, "batch history persistence failed");
-            }
+        // C3 §184/§246：批量产物入 History（kind=BatchExecute，创建型契约，
+        // 撤销 = stat 守卫删除）——历史写失败 ≠ 操作失败（M2 §84）。
+        let outputs: Vec<std::path::PathBuf> = result
+            .items
+            .iter()
+            .filter(|i| i.status == weave_batch::ItemStatus::Success)
+            .filter_map(|i| i.output.clone())
+            .collect();
+        let job_inputs: Vec<String> = plan
+            .input_snapshot
+            .iter()
+            .map(|e| e.path.to_string_lossy().into_owned())
+            .collect();
+        if let Ok(hdir) = crate::rename_service::resolve_history_dir(&handle)
+            && let Err(e) = record_creation_transaction(
+                &hdir,
+                &job_inputs,
+                &outputs,
+                &format!("Batch pipeline · {} outputs", result.succeeded),
+            )
+        {
+            tracing::warn!(job = %tracker_job_id, error = %e, "batch history persistence failed");
         }
         let mut dto = job_result_dto(&result);
         dto.operation_id = Some(operation.to_string());
         dto.resume_conflicts = resume_conflicts;
-        let _ = history_ok;
         app_state
             .jobs
             .finish(&tracker, JobOutcome::BatchExecuted(Box::new(dto)));
@@ -970,4 +931,66 @@ fn spawn_batch_task(
         }
         release_dest_lock(&app_state, &tracker_job_id);
     });
+}
+
+/// 创建型 History 事务（M7/M8 共用，§205 单一事务机制）：产物 = 已创建
+/// 文件（撤销 = 删除，stat 守卫保护）；调用方保证 output-first（无覆盖）。
+#[allow(clippy::result_large_err)] // D10
+pub fn record_creation_transaction(
+    history_dir: &std::path::Path,
+    inputs: &[String],
+    outputs: &[std::path::PathBuf],
+    summary: &str,
+) -> Result<(), WeaveError> {
+    let now = std::time::SystemTime::now();
+    let items: Vec<weave_history::TransactionItem> = outputs
+        .iter()
+        .enumerate()
+        .map(|(i, output)| {
+            let post = std::fs::metadata(output).ok();
+            let post_modified = post.as_ref().and_then(|m| m.modified().ok());
+            weave_history::TransactionItem {
+                item_id: format!("item_{i}"),
+                // 创建型契约（同 text_service）：source_path = 已创建的产物
+                // 路径——undo 删除分支删的是它（stat 守卫保护）。
+                source_path: output.to_string_lossy().into_owned(),
+                target_path: String::new(),
+                status: weave_history::TransactionItemStatus::Executed,
+                timestamp: post_modified,
+                original_size: post.as_ref().map(|m| m.len()),
+                original_modified: post_modified,
+                original_created: None,
+            }
+        })
+        .collect();
+    let created = items.len();
+    let operation = OperationId::generate();
+    let tx = weave_history::OperationTransaction {
+        operation_id: operation,
+        kind: weave_core::prelude::OperationKind::BatchExecute,
+        status: weave_history::OperationStatus::Completed,
+        timestamp: now,
+        reversible: if created == 0 {
+            weave_history::Reversibility::None
+        } else {
+            weave_history::Reversibility::Full
+        },
+        items,
+    };
+    let entry = weave_history::HistoryEntry {
+        operation_id: OperationId::generate(),
+        kind: weave_core::prelude::OperationKind::BatchExecute,
+        timestamp: now,
+        summary: summary.to_owned(),
+        item_count: inputs.len() as u64,
+        success_count: created as u64,
+        failed_count: 0,
+        skipped_count: 0,
+        undoable: created > 0,
+        status: weave_history::OperationStatus::Completed,
+        input_root: None,
+        rule_summary: None,
+    };
+    weave_history::HistoryStore::open(history_dir)
+        .and_then(|s| s.save_transaction(&tx).and_then(|_| s.upsert_entry(entry)))
 }

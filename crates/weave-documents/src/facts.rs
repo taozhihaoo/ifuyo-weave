@@ -2,6 +2,8 @@
 //! （M8 上 §9/§11/§13/§61/§87/§97/§100）。
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::path::PathBuf;
 
 use crate::detect::{Detection, DocumentFormat};
@@ -9,6 +11,7 @@ use crate::detect::{Detection, DocumentFormat};
 /// 字段三态（§11：解析失败 ≠ 0——绝不让 0 同时表示"零页"与"解析失败"）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub enum Field<T> {
     Known(T),
     /// 库未暴露 / 文档不含该字段。
@@ -28,6 +31,7 @@ impl<T> Field<T> {
 /// DocumentIdentity（§9）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct DocumentIdentity {
     pub path: PathBuf,
     pub file_name: String,
@@ -41,6 +45,7 @@ pub struct DocumentIdentity {
 /// DocumentDiagnostic（§97）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct DocumentDiagnostic {
     /// info | warning | error
     pub severity: String,
@@ -70,28 +75,30 @@ pub fn diag(
 /// 文档统计（§34：标注 Exact/Approximate）。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct DocumentStatistics {
     /// Exact：解析器逐个计数的字段。
-    pub paragraphs: Option<Field<u64>>,
-    pub headings: Option<Field<u64>>,
-    pub tables: Option<Field<u64>>,
-    pub images: Option<Field<u64>>,
-    pub hyperlinks: Option<Field<u64>>,
+    pub paragraphs: Option<Field<f64>>,
+    pub headings: Option<Field<f64>>,
+    pub tables: Option<Field<f64>>,
+    pub images: Option<Field<f64>>,
+    pub hyperlinks: Option<Field<f64>>,
     /// §34：word count 必须标 Approximate（whitespace split ≠ Word 统计）。
-    pub words: Option<Field<u64>>,
-    pub characters: Option<Field<u64>>,
+    pub words: Option<Field<f64>>,
+    pub characters: Option<Field<f64>>,
 }
 
 /// 结构化 DocumentFacts（§11/§13）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct DocumentFacts {
     pub format: DocumentFormat,
     pub detection_reason: &'static str,
     pub extension_mismatch: bool,
-    pub size: u64,
+    pub size: f64,
     /// PDF：页数 / 加密 / PDF 版本（§16 只报库真实暴露的字段）。
-    pub pages: Option<Field<u64>>,
+    pub pages: Option<Field<f64>>,
     pub encrypted: Option<Field<bool>>,
     pub pdf_version: Option<Field<String>>,
     /// 页面尺寸列表（pt，[w,h]）——有界：最多前 64 页（§100）。
@@ -110,36 +117,39 @@ pub struct DocumentFacts {
 /// XLSX Sheet 事实（§40-§44）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct SheetFact {
     pub name: String,
     /// visible | hidden | veryHidden（§44：库能区分才区分）。
     pub visibility: String,
     /// §41：dimension 声明范围 ≠ populated cell 数——两者都报。
     pub dimension: Option<String>,
-    pub populated_cells: Option<u64>,
-    pub row_count: Option<u64>,
-    pub column_count: Option<u64>,
-    pub formula_cells: Option<u64>,
-    pub merged_cells: Option<u64>,
+    pub populated_cells: Option<f64>,
+    pub row_count: Option<f64>,
+    pub column_count: Option<f64>,
+    pub formula_cells: Option<f64>,
+    pub merged_cells: Option<f64>,
 }
 
 /// PPTX Slide 事实（§48-§49）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct SlideFact {
-    pub index: u64,
+    pub index: f64,
     pub hidden: bool,
     /// 有文本占位的 slide（§50：文本提取 ≠ 视觉渲染）。
     pub has_text: bool,
-    pub text_chars: u64,
-    pub image_count: Option<u64>,
-    pub shape_count: Option<u64>,
+    pub text_chars: f64,
+    pub image_count: Option<f64>,
+    pub shape_count: Option<f64>,
     pub has_notes: Option<bool>,
 }
 
 /// DocumentCapabilities（§8/§61：按真实代码声明，绝不伪装）。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct FormatCapabilities {
     pub format: DocumentFormat,
     pub inspect: bool,

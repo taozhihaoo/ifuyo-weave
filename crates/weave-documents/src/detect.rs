@@ -2,10 +2,13 @@
 //! 扩展名仅兜底。Extension 不是最终事实（§9）。
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::path::Path;
 
 /// 文档格式（§10：只有实际能力能判断的才加入枚举）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub enum DocumentFormat {
     Pdf,

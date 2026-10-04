@@ -198,8 +198,8 @@ pub fn inspect_docx(
         .part_names()
         .into_iter()
         .filter(|n| n.starts_with("word/media/"))
-        .count() as u64;
-    if image_count == 0 && counts[4] > 0 {
+        .count() as f64;
+    if image_count == 0.0 && counts[4] > 0 {
         warnings.push("drawing elements present but no media parts found".into());
     }
 
@@ -207,7 +207,9 @@ pub fn inspect_docx(
         format: DocumentFormat::Docx,
         detection_reason: "container-structure",
         extension_mismatch: false,
-        size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        size: std::fs::metadata(path)
+            .map(|m| m.len() as f64)
+            .unwrap_or(0.0),
         pages: Some(Field::Unavailable),
         encrypted: Some(Field::Known(false)),
         pdf_version: None,
@@ -216,18 +218,18 @@ pub fn inspect_docx(
         slides: None,
         metadata: read_core_properties(&mut pkg),
         statistics: DocumentStatistics {
-            paragraphs: Some(Field::Known(counts[0])),
-            headings: Some(Field::Known(headings)),
-            tables: Some(Field::Known(counts[1])),
+            paragraphs: Some(Field::Known(counts[0] as f64)),
+            headings: Some(Field::Known(headings as f64)),
+            tables: Some(Field::Known(counts[1] as f64)),
             images: Some(Field::Known(image_count)),
-            hyperlinks: Some(Field::Known(counts[2])),
+            hyperlinks: Some(Field::Known(counts[2] as f64)),
             // §34：word count = whitespace split ⇒ Approximate（≠ Word 统计）
             words: Some(Field::Estimated(
                 String::from_utf8_lossy(&word_split_count(&document_xml))
                     .parse()
-                    .unwrap_or(0),
+                    .unwrap_or(0.0),
             )),
-            characters: Some(Field::Known(text_bytes)),
+            characters: Some(Field::Known(text_bytes as f64)),
         },
         warnings,
         diagnostics,
@@ -328,7 +330,9 @@ pub fn inspect_xlsx(
         format: DocumentFormat::Xlsx,
         detection_reason: "container-structure",
         extension_mismatch: false,
-        size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        size: std::fs::metadata(path)
+            .map(|m| m.len() as f64)
+            .unwrap_or(0.0),
         pages: Some(Field::Unavailable),
         encrypted: Some(Field::Known(false)),
         pdf_version: None,
@@ -425,13 +429,13 @@ fn fill_sheet_stats(sheet: &mut SheetFact, xml: &[u8]) {
         .and_then(parse_dimension_extent)
         .unwrap_or((None, None));
     sheet.dimension = dimension;
-    sheet.populated_cells = Some(cells);
-    sheet.row_count = row_count.or(Some(rows));
+    sheet.populated_cells = Some(cells as f64);
+    sheet.row_count = row_count.or(Some(rows as f64));
     sheet.column_count = col_count;
-    sheet.formula_cells = Some(formulas);
+    sheet.formula_cells = Some(formulas as f64);
     // merged cells：<mergeCells count="N"/> 或逐个 <mergeCell/>
     let (merge_counts, _) = count_elements(xml, &["mergeCell"], false);
-    sheet.merged_cells = Some(merge_counts[0]);
+    sheet.merged_cells = Some(merge_counts[0] as f64);
 }
 
 fn extract_dimension(xml: &[u8]) -> Option<String> {
@@ -458,14 +462,14 @@ fn extract_dimension(xml: &[u8]) -> Option<String> {
 }
 
 /// "A1:Z500" → (rows≈500, cols≈26)——粗略口径（dimension ≠ populated §41）。
-fn parse_dimension_extent(dim: &str) -> Option<(Option<u64>, Option<u64>)> {
+fn parse_dimension_extent(dim: &str) -> Option<(Option<f64>, Option<f64>)> {
     let b = dim.rsplit(':').next()?;
     let rows = b.chars().filter(|c| c.is_ascii_digit()).collect::<String>();
     let cols = b
         .chars()
         .filter(|c| c.is_ascii_alphabetic())
         .collect::<String>();
-    let row_n = rows.parse::<u64>().ok();
+    let row_n = rows.parse::<f64>().ok();
     let col_n = if cols.is_empty() {
         None
     } else {
@@ -473,7 +477,7 @@ fn parse_dimension_extent(dim: &str) -> Option<(Option<u64>, Option<u64>)> {
             acc * 26 + (c.to_ascii_uppercase() as u64 - 'A' as u64 + 1)
         }))
     };
-    Some((row_n, col_n))
+    Some((row_n, col_n.map(|c| c as f64)))
 }
 
 // ── PPTX（§46-§50）──
@@ -539,12 +543,12 @@ pub fn inspect_pptx(
         );
         let has_notes = pkg.read_part(&notes_part).is_some();
         slides.push(SlideFact {
-            index: (index + 1) as u64,
+            index: (index + 1) as f64,
             hidden,
             has_text: text_bytes > 0,
-            text_chars: text_bytes,
-            image_count: Some(counts[1]),
-            shape_count: Some(counts[0]),
+            text_chars: text_bytes as f64,
+            image_count: Some(counts[1] as f64),
+            shape_count: Some(counts[0] as f64),
             has_notes: Some(has_notes),
         });
     }
@@ -552,7 +556,9 @@ pub fn inspect_pptx(
         format: DocumentFormat::Pptx,
         detection_reason: "container-structure",
         extension_mismatch: false,
-        size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        size: std::fs::metadata(path)
+            .map(|m| m.len() as f64)
+            .unwrap_or(0.0),
         pages: Some(Field::Unavailable),
         encrypted: Some(Field::Known(false)),
         pdf_version: None,

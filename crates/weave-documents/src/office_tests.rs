@@ -83,13 +83,16 @@ fn docx_inspect_reports_structure_and_metadata() {
     assert_eq!(facts.format, DocumentFormat::Docx);
     let stats = &facts.statistics;
     assert!(
-        matches!(stats.paragraphs, Some(Field::Known(9))),
+        matches!(stats.paragraphs, Some(Field::Known(9.0))),
         "{stats:?}"
     ); // 2 heading + 5 plain + 2 表格单元格
-    assert!(matches!(stats.headings, Some(Field::Known(2))), "{stats:?}");
-    assert!(matches!(stats.tables, Some(Field::Known(2))));
-    assert!(matches!(stats.images, Some(Field::Known(1))));
-    assert!(matches!(stats.hyperlinks, Some(Field::Known(1))));
+    assert!(
+        matches!(stats.headings, Some(Field::Known(2.0))),
+        "{stats:?}"
+    );
+    assert!(matches!(stats.tables, Some(Field::Known(2.0))));
+    assert!(matches!(stats.images, Some(Field::Known(1.0))));
+    assert!(matches!(stats.hyperlinks, Some(Field::Known(1.0))));
     // §34：words = Estimated（非精确）
     assert!(
         matches!(stats.words, Some(Field::Estimated(_))),
@@ -166,11 +169,11 @@ fn xlsx_inspect_reports_sheets_visibility_and_stats() {
     assert_eq!(sheets[1].visibility, "veryHidden");
     // §41：dimension（声明）≠ populated cells（实际）——两者都报
     assert_eq!(sheets[0].dimension.as_deref(), Some("A1:C4"));
-    assert_eq!(sheets[0].populated_cells, Some(3));
-    assert_eq!(sheets[0].row_count, Some(4), "dimension 行数");
+    assert_eq!(sheets[0].populated_cells, Some(3.0));
+    assert_eq!(sheets[0].row_count, Some(4.0), "dimension 行数");
     // §42：公式只报 presence 计数（1 个 <f>）
-    assert_eq!(sheets[0].formula_cells, Some(1));
-    assert_eq!(sheets[0].merged_cells, Some(1));
+    assert_eq!(sheets[0].formula_cells, Some(1.0));
+    assert_eq!(sheets[0].merged_cells, Some(1.0));
 }
 
 /// 最小 PPTX：2 slides（其一 hidden）+ notes。
@@ -236,8 +239,8 @@ fn pptx_inspect_reports_slides_hidden_and_shapes() {
     assert!(!slides[0].hidden);
     assert!(slides[1].hidden, "show=\"0\" ⇒ hidden（如实）");
     assert!(slides[0].has_text);
-    assert_eq!(slides[0].image_count, Some(1));
-    assert_eq!(slides[0].shape_count, Some(3)); // 3 个 sp
+    assert_eq!(slides[0].image_count, Some(1.0));
+    assert_eq!(slides[0].shape_count, Some(3.0)); // 3 个 sp
     assert_eq!(slides[0].has_notes, Some(true));
     assert_eq!(slides[1].has_notes, Some(false));
 }

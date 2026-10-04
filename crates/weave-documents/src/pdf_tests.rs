@@ -75,7 +75,7 @@ fn inspect_reports_pages_sizes_metadata_version() {
         Some(crate::Field::Known(n)) => n,
         other => panic!("pages field: {other:?}"),
     };
-    assert_eq!(pages, 4, "§11: 解析成功 = Known(4)");
+    assert_eq!(pages, 4.0, "§11: 解析成功 = Known(4)");
     assert_eq!(
         facts
             .metadata
@@ -121,8 +121,8 @@ fn merge_preserves_order_and_page_count() {
     make_pdf(&a, 3, Some("A"));
     make_pdf(&b, 2, Some("B"));
     let plan = plan_merge(&[a.clone(), b.clone()], &limits()).expect("plan");
-    assert_eq!(plan.input_page_counts, vec![3, 2]);
-    assert_eq!(plan.output_page_count, 5);
+    assert_eq!(plan.input_page_counts, vec![3.0, 2.0]);
+    assert_eq!(plan.output_page_count, 5.0);
     let out = dir.path().join("merged.pdf");
     let (pages, diags) = execute_merge(&plan, &out, &limits()).expect("merge");
     assert_eq!(pages, 5);
@@ -192,7 +192,7 @@ fn extract_pages_respects_ranges() {
     let pages = execute_extract_pages(&src, "1-3,5", &out, &limits()).expect("extract");
     assert_eq!(pages, 4);
     let facts = inspect_document(&out, &limits());
-    assert!(matches!(facts.pages, Some(crate::Field::Known(4))));
+    assert!(matches!(facts.pages, Some(crate::Field::Known(4.0))));
     // 越界 ⇒ 结构化错误
     let out2 = dir.path().join("oob.pdf");
     let e = execute_extract_pages(&src, "9-11", &out2, &limits()).expect_err("oob");
@@ -212,7 +212,7 @@ fn reorder_validates_and_executes() {
     let pages = execute_reorder(&src, &[3, 1, 2, 5, 4], &out, &limits()).expect("reorder");
     assert_eq!(pages, 5);
     let facts = inspect_document(&out, &limits());
-    assert!(matches!(facts.pages, Some(crate::Field::Known(5))));
+    assert!(matches!(facts.pages, Some(crate::Field::Known(5.0))));
 }
 
 #[test]

@@ -10,6 +10,7 @@ pub mod batch_service;
 pub mod commands;
 pub mod config;
 pub mod data_service;
+pub mod document_service;
 pub mod duplicates_service;
 pub mod files_dto;
 pub mod image_batch_service;
@@ -77,6 +78,12 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         batch_service::batch_resume,
         batch_service::batch_retry_failed,
         batch_service::batch_jobs_list,
+        document_service::document_inspect,
+        document_service::pdf_merge_preview,
+        document_service::pdf_merge_execute,
+        document_service::pdf_extract_execute,
+        document_service::pdf_rotate_execute,
+        document_service::pdf_split_every_n_execute,
     ])
 }
 
