@@ -532,5 +532,6 @@
   "app.theme": "Theme",
   "app.themeName.system": "Theme: System",
   "app.themeName.light": "Theme: Light",
-  "app.themeName.dark": "Theme: Dark"
+  "app.themeName.dark": "Theme: Dark",
+  "quickDrop.suggestions": "Suggested tools:"
 }

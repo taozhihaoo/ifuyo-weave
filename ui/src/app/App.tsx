@@ -14,6 +14,7 @@ import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
 import { registerShortcut, dispatchShortcut } from "../lib/shortcuts";
+import { suggestionsFor } from "../lib/quickDrop";
 import { persistTheme } from "../lib/bootstrap";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
@@ -681,6 +682,24 @@ function App() {
             </button>
           </section>
         </>
+      ) : null}
+
+      {view === "tools" && inspection ? (
+        <div style={rowStyle} role="status">
+          <span style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+            {t("quickDrop.suggestions")}
+          </span>
+          {suggestionsFor(inspection.kind, inspection.extension).map((viewId) => (
+            <button
+              key={viewId}
+              type="button"
+              onClick={() => setView(viewId as typeof view)}
+              style={buttonStyle}
+            >
+              {t(`nav.${viewId}`, { defaultValue: viewId })}
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {view === "tools" && inspectError ? (

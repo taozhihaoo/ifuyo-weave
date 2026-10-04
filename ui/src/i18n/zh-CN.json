@@ -532,5 +532,6 @@
   "app.theme": "主题",
   "app.themeName.system": "主题：跟随系统",
   "app.themeName.light": "主题：浅色",
-  "app.themeName.dark": "主题：深色"
+  "app.themeName.dark": "主题：深色",
+  "quickDrop.suggestions": "建议工具："
 }
