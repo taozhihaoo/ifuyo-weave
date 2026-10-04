@@ -681,3 +681,33 @@ Known Limitations:
   auto-detect 显示 Seconds；URL component %20 / query + 双语义；正则分组
   + 位置 [1:1] + 能力矩阵（lookaround=不支持 §67）；颜色 #ff8800→#FF8800
   归一 + 对比度；console 零错误
+
+## M9 Utilities（下）
+
+Status: COMPLETE
+
+Implemented:
+
+- 文件 Checksum 工具（§131/§138/§140）：weave-utilities file_digest——
+  表驱动增量 CRC-32/ISO-HDLC + CRC-32C + Adler-32（常量内存；增量=整体
+  golden 交叉验证 crc crate；取消 + 进度回调）；UI 进 Hash 工具
+  （路径/打开对话框，三算法）
+- 报告导出（§93/§144-§148）：utilities_export_report——TXT/CSV/JSON
+  统一 export_report 组装（RFC 4180 逗号/引号/换行转义 §147），写盘复用
+  M2 atomic_write（temp→flush→rename §201 不重建），产物入 History
+  创建型事务（撤销 = stat 守卫删除）；output-first 目标存在拒绝
+- 42→46 域测试（增量=整体、chunked=整体、真实文件、CSV 转义、JSON 稳定）
+- IPC：utilities_checksum_file / utilities_export_report
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-utilities 46）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- 真窗口冒烟：见收口记录
+
+Known Limitations:
+
+- 文件 Hash（SHA-256）沿用 M1 hash_file job（流式/取消/进度完备），M9 页
+  未重复内嵌——从 Inspector 进入（§5/§28 复用决策不变）
+- 文件 checksum 为同步命令（流式毫秒级；任务化列 M10 工作流批次）
+- 多文件批量 checksum UI 列（下）后续（域 API 已批量就绪）

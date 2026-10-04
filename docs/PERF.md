@@ -285,3 +285,14 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
 - 大文档基线（§101/§102：500/1000 页、大型 Office）：pdf-large-200page
   fixture 已入 tests/fixtures（200 页 inspect 通过）；更大规模列 M9 复测
   （KNOWN LIMITATION 如实——本节不宣称）
+
+## M9 Utilities（下）— 2026-10-05
+
+- 复现：`cargo test -p weave-utilities`（file_digest tests）+ 批量吞吐
+  `cargo test -p weave-batch --release -- --ignored --nocapture`
+- 文件 checksum（流式表驱动增量）：100 KB 级 fixture 毫秒级；增量=整体
+  golden 与 crc crate 交叉验证（§36）
+- 批量 document inspect（M8 基准沿用）：10/100/1000 docs = 2.5/1.58/
+  1.43 ms/doc 线性
+- 大规模 hash 文件基线：M1 hash job 既有（100 MiB ≈ 66 ms，PERF M1 节）
+  ——M9 复用不重测（§5 复用决策）
