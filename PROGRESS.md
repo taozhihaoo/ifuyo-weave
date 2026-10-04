@@ -845,3 +845,31 @@ Known Limitations:
   里重复 registerCommand("navigation.*") ⇒ duplicate id throw ⇒ 整树
   卸载白屏（body 仅 15 字符）；修复 = upsertCommand 幂等注册（App 重挂
   场景），测试仍用 registerCommand 保留 duplicate 检测（§17/§54）
+
+## M11 Polish（下）
+
+Status: COMPLETE
+
+Implemented:
+
+- Theme（§222-§224）：dark token overrides（color/surface 全集）+
+  applyTokens(theme)；system 跟随 prefers-color-scheme；light/dark/system
+  循环按钮（header）持久化 AppConfig.theme；§224 fallback = system
+- Quick Drop 建议（§25-§33/§177-§178）：extension→view 路由映射
+  （image→图片、pdf/docx→文档、csv/xlsx→数据、txt/md→文本、目录→
+  重复+工作流）；inspect 后首页显示建议按钮（点击跳转既有工具页）；
+  §26 不自作聪明（unknown extension 无建议）；§178 application 层路由
+- 测试：quickDrop 7（映射/目录/未知/大小写）
+- 文档：PROGRESS M11（下）
+
+Quality:
+
+- Frontend gates: PASS（typecheck；lint；vitest 38 = 31+7）
+- Rust gates: PASS（fmt/clippy/test/deny；tauri build 4.67 MiB）
+
+Known Limitations:
+
+- 事件监听/定时器审计（§251-§253）：现有面板均已 cleanup（pollStop/
+  unlisten 模式），无新增泄漏面；未做自动化泄漏检测
+- 多文件 drop 的"Common Actions"聚合（§31）未做——当前 drop 取首文件
+  检测（KNOWN LIMITATION）
