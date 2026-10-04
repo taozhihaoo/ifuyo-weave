@@ -4,12 +4,25 @@
  * M0 只验证架构：注册、罗列（deterministic 排序）、执行。
  */
 
+export type CommandCategory =
+  | "navigation"
+  | "tools"
+  | "workflow"
+  | "history"
+  | "settings"
+  | "app";
+
 export interface CommandDefinition {
   /** 稳定机器可读 ID，如 "app.ping"。 */
   id: string;
   /** i18n 资源 key，禁止硬编码文案（charter #34）。 */
   labelKey: string;
   run: () => void | Promise<void>;
+  /** M11 §17：palette 分类与搜索关键词。 */
+  category?: CommandCategory;
+  keywords?: string[];
+  /** 展示用快捷键（如 "Mod+K"）；实际分发在 ShortcutRegistry。 */
+  shortcut?: string;
 }
 
 const registry = new Map<string, CommandDefinition>();

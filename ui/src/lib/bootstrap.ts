@@ -37,8 +37,29 @@ export async function bootstrapApp(): Promise<void> {
       : "zh-CN";
     useAppStore.getState().setLocale(locale);
     useAppStore.getState().setTheme(asTheme(config.data.theme ?? "system"));
+    // M11 §34/§38：收藏加载；启动时清理失效引用（§38 stale → remove safely）
+    const favorites = (config.data.favorites ?? []).filter(
+      (f) => f.kind === "view" || f.kind === "workflow",
+    );
+    useAppStore.getState().setFavorites(
+      favorites.map((f) => ({ kind: f.kind as "view" | "workflow", id: f.id })),
+    );
   } else {
     useAppStore.getState().setError(config.error);
+  }
+}
+
+/** M11 §40 收藏持久化（AppConfig.favorites；失败经 store 错误呈现）。 */
+export async function persistFavorites(): Promise<void> {
+  const current = useAppStore.getState();
+  const result = await commands.setAppConfig({
+    version: 1,
+    language: current.locale,
+    theme: current.theme,
+    favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
+  });
+  if (result.status === "error") {
+    useAppStore.getState().setError(result.error);
   }
 }
 
@@ -49,6 +70,7 @@ export async function persistLocale(locale: Locale): Promise<void> {
     version: 1,
     language: locale,
     theme: current.theme,
+    favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
   });
   if (result.status === "error") {
     useAppStore.getState().setError(result.error);

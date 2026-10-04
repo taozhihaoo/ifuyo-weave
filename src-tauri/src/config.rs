@@ -14,6 +14,17 @@ pub const CONFIG_VERSION: u32 = 1;
 pub const LANGUAGES: [&str; 2] = ["zh-CN", "en"];
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
 
+/// 收藏条目（M11 §37）：只存 type/id（引用），label 等从当前 Registry
+/// 重新解析；数组顺序 = 用户顺序（§39）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteEntry {
+    /// "view"（工具页）| "workflow"（工作流定义）。
+    pub kind: String,
+    /// view id（如 "image"）或 workflow id。
+    pub id: String,
+}
+
 /// 应用级最小配置。工具参数永远跟随工具本身，不进入全局配置（charter #37）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", default)]
@@ -21,6 +32,8 @@ pub struct AppConfig {
     pub version: u32,
     pub language: String,
     pub theme: String,
+    /// M11 §34：用户收藏（本地配置持久化；无云无同步 §36）。
+    pub favorites: Vec<FavoriteEntry>,
 }
 
 impl Default for AppConfig {
@@ -29,6 +42,7 @@ impl Default for AppConfig {
             version: CONFIG_VERSION,
             language: "zh-CN".to_string(),
             theme: "system".to_string(),
+            favorites: Vec::new(),
         }
     }
 }

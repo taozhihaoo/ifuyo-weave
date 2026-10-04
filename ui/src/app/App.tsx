@@ -11,6 +11,9 @@ import { ImagePanel } from "../features/image/ImagePanel";
 import { DocumentsPanel } from "../features/documents/DocumentsPanel";
 import { UtilitiesPanel } from "../features/utilities/UtilitiesPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
+import { CommandPalette } from "../features/palette/CommandPalette";
+import { registerCommand } from "../commands/registry";
+import { registerShortcut, dispatchShortcut } from "../lib/shortcuts";
 import { BatchPanel } from "../features/batch/BatchPanel";
 import { HistoryPanel } from "../features/ops/HistoryPanel";
 import { OrganizerPanel } from "../features/ops/OrganizerPanel";
@@ -45,6 +48,7 @@ function App() {
     scanStatus,
     hashJob,
     hashStatus,
+    paletteOpen,
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
   const [view, setView] = useState<
@@ -70,6 +74,55 @@ function App() {
   const hashPollStop = useRef<(() => void) | null>(null);
   const scanPollStop = useRef<(() => void) | null>(null);
 
+  // M11 §16/§17：注册导航命令（真实能力 = setView；keywords 含中英文 §19/§65）
+  useEffect(() => {
+    const views: [string, string, string][] = [
+      ["tools", "nav.tools", "home inspector drop"],
+      ["rename", "nav.rename", "batch rename files 重命名"],
+      ["organizer", "nav.organizer", "organize files 整理"],
+      ["duplicates", "nav.duplicates", "duplicate finder 重复文件"],
+      ["text", "nav.text", "text editor 文本 format"],
+      ["data", "nav.data", "csv json data 数据"],
+      ["image", "nav.image", "image resize convert 图片"],
+      ["batch", "nav.batch", "batch execution 批量"],
+      ["documents", "nav.documents", "pdf docx xlsx 文档"],
+      ["utilities", "nav.utilities", "hash base64 uuid 工具集"],
+      ["workflow", "nav.workflow", "workflow pipeline 工作流"],
+      ["history", "nav.history", "history undo 历史"],
+    ];
+    for (const [viewId, labelKey, keywords] of views) {
+      registerCommand({
+        id: `navigation.${viewId}`,
+        labelKey,
+        category: "navigation",
+        keywords: keywords.split(" "),
+        run: () => setView(viewId as typeof view),
+      });
+    }
+    registerCommand({
+      id: "app.toggle-language",
+      labelKey: "app.language",
+      category: "settings",
+      keywords: ["language", "语言", "english", "中文"],
+      run: () => {
+        const s = useAppStore.getState();
+        const next = s.locale === "zh-CN" ? "en" : "zh-CN";
+        s.setLocale(next);
+        void commands
+          .setAppConfig({
+            version: 1,
+            language: next,
+            theme: s.theme,
+            favorites: s.favorites.map((f) => ({ kind: f.kind, id: f.id })),
+          })
+          .then((r) => {
+            if (r.status === "error") {
+              s.setError(r.error);
+            }
+          });
+      },
+    });
+  }, []);
   const startHash = (path: string): void => {
     hashPollStop.current?.();
     void commands
@@ -147,6 +200,25 @@ function App() {
       })
       .catch(() => useAppStore.getState().setIpcStatus("failed"));
   };
+
+  // M11 §51/§55：全局快捷键单一分发（Mod+K = palette；注册进 ShortcutRegistry）
+  useEffect(() => {
+    registerShortcut({
+      id: "app.open-command-palette",
+      keys: "Mod+K",
+      scope: "global",
+      descriptionKey: "palette.title",
+      action: () => {
+        const s = useAppStore.getState();
+        s.setPaletteOpen(!s.paletteOpen);
+      },
+    });
+    const handler = (e: KeyboardEvent): void => {
+      dispatchShortcut(e);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -257,6 +329,10 @@ function App() {
       version: 1,
       language: next,
       theme: useAppStore.getState().theme,
+      favorites: useAppStore.getState().favorites.map((f) => ({
+        kind: f.kind,
+        id: f.id,
+      })),
     });
     void result.then((saved) => {
       if (saved.status === "error") {
@@ -453,6 +529,22 @@ function App() {
           onUndoDone={() => setHistoryRefresh((n) => n + 1)}
         />
       ) : null}
+
+      <CommandPalette
+        key={paletteOpen ? "open" : "closed"}
+        open={paletteOpen}
+        onClose={() => useAppStore.getState().setPaletteOpen(false)}
+        onExecuteError={(message) =>
+          useAppStore.getState().setError({
+            kind: "internal",
+            code: "command.executeFailed",
+            message,
+            location: null,
+            recoverability: "retryable",
+            suggestion: null,
+          })
+        }
+      />
 
       {view === "tools" ? (
         <section

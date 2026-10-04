@@ -184,6 +184,8 @@ export type AppConfig = {
 	version?: number,
 	language?: string,
 	theme?: string,
+	/**  M11 §34：用户收藏（本地配置持久化；无云无同步 §36）。 */
+	favorites?: FavoriteEntry[],
 };
 
 /**  应用信息（品牌 + 版本 + 运行环境）。 */
@@ -575,6 +577,17 @@ export type ExtractResultDto = {
 	count: number | null,
 	uniqueCount: number | null,
 	truncated: boolean,
+};
+
+/**
+ *  收藏条目（M11 §37）：只存 type/id（引用），label 等从当前 Registry
+ *  重新解析；数组顺序 = 用户顺序（§39）。
+ */
+export type FavoriteEntry = {
+	/**  "view"（工具页）| "workflow"（工作流定义）。 */
+	kind: string,
+	/**  view id（如 "image"）或 workflow id。 */
+	id: string,
 };
 
 /**  字段三态（§11：解析失败 ≠ 0——绝不让 0 同时表示"零页"与"解析失败"）。 */
