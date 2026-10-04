@@ -44,6 +44,7 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
   const [mergeInputs, setMergeInputs] = useState("");
   const [mergeDraft, setMergeDraft] = useState("");
   const [mergePreview, setMergePreview] = useState<PdfMergePlan | null>(null);
+  const [mergePlanId, setMergePlanId] = useState<string | null>(null);
   const [destDir, setDestDir] = useState("");
   const [ranges, setRanges] = useState("");
   const [rotateDegrees, setRotateDegrees] = useState(90);
@@ -95,9 +96,10 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
   const doMergePreview = async (): Promise<void> => {
     setError(null);
     setMergePreview(null);
-    const inputs = mergeInputs.split("\n").map((l) => l.trim()).filter(Boolean);
     try {
-      setMergePreview(await pdfMergePreview(inputs));
+      const handle = await pdfMergePreview(mergeList);
+      setMergePlanId(handle.planId);
+      setMergePreview(handle.plan);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -283,7 +285,14 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
             <button
               type="button"
               disabled={busy || mergeList.length < 2 || new Set(mergeList).size !== mergeList.length}
-              onClick={() => void runPdf(() => pdfMergeExecute(mergeList, destDir))}
+              onClick={() =>
+                void runPdf(() => {
+                  if (mergePlanId === null) {
+                    return Promise.reject(new Error(t("documents.repreview")));
+                  }
+                  return pdfMergeExecute(mergePlanId, destDir);
+                })
+              }
               style={boxStyle}
             >
               {t("documents.mergeExecute")}

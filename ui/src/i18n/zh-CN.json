@@ -411,5 +411,6 @@
   "documents.dupBlocked": "存在重复输入，已阻止执行（§124）",
   "documents.moveUp": "上移",
   "documents.moveDown": "下移",
-  "documents.addInput": "添加"
+  "documents.addInput": "添加",
+  "documents.repreview": "请先重新预览（合并计划已失效）"
 }

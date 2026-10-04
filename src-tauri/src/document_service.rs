@@ -12,6 +12,7 @@
 
 use serde::Serialize;
 use specta::Type;
+use tauri::Manager;
 use weave_core::prelude::WeaveError;
 use weave_documents::{DocumentFacts, DocumentResourceLimits, PdfMergePlan, Rotation};
 
@@ -85,11 +86,23 @@ fn stem_of(path: &str) -> String {
         .unwrap_or_else(|| "document".into())
 }
 
-/// §19：Merge Preview（每输入页数 + 总页数 + 顺序）。
+/// Merge plan 服务端缓存句柄（§19/§141：execute 用同一 plan 做 TOCTOU）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfMergePlanHandleDto {
+    pub plan_id: String,
+    pub plan: PdfMergePlan,
+}
+
+/// §19：Merge Preview（每输入页数 + 总页数 + 顺序）。Plan 进服务端缓存，
+/// execute 只收 plan_id（M3/M4 同模式）——TOCTOU 重校验有据可依。
 #[tauri::command]
 #[specta::specta]
 #[allow(clippy::result_large_err)] // D10
-pub fn pdf_merge_preview(inputs: Vec<String>) -> Result<PdfMergePlan, IpcError> {
+pub fn pdf_merge_preview(
+    app: tauri::AppHandle,
+    inputs: Vec<String>,
+) -> Result<PdfMergePlanHandleDto, IpcError> {
     if inputs.is_empty() {
         return Err(err("document.emptySelection", "no input files"));
     }
@@ -97,7 +110,15 @@ pub fn pdf_merge_preview(inputs: Vec<String>) -> Result<PdfMergePlan, IpcError> 
         weave_core::prelude::validate_absolute_path(path)?;
     }
     let paths: Vec<std::path::PathBuf> = inputs.iter().map(std::path::PathBuf::from).collect();
-    weave_documents::plan_merge(&paths, &limits()).map_err(|e| err(e.code, e.message))
+    let plan =
+        weave_documents::plan_merge(&paths, &limits()).map_err(|e| err(e.code, e.message))?;
+    let plan_id = weave_core::prelude::OperationId::generate().to_string();
+    app.state::<crate::state::AppState>()
+        .document_plans
+        .lock()
+        .expect("document plans")
+        .insert(plan_id.clone(), plan.clone());
+    Ok(PdfMergePlanHandleDto { plan_id, plan })
 }
 
 /// §18/§20/§74：有序合并（单一逻辑操作；输出 = 首输入 stem.merged.pdf）。
@@ -106,28 +127,53 @@ pub fn pdf_merge_preview(inputs: Vec<String>) -> Result<PdfMergePlan, IpcError> 
 #[allow(clippy::result_large_err)] // D10
 pub fn pdf_merge_execute(
     app: tauri::AppHandle,
-    inputs: Vec<String>,
+    plan_id: String,
     destination_dir: String,
 ) -> Result<PdfOperationResultDto, IpcError> {
-    for path in &inputs {
-        weave_core::prelude::validate_absolute_path(path)?;
-    }
-    let paths: Vec<std::path::PathBuf> = inputs.iter().map(std::path::PathBuf::from).collect();
-    let plan =
-        weave_documents::plan_merge(&paths, &limits()).map_err(|e| err(e.code, e.message))?;
-    let first_stem = stem_of(&inputs[0]);
-    let output = prepare_output(&destination_dir, &format!("{first_stem}.merged.pdf"))?;
-    let (pages, diagnostics) = weave_documents::execute_merge(&plan, &output, &limits())
-        .map_err(|e| err(e.code, e.message))?;
-    record_outputs(&app, &inputs, std::slice::from_ref(&output));
-    Ok(PdfOperationResultDto {
-        outputs: vec![output.to_string_lossy().into_owned()],
-        page_counts: vec![pages as f64],
-        warnings: diagnostics
+    // §141：只接受 Preview 缓存的 plan——重校验依据 = 预览时的输入快照
+    let plan = {
+        let taken = app
+            .state::<crate::state::AppState>()
+            .document_plans
+            .lock()
+            .expect("document plans")
+            .remove(&plan_id);
+        taken.ok_or_else(|| {
+            err(
+                "document.planUnknownOrExpired",
+                format!("merge plan '{plan_id}' unknown or expired (re-preview)"),
+            )
+        })?
+    };
+    let execute_result = (|| -> Result<PdfOperationResultDto, IpcError> {
+        let inputs: Vec<String> = plan
+            .inputs
             .iter()
-            .map(|d| format!("{}: {}", d.code, d.message))
-            .collect(),
-    })
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        let first_stem = stem_of(&inputs[0]);
+        let output = prepare_output(&destination_dir, &format!("{first_stem}.merged.pdf"))?;
+        let (pages, diagnostics) = weave_documents::execute_merge(&plan, &output, &limits())
+            .map_err(|e| err(e.code, e.message))?;
+        record_outputs(&app, &inputs, std::slice::from_ref(&output));
+        Ok(PdfOperationResultDto {
+            outputs: vec![output.to_string_lossy().into_owned()],
+            page_counts: vec![pages as f64],
+            warnings: diagnostics
+                .iter()
+                .map(|d| format!("{}: {}", d.code, d.message))
+                .collect(),
+        })
+    })();
+    if execute_result.is_err() {
+        // 失败放回缓存允许重试（重试仍经 §141 重校验，§129 不盲放）
+        app.state::<crate::state::AppState>()
+            .document_plans
+            .lock()
+            .expect("document plans")
+            .insert(plan_id, plan);
+    }
+    execute_result
 }
 
 /// §21/§22：按页范围导出（新文件 {stem}.extract.pdf）。

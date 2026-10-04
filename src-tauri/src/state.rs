@@ -33,6 +33,9 @@ pub struct AppState {
     /// M7（下 §202/§204）：目的地互斥——canonical dest dir → job_id。
     /// 同一目标目录同时只允许一个 Batch Job（策略 = 拒绝，不排队）。
     pub batch_dest_locks: Mutex<HashMap<String, String>>,
+    /// M8（下 §141）：merge plan 服务端缓存（preview 建、execute 用——
+    /// TOCTOU 重校验依据；execute 取走即删，失败放回）。
+    pub document_plans: Mutex<HashMap<String, weave_documents::PdfMergePlan>>,
 }
 
 impl AppState {
@@ -47,6 +50,7 @@ impl AppState {
             data_sessions: DataSessions::new(),
             batch_jobs: Mutex::new(HashMap::new()),
             batch_dest_locks: Mutex::new(HashMap::new()),
+            document_plans: Mutex::new(HashMap::new()),
         }
     }
 }

@@ -411,5 +411,6 @@
   "documents.dupBlocked": "duplicate inputs detected, execute blocked (§124)",
   "documents.moveUp": "Move up",
   "documents.moveDown": "Move down",
-  "documents.addInput": "Add"
+  "documents.addInput": "Add",
+  "documents.repreview": "Re-preview first (merge plan expired)"
 }

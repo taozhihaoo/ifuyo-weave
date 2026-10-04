@@ -117,10 +117,13 @@ export const commands = {
 	 *  Err 仅保留给路径级失败）。
 	 */
 	documentInspect: (path: string) => typedError<DocumentFacts, IpcError>(__TAURI_INVOKE("document_inspect", { path })),
-	/**  §19：Merge Preview（每输入页数 + 总页数 + 顺序）。 */
-	pdfMergePreview: (inputs: string[]) => typedError<PdfMergePlan, IpcError>(__TAURI_INVOKE("pdf_merge_preview", { inputs })),
+	/**
+	 *  §19：Merge Preview（每输入页数 + 总页数 + 顺序）。Plan 进服务端缓存，
+	 *  execute 只收 plan_id（M3/M4 同模式）——TOCTOU 重校验有据可依。
+	 */
+	pdfMergePreview: (inputs: string[]) => typedError<PdfMergePlanHandleDto, IpcError>(__TAURI_INVOKE("pdf_merge_preview", { inputs })),
 	/**  §18/§20/§74：有序合并（单一逻辑操作；输出 = 首输入 stem.merged.pdf）。 */
-	pdfMergeExecute: (inputs: string[], destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_merge_execute", { inputs, destinationDir })),
+	pdfMergeExecute: (planId: string, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_merge_execute", { planId, destinationDir })),
 	/**  §21/§22：按页范围导出（新文件 {stem}.extract.pdf）。 */
 	pdfExtractExecute: (input: string, ranges: string, destinationDir: string) => typedError<PdfOperationResultDto, IpcError>(__TAURI_INVOKE("pdf_extract_execute", { input, ranges, destinationDir })),
 	/**  §25-§26：页旋转（/Rotate 元数据语义；新文件 {stem}.rotated.pdf）。 */
@@ -704,6 +707,15 @@ export type PdfMergePlan = {
 	/**  每输入页数（与 inputs 同序）。 */
 	inputPageCounts: (number | null)[],
 	outputPageCount: number | null,
+	/**  §69 输入快照（size/mtime ms）——Execute 前重校验（§141 TOCTOU）。 */
+	inputSizes: (number | null)[],
+	inputModifiedMs: (number | null)[],
+};
+
+/**  Merge plan 服务端缓存句柄（§19/§141：execute 用同一 plan 做 TOCTOU）。 */
+export type PdfMergePlanHandleDto = {
+	planId: string,
+	plan: PdfMergePlan,
 };
 
 /**  通用产物结果（§72：Created Outputs + Diagnostics）。 */

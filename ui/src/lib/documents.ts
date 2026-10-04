@@ -43,8 +43,13 @@ export async function documentInspect(path: string): Promise<DocumentFacts> {
   return unwrap(await commands.documentInspect(path));
 }
 
-export async function pdfMergePreview(inputs: string[]): Promise<PdfMergePlan> {
+export async function pdfMergePreview(inputs: string[]): Promise<PdfMergePlanHandle> {
   return unwrap(await commands.pdfMergePreview(inputs));
+}
+
+export interface PdfMergePlanHandle {
+  planId: string;
+  plan: PdfMergePlan;
 }
 
 export interface PdfOperationResult {
@@ -62,10 +67,10 @@ function mapResult(d: PdfOperationResultDto): PdfOperationResult {
 }
 
 export async function pdfMergeExecute(
-  inputs: string[],
+  planId: string,
   destinationDir: string,
 ): Promise<PdfOperationResult> {
-  return mapResult(unwrap(await commands.pdfMergeExecute(inputs, destinationDir)));
+  return mapResult(unwrap(await commands.pdfMergeExecute(planId, destinationDir)));
 }
 
 export async function pdfExtractExecute(
