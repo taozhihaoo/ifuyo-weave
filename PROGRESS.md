@@ -431,6 +431,14 @@ Quality:
 - Frontend gates: PASS（typecheck/lint/vitest 23）
 - PERF 实测：text 1000 files 288.7 ms；image 100 files 96.8 ms
   （docs/PERF.md M7 节）
+- tauri build: PASS（3.97 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — 批量页预设管线（文本
+  trim）× 2 输入（a.txt + b.log）：Preview 计数 2/成功1/跳过1 且盘侧
+  零写入（§21）；Execute 后台任务 + 结果表逐条正确 + 产物字节级断言
+  （"hello weave
+batch engine
+"）；取消冒烟 = 20000 条任务中途
+  cancel ⇒ 成功 1627 + 取消 18373（计数闭合）；三阶段 console 零错误
 
 Known Limitations:
 
