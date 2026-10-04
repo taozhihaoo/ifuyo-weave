@@ -11,6 +11,7 @@ pub mod config;
 pub mod data_service;
 pub mod duplicates_service;
 pub mod files_dto;
+pub mod image_batch_service;
 pub mod image_service;
 pub mod jobs;
 pub mod logging;
@@ -68,6 +69,7 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         image_service::image_preview,
         image_service::image_execute,
         image_service::image_cancel,
+        image_batch_service::image_batch_execute,
     ])
 }
 

@@ -86,6 +86,8 @@ export const commands = {
 	/**  Execute：同一引擎 + 安全写盘（§87-§91/§146：原子替换 + 历史/Undo）。 */
 	imageExecute: (path: string, operation: ImageOperationDto, exportOptions: ImageExportOptionsDto) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("image_execute", { path, operation, exportOptions })),
 	imageCancel: (token: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("image_cancel", { token })),
+	/**  批量执行：输入快照 → 逐文件处理（失败隔离/取消安全点）→ 汇总。 */
+	imageBatchExecute: (inputs: string[], options: ImageBatchOptionsDto) => typedError<BatchResultDto, IpcError>(__TAURI_INVOKE("image_batch_execute", { inputs, options })),
 };
 
 /* Types */
@@ -103,6 +105,26 @@ export type AppInfo = {
 	site: string,
 	version: string,
 	environment: string,
+};
+
+export type BatchFileResultDto = {
+	input: string,
+	output: string | null,
+	/**  success | failed | skipped | cancelled */
+	status: string,
+	error: string | null,
+	inputBytes: number | null,
+	outputBytes: number | null,
+};
+
+export type BatchResultDto = {
+	results: BatchFileResultDto[],
+	total: number | null,
+	succeeded: number | null,
+	failed: number | null,
+	cancelled: number | null,
+	inputBytes: number | null,
+	outputBytes: number | null,
 };
 
 export type ClassificationDto = {
@@ -364,6 +386,14 @@ export type HistoryEntryDto = {
 	skippedCount: number | null,
 	undoable: boolean,
 	status: string,
+};
+
+export type ImageBatchOptionsDto = {
+	destinationDir: string,
+	/**  png | jpeg | webp | bmp | tiff */
+	targetFormat: string,
+	quality: number | null,
+	overwriteExisting: boolean,
 };
 
 export type ImageExportOptionsDto = {
