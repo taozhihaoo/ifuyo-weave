@@ -81,6 +81,11 @@ export const commands = {
 	dataExport: (sessionId: string, options: DataExportOptionsDto) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("data_export", { sessionId, options })),
 	/**  §146 手动关闭会话：立即释放内存。 */
 	dataClose: (sessionId: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("data_close", { sessionId })),
+	imageOpen: (path: string) => typedError<ImageOpenDto, IpcError>(__TAURI_INVOKE("image_open", { path })),
+	imagePreview: (path: string, operation: ImageOperationDto) => typedError<ImagePreviewDto, IpcError>(__TAURI_INVOKE("image_preview", { path, operation })),
+	/**  Execute：同一引擎 + 安全写盘（§87-§91/§146：原子替换 + 历史/Undo）。 */
+	imageExecute: (path: string, operation: ImageOperationDto, exportOptions: ImageExportOptionsDto) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("image_execute", { path, operation, exportOptions })),
+	imageCancel: (token: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("image_cancel", { token })),
 };
 
 /* Types */
@@ -361,6 +366,68 @@ export type HistoryEntryDto = {
 	status: string,
 };
 
+export type ImageExportOptionsDto = {
+	/**  覆盖源文件（§74：显式；否则必须新目标）。 */
+	overwriteSource: boolean,
+	/**  overwrite_source = false 时必填的目标路径。 */
+	destination: string | null,
+};
+
+export type ImageFactsDto = {
+	format: string,
+	width: number | null,
+	height: number | null,
+	hasAlpha: boolean,
+	colorModel: string,
+	bitDepth: number | null,
+	frameCount: number | null,
+	extensionMismatch: boolean,
+	exifPresent: boolean,
+	gpsPresent: boolean,
+	cameraMake: string | null,
+	cameraModel: string | null,
+	datetime: string | null,
+	orientation: number | null,
+	iccPresent: boolean,
+};
+
+export type ImageOpenDto = {
+	path: string,
+	/**  §65 有界预览（PNG data URI，最长边 ≤ 2048）。 */
+	previewDataUri: string,
+	facts: ImageFactsDto,
+};
+
+export type ImageOperationDto = {
+	/**  resize | compress | convert | strip_metadata */
+	operation: string,
+	/**  目标格式（convert/compress/strip 时有效）。 */
+	targetFormat: string | null,
+	quality: number | null,
+	/**  §14 alpha 合成背景：white | black。 */
+	alphaBackground: string | null,
+	resize: ResizeOptionsDto | null,
+	/**  §61 strip：true = 剥离全部可移除元数据。 */
+	stripMetadata: boolean,
+};
+
+export type ImagePreviewDto = {
+	/**  §64：同一变换引擎产出的 After 预览（PNG data URI，有界）。 */
+	previewDataUri: string,
+	outputFormat: string,
+	outWidth: number | null,
+	outHeight: number | null,
+	/**  §69/§70：Preview 阶段为估算标注。 */
+	estimatedOutputBytes: number | null,
+	/**  §51 有损警示。 */
+	lossy: boolean,
+	/**  §54 re-encode 警示。 */
+	reEncoded: boolean,
+	/**  §59 动画不保留警示。 */
+	animationDropped: boolean,
+	warnings: string[],
+};
+
 /**
  *  统一错误在 IPC 边界的 DTO。weave-core 不依赖 specta；
  *  错误在 Application 层显式翻译（Domain Error → Application → UI）。
@@ -458,6 +525,15 @@ export type RecycleSelectionDto = {
 };
 
 export type RenameRuleDto = { type: "prefix"; text: string } | { type: "suffix"; text: string } | { type: "replace"; find: string; replace_with: string } | { type: "regexReplace"; pattern: string; replacement: string } | { type: "counter"; start: number | null; step: number | null; width: number | null } | { type: "date"; field: string; format: string } | { type: "case"; form: string } | { type: "extension"; new_extension: string } | { type: "template"; template: string };
+
+export type ResizeOptionsDto = {
+	mode: string,
+	width: number | null,
+	height: number | null,
+	scalePercent: number | null,
+	preventUpscale: boolean,
+	filter: string,
+};
 
 export type ScanErrorDto = {
 	relativePath: string,

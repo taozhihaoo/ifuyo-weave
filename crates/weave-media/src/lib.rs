@@ -17,11 +17,12 @@ pub mod inspect;
 pub mod limits;
 pub mod ops;
 
-pub use capabilities::FormatCapability;
+pub use capabilities::{FormatCapability, capability};
 pub use detect::{ExtensionMismatch, ImageFormat, detect_format};
 pub use inspect::{ImageFacts, MetadataFacts, inspect_bytes};
 pub use limits::ImageLimits;
 pub use ops::{
-    AlphaPolicy, FitMode, ResizeOptions, apply_exif_orientation, composite_on_background,
-    encode_image, exif_gps_present, resize_dimensions, resize_image, strip_metadata_bytes,
+    AlphaPolicy, FitMode, ResizeFilter, ResizeOptions, apply_exif_orientation,
+    composite_on_background, encode_image, exif_gps_present, resize_dimensions, resize_image,
+    strip_metadata_bytes,
 };

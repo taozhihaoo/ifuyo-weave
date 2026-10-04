@@ -4386,6 +4386,7 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "encoding_rs",
+ "image",
  "serde",
  "serde_json",
  "specta",
@@ -4401,6 +4402,7 @@ dependencies = [
  "weave-data",
  "weave-files",
  "weave-history",
+ "weave-media",
  "weave-testkit",
  "weave-text",
 ]

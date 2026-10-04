@@ -21,7 +21,9 @@ weave-core = { path = "../crates/weave-core" }
 weave-files = { path = "../crates/weave-files" }
 weave-text = { path = "../crates/weave-text" }
 weave-data = { path = "../crates/weave-data", features = ["specta"] }
+weave-media = { path = "../crates/weave-media" }
 csv = "1.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
 encoding_rs = { workspace = true }
 weave-history = { path = "../crates/weave-history" }
 tauri = { version = "2", features = [] }
