@@ -217,3 +217,45 @@ export function colorConvert(input: ColorRequest): Promise<ColorResult> {
 export function colorContrast(hexA: string, hexB: string): Promise<number> {
   return commands.utilitiesColorContrast(hexA, hexB).then((r) => unwrap(r) ?? 1);
 }
+
+// ── M9（下）：文件 Checksum + 导出 ──
+
+export interface FileChecksumEntry {
+  path: string;
+  algorithm: string;
+  digestHex: string;
+  bytesProcessed: number;
+  status: string;
+}
+
+export interface FileExportResult {
+  output: string;
+  entryCount: number;
+}
+
+export function checksumFile(path: string, algorithmId: string): Promise<FileChecksumEntry> {
+  return commands.utilitiesChecksumFile(path, algorithmId).then((r) => {
+    const d = unwrap(r);
+    return {
+      path: d.path,
+      algorithm: d.algorithm,
+      digestHex: d.digestHex,
+      bytesProcessed: d.bytesProcessed ?? 0,
+      status: d.status,
+    };
+  });
+}
+
+export function exportReport(
+  entries: FileChecksumEntry[],
+  format: string,
+  destinationDir: string,
+  fileName: string,
+): Promise<FileExportResult> {
+  return commands
+    .utilitiesExportReport(entries, format, destinationDir, fileName)
+    .then((r) => {
+      const d = unwrap(r);
+      return { output: d.output, entryCount: d.entryCount ?? 0 };
+    });
+}

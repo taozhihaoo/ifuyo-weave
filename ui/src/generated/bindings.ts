@@ -148,6 +148,13 @@ export const commands = {
 	utilitiesRegexCapabilities: () => __TAURI_INVOKE<RegexCapabilityDto[]>("utilities_regex_capabilities"),
 	utilitiesColorConvert: (input: ColorRequestDto) => typedError<ColorResultDto, IpcError>(__TAURI_INVOKE("utilities_color_convert", { input })),
 	utilitiesColorContrast: (hexA: string, hexB: string) => typedError<number | null, IpcError>(__TAURI_INVOKE("utilities_color_contrast", { hexA, hexB })),
+	/**  文件校验和（同步命令——校验和为流式快速计算；任务化列下批）。 */
+	utilitiesChecksumFile: (path: string, algorithmId: string) => typedError<FileChecksumEntryDto, IpcError>(__TAURI_INVOKE("utilities_checksum_file", { path, algorithmId })),
+	/**
+	 *  报告导出（§93/§144/§146-§148）：TXT/CSV/JSON 统一经 M2 atomic_write
+	 *  + History 创建型事务（撤销 = 删除，stat 守卫）。禁止 UI 层直接写盘。
+	 */
+	utilitiesExportReport: (entries: FileChecksumEntryDto[], format: string, destinationDir: string, fileName: string) => typedError<FileExportResultDto, IpcError>(__TAURI_INVOKE("utilities_export_report", { entries, format, destinationDir, fileName })),
 };
 
 /* Types */
@@ -557,6 +564,20 @@ export type Field<T> = { state: "known"; value: T } |
 { state: "unavailable" } | 
 /**  近似值（如 word count 非精确 §34）。 */
 { state: "estimated"; value: T };
+
+export type FileChecksumEntryDto = {
+	path: string,
+	algorithm: string,
+	digestHex: string,
+	bytesProcessed: number | null,
+	status: string,
+};
+
+export type FileExportResultDto = {
+	/**  写出文件路径（M2 atomic_write + History 创建型事务，可撤销）。 */
+	output: string,
+	entryCount: number | null,
+};
 
 export type FileInspectionDto = {
 	status: string,

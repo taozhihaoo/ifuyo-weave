@@ -475,5 +475,9 @@
   "utilities.regex.cap.unsupported": "Unsupported",
   "utilities.color.input": "HEX color",
   "utilities.color.contrastWhite": "Contrast on white",
-  "utilities.color.contrastBlack": "Contrast on black"
+  "utilities.color.contrastBlack": "Contrast on black",
+  "utilities.fileChecksum.title": "File checksum",
+  "utilities.fileChecksum.path": "File path",
+  "utilities.fileChecksum.export": "Export report",
+  "documents.exportFormat": "Export format"
 }

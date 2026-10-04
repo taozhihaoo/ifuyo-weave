@@ -1,10 +1,13 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useT } from "../../i18n";
 import {
   base64Decode,
   base64Encode,
+  checksumFile,
   checksumText,
   colorConvert,
+  exportReport,
   hashAlgorithms,
   hashText,
   regexCapabilities,
@@ -22,6 +25,7 @@ import {
   type RegexCapabilityDto,
   type RegexMatchDto,
   type TimestampConversionDto,
+  type FileChecksumEntry,
   type UrlPartDto,
   type UuidInfoDto,
 } from "../../lib/utilities";
@@ -204,6 +208,7 @@ function HashTool() {
           {result}
         </div>
       ) : null}
+      <FileChecksumSub onDone={() => undefined} />
       {matrix.length > 0 ? (
         <details>
           <summary style={{ fontSize: "var(--typography-size-sm)" }}>{t("utilities.hash.matrix")}</summary>
@@ -780,6 +785,126 @@ function ColorTool() {
             {t("utilities.color.contrastWhite")}: {result.contrastOnWhite.toFixed(2)} ·{" "}
             {t("utilities.color.contrastBlack")}: {result.contrastOnBlack.toFixed(2)}
           </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** M9（下）：文件 Checksum + 报告导出（§131/§140/§144-§148）。
+ * 路径手动输入/打开对话框；导出经 M2 atomic_write + History。 */
+function FileChecksumSub({ onDone }: { onDone: () => void }) {
+  const t = useT();
+  const [path, setPath] = useState("");
+  const [algorithm, setAlgorithm] = useState("crc32");
+  const [entry, setEntry] = useState<FileChecksumEntry | null>(null);
+  const [exportFmt, setExportFmt] = useState("csv");
+  const [destDir, setDestDir] = useState("");
+  const [exportOut, setExportOut] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = (): void => {
+    setBusy(true);
+    setError(null);
+    setEntry(null);
+    checksumFile(path, algorithm)
+      .then((e) => {
+        setEntry(e);
+        onDone();
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const openFile = async (): Promise<void> => {
+    try {
+      const selected = await openDialog({ multiple: false, directory: false });
+      if (typeof selected === "string" && selected) {
+        setPath(selected);
+      }
+    } catch {
+      // 对话框取消不视为错误
+    }
+  };
+
+  const doExport = (): void => {
+    if (!entry) {
+      return;
+    }
+    setError(null);
+    setExportOut(null);
+    const name =
+      "checksum-report." + (exportFmt === "json" ? "json" : exportFmt === "csv" ? "csv" : "txt");
+    exportReport([entry], exportFmt, destDir, name)
+      .then((r) => {
+        setExportOut(r.output);
+        onDone();
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}>
+      <h4 style={{ margin: 0 }}>{t("utilities.fileChecksum.title")}</h4>
+      <div style={rowStyle}>
+        <input
+          aria-label={t("utilities.fileChecksum.path")}
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder="C:\path	oile"
+          style={{ ...boxStyle, flex: 1, minWidth: "16em", fontFamily: "var(--typography-mono-family)" }}
+        />
+        <button type="button" onClick={() => void openFile()} style={boxStyle}>
+          {t("documents.open")}
+        </button>
+        <select
+          aria-label={t("utilities.checksum.algorithm")}
+          value={algorithm}
+          onChange={(e) => setAlgorithm(e.target.value)}
+          style={boxStyle}
+        >
+          <option value="crc32">CRC-32/ISO-HDLC</option>
+          <option value="crc32c">CRC-32C</option>
+          <option value="adler32">Adler-32</option>
+        </select>
+        <button type="button" disabled={busy || !path} onClick={run} style={boxStyle}>
+          {t("utilities.run")}
+        </button>
+      </div>
+      <ErrorLine error={error} />
+      {entry ? (
+        <div role="status" style={{ ...boxStyle, ...cellStyle }}>
+          {entry.digestHex} · {entry.algorithm} · {entry.bytesProcessed}B
+        </div>
+      ) : null}
+      {entry ? (
+        <div style={rowStyle}>
+          <select aria-label={t("documents.exportFormat")} value={exportFmt} onChange={(e) => setExportFmt(e.target.value)} style={boxStyle}>
+            <option value="txt">TXT</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <input
+            aria-label={t("documents.destDir")}
+            value={destDir}
+            onChange={(e) => setDestDir(e.target.value)}
+            placeholder="C:\path	o\output"
+            style={{ ...boxStyle, flex: 1, minWidth: "14em" }}
+          />
+          <button
+            type="button"
+            disabled={!destDir}
+            onClick={doExport}
+            style={boxStyle}
+          >
+            {t("utilities.fileChecksum.export")}
+          </button>
+        </div>
+      ) : null}
+      {exportOut ? (
+        <div role="status" style={{ fontSize: "var(--typography-size-sm)" }}>
+          {t("documents.result")}: {exportOut}
         </div>
       ) : null}
     </div>
