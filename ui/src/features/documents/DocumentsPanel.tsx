@@ -14,6 +14,8 @@ import {
   type PdfOperationResult,
 } from "../../lib/documents";
 
+const FORCE_LINE_SEP = String.fromCharCode(10);
+
 const boxStyle: CSSProperties = {
   padding: "var(--spacing-sm)",
   borderRadius: "var(--radius-sm)",
@@ -24,15 +26,6 @@ const rowStyle: CSSProperties = {
   gap: "var(--spacing-sm)",
   alignItems: "center",
   flexWrap: "wrap",
-};
-const areaStyle: CSSProperties = {
-  fontFamily: "var(--typography-mono-family)",
-  fontSize: "var(--typography-size-sm)",
-  padding: "var(--spacing-sm)",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid var(--color-border)",
-  width: "100%",
-  boxSizing: "border-box",
 };
 const tableStyle: CSSProperties = {
   width: "100%",
@@ -49,6 +42,7 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mergeInputs, setMergeInputs] = useState("");
+  const [mergeDraft, setMergeDraft] = useState("");
   const [mergePreview, setMergePreview] = useState<PdfMergePlan | null>(null);
   const [destDir, setDestDir] = useState("");
   const [ranges, setRanges] = useState("");
@@ -149,7 +143,11 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
         </div>
       ) : null}
 
-      {facts ? <FactsView facts={facts} /> : null}
+      {facts ? <FactsView facts={facts} /> : (
+        <div style={{ ...boxStyle, fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+          {t("documents.emptyNoDoc")}
+        </div>
+      )}
 
       {isPdf ? (
         <>
@@ -207,26 +205,94 @@ export function DocumentsPanel({ onOperationDone }: { onOperationDone: () => voi
           </div>
 
           <h4 style={{ margin: 0 }}>{t("documents.merge")}</h4>
-          <textarea
-            aria-label={t("documents.mergeInputs")}
-            value={mergeInputs}
-            onChange={(e) => setMergeInputs(e.target.value)}
-            rows={4}
-            placeholder={t("documents.inputsHint")}
-            style={areaStyle}
-          />
+          {mergeList.length === 0 ? (
+            <div style={{ ...boxStyle, fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+              {t("documents.emptyMerge")}
+            </div>
+          ) : null}
+          <ol style={{ margin: 0, paddingLeft: "1.2em", display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+            {mergeList.map((input, i) => {
+              const duplicate = mergeList.indexOf(input) !== i;
+              return (
+                <li key={`${input}-${i}`} style={{ fontSize: "var(--typography-size-sm)" }}>
+                  <span style={{ fontFamily: "var(--typography-mono-family)" }}>{input}</span>
+                  {duplicate ? (
+                    <span role="alert" style={{ color: "var(--color-danger)" }}> · {t("documents.duplicate")}</span>
+                  ) : null}
+                  {" "}
+                  <button
+                    type="button"
+                    aria-label={t("documents.moveUp")}
+                    disabled={i === 0}
+                    onClick={() => {
+                      const next = [...mergeList];
+                      const removed = next.splice(i - 1, 1)[0];
+                      if (removed !== undefined) {
+                        next.splice(i, 0, removed);
+                      }
+                      setMergeInputs(next.join(FORCE_LINE_SEP));
+                    }}
+                    style={boxStyle}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("documents.moveDown")}
+                    disabled={i === mergeList.length - 1}
+                    onClick={() => {
+                      const next = [...mergeList];
+                      const removed = next.splice(i + 1, 1)[0];
+                      if (removed !== undefined) {
+                        next.splice(i, 0, removed);
+                      }
+                      setMergeInputs(next.join(FORCE_LINE_SEP));
+                    }}
+                    style={boxStyle}
+                  >
+                    ↓
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <div style={rowStyle}>
+            <input
+              aria-label={t("documents.mergeInputs")}
+              value={mergeDraft}
+              onChange={(e) => setMergeDraft(e.target.value)}
+              placeholder={t("documents.inputsHint")}
+              style={{ ...boxStyle, flex: 1, minWidth: "16em", fontFamily: "var(--typography-mono-family)" }}
+            />
+            <button
+              type="button"
+              disabled={mergeDraft.length === 0}
+              onClick={() => {
+                setMergeInputs([...mergeList, mergeDraft.trim()].join(FORCE_LINE_SEP));
+                setMergeDraft("");
+              }}
+              style={boxStyle}
+            >
+              {t("documents.addInput")}
+            </button>
+          </div>
           <div style={rowStyle}>
             <button type="button" disabled={mergeList.length < 2} onClick={() => void doMergePreview()} style={boxStyle}>
               {t("documents.mergePreview")}
             </button>
             <button
               type="button"
-              disabled={busy || mergeList.length < 2}
+              disabled={busy || mergeList.length < 2 || new Set(mergeList).size !== mergeList.length}
               onClick={() => void runPdf(() => pdfMergeExecute(mergeList, destDir))}
               style={boxStyle}
             >
               {t("documents.mergeExecute")}
             </button>
+            {new Set(mergeList).size !== mergeList.length ? (
+              <span role="alert" style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-danger)" }}>
+                {t("documents.dupBlocked")}
+              </span>
+            ) : null}
           </div>
           {mergePreview ? (
             <div role="status" style={{ fontSize: "var(--typography-size-sm)" }}>
