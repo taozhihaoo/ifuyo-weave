@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getJob: vi.fn(),
   cancelJob: vi.fn(),
   listTools: vi.fn(),
+  getHistory: vi.fn(),
 }));
 
 vi.mock("../generated/bindings", () => ({ commands: mocks }));
@@ -36,6 +37,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   clearCommands();
   registerBuiltinCommands();
+  mocks.getHistory.mockResolvedValue({ status: "ok", data: [] });
+  mocks.getAppConfig.mockResolvedValue({
+    status: "ok",
+    data: { version: 1, language: "zh-CN", theme: "system", favorites: [] },
+  });
   useAppStore.setState({
     locale: "zh-CN",
     theme: "system",

@@ -49,8 +49,13 @@ function App() {
     hashJob,
     hashStatus,
     paletteOpen,
+    favorites,
+    toggleFavorite,
   } = useAppStore();
   const [dragOver, setDragOver] = useState(false);
+  const [recentHistory, setRecentHistory] = useState<
+    { operationId: string; kind: string; summary: string; status: string; timestampMs: number | null }[]
+  >([]);
   const [view, setView] = useState<
     | "tools"
     | "rename"
@@ -228,6 +233,37 @@ function App() {
       (window as { __weaveDev?: unknown }).__weaveDev = { dispatch: dispatchPath };
     }
   });
+
+  // M11 §43/§45：Recent = M2 History 最新条目（真实数据，非前端 fake）
+  useEffect(() => {
+    if (view !== "tools") {
+      return;
+    }
+    let cancelled = false;
+    void commands
+      .getHistory(8)
+      .then((r) => {
+        if (r.status === "ok" && !cancelled) {
+          setRecentHistory(
+            r.data.map((e) => ({
+              operationId: e.operationId,
+              kind: e.kind,
+              summary: e.summary,
+              status: e.status,
+              timestampMs: e.timestampMs,
+            })),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRecentHistory([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, historyRefresh]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -560,6 +596,76 @@ function App() {
         >
           {t("drop.hint")}
         </section>
+      ) : null}
+
+      {view === "tools" ? (
+        <>
+          {/* M11 §34/§42：首页收藏（引用而非第二套 Registry） */}
+          <section aria-label={t("favorites.title")} style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+            <strong style={{ fontSize: "var(--typography-size-sm)" }}>{t("favorites.title")}</strong>
+            {favorites.length === 0 ? (
+              <div style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+                {t("favorites.empty")}
+              </div>
+            ) : (
+              favorites.map((f) => (
+                <div key={`${f.kind}:${f.id}`} style={{ display: 'flex', gap: 'var(--spacing-xs)', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (f.kind === "view") {
+                        setView(f.id as typeof view);
+                      } else {
+                        setView("workflow");
+                      }
+                    }}
+                    style={buttonStyle}
+                  >
+                    {f.kind === "workflow"
+                      ? t("favorites.workflowPrefix")
+                      : t(`nav.${f.id}`, { defaultValue: f.id })}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("favorites.remove")}
+                    onClick={() => {
+                      toggleFavorite(f);
+                      void import("../lib/bootstrap").then((m) => m.persistFavorites());
+                    }}
+                    style={buttonStyle}
+                  >
+                    {t("favorites.remove")}
+                  </button>
+                </div>
+              ))
+            )}
+          </section>
+
+          {/* M11 §43/§45：Recent Operations（真实 M2 History） */}
+          <section aria-label={t("recent.title")} style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+            <strong style={{ fontSize: "var(--typography-size-sm)" }}>{t("recent.title")}</strong>
+            {recentHistory.length === 0 ? (
+              <div style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+                {t("recent.empty")}
+              </div>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: "1.2em", fontSize: "var(--typography-size-sm)" }}>
+                {recentHistory.map((r) => (
+                  <li key={r.operationId}>
+                    {r.summary} · <span style={{ color: "var(--color-text-muted)" }}>{r.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={() => setView("history")}
+              style={{ ...buttonStyle, alignSelf: "flex-start", fontSize: "var(--typography-size-sm)" }}
+            >
+              {t("recent.openHistory")}
+            </button>
+          </section>
+        </>
       ) : null}
 
       {view === "tools" && inspectError ? (

@@ -516,5 +516,17 @@
   "workflow.previewSummary": "输入 {input} · 成功 {success} · 失败 {failed} · 跳过 {skipped}",
   "workflow.stepCount": "{count} 步骤",
   "workflow.config.extensions": "扩展名（逗号分隔）",
-  "workflow.config.degrees": "旋转角度"
+  "workflow.config.degrees": "旋转角度",
+  "favorites.title": "收藏",
+  "favorites.empty": "还没有收藏——用命令面板（Ctrl+K）或在工具页添加",
+  "favorites.remove": "移除收藏",
+  "favorites.workflowPrefix": "工作流：",
+  "recent.title": "最近操作",
+  "recent.empty": "暂无操作记录——从工具页开始使用",
+  "recent.openHistory": "打开历史",
+  "palette.title": "命令面板",
+  "palette.placeholder": "搜索命令…（↑↓ 选择，Enter 执行，Esc 关闭）",
+  "palette.noResults": "没有匹配的命令",
+  "palette.clearSearch": "清除搜索",
+  "palette.close": "关闭"
 }

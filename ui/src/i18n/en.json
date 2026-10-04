@@ -516,5 +516,17 @@
   "workflow.previewSummary": "input {input} · success {success} · failed {failed} · skipped {skipped}",
   "workflow.stepCount": "{count} steps",
   "workflow.config.extensions": "Extensions (comma separated)",
-  "workflow.config.degrees": "Rotation degrees"
+  "workflow.config.degrees": "Rotation degrees",
+  "favorites.title": "Favorites",
+  "favorites.empty": "No favorites yet — use the command palette (Ctrl+K) or add from tool pages",
+  "favorites.remove": "Remove favorite",
+  "favorites.workflowPrefix": "Workflow: ",
+  "recent.title": "Recent operations",
+  "recent.empty": "No operations yet — start from a tool page",
+  "recent.openHistory": "Open history",
+  "palette.title": "Command palette",
+  "palette.placeholder": "Search commands… (↑↓ select, Enter run, Esc close)",
+  "palette.noResults": "No matching commands",
+  "palette.clearSearch": "Clear search",
+  "palette.close": "Close"
 }
