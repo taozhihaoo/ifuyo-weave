@@ -173,6 +173,9 @@ pub struct PdfMergePlan {
     /// 每输入页数（与 inputs 同序）。
     pub input_page_counts: Vec<f64>,
     pub output_page_count: f64,
+    /// §69 输入快照（size/mtime ms）——Execute 前重校验（§141 TOCTOU）。
+    pub input_sizes: Vec<f64>,
+    pub input_modified_ms: Vec<f64>,
 }
 
 /// Merge 预览数据（§19：不能只显示 "Ready to merge"）。
@@ -200,10 +203,26 @@ pub fn plan_merge(
         counts.push(facts.page_count);
     }
     let total: f64 = counts.iter().map(|c| *c as f64).sum();
+    let mut input_sizes = Vec::with_capacity(inputs.len());
+    let mut input_modified_ms = Vec::with_capacity(inputs.len());
+    for path in inputs {
+        let meta = std::fs::metadata(path)
+            .map_err(|e| PdfError::new("pdf.sourceMissing", format!("{}: {e}", path.display())))?;
+        input_sizes.push(meta.len() as f64);
+        input_modified_ms.push(
+            meta.modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as f64)
+                .unwrap_or(0.0),
+        );
+    }
     Ok(PdfMergePlan {
         inputs: inputs.to_vec(),
         input_page_counts: counts.iter().map(|c| *c as f64).collect(),
         output_page_count: total,
+        input_sizes,
+        input_modified_ms,
     })
 }
 
@@ -214,6 +233,32 @@ pub fn execute_merge(
     output: &Path,
     limits: &DocumentResourceLimits,
 ) -> PdfResult<(u64, Vec<DocumentDiagnostic>)> {
+    // §141 TOCTOU：Preview 与 Execute 之间输入被改动 ⇒ 拒绝盲执行
+    for (index, path) in plan.inputs.iter().enumerate() {
+        let meta = std::fs::metadata(path).map_err(|e| {
+            PdfError::new("pdf.changedSincePlan", format!("{}: {e}", path.display()))
+        })?;
+        let size = meta.len() as f64;
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0);
+        if size != plan.input_sizes[index] || mtime != plan.input_modified_ms[index] {
+            return Err(PdfError::new(
+                "pdf.changedSincePlan",
+                format!(
+                    "input {} changed since plan (size {}→{}, mtime {}→{})",
+                    path.display(),
+                    plan.input_sizes[index],
+                    size,
+                    plan.input_modified_ms[index],
+                    mtime
+                ),
+            ));
+        }
+    }
     let mut docs = Vec::new();
     for path in &plan.inputs {
         docs.push(load(path, limits)?);
@@ -621,6 +666,35 @@ pub fn execute_rotate(
 /// 任何写出的 PDF 必须：exists / non-zero / parseable / 页数符合预期。
 /// 绝不以 "file exists" 为成功标准（§27）。
 pub fn write_and_validate(
+    doc: &mut Document,
+    output: &Path,
+    expected_pages: u64,
+    limits: &DocumentResourceLimits,
+) -> PdfResult<u64> {
+    // §178/§179 原子输出：先写同目录 temp（受控命名）→ 校验 → promote；
+    // 校验失败清理 temp，绝不留下"看似合法实则不完整"的最终产物。
+    let file_name = output
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "output.pdf".into());
+    let temp = output.with_file_name(format!(".{file_name}.weave-tmp-{}", std::process::id()));
+    let result = write_and_validate_inner(doc, &temp, expected_pages, limits);
+    match result {
+        Ok(pages) => {
+            std::fs::rename(&temp, output).map_err(|e| {
+                let _ = std::fs::remove_file(&temp);
+                PdfError::new("pdf.writeFailed", format!("promote failed: {e}"))
+            })?;
+            Ok(pages)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&temp);
+            Err(e)
+        }
+    }
+}
+
+fn write_and_validate_inner(
     doc: &mut Document,
     output: &Path,
     expected_pages: u64,
