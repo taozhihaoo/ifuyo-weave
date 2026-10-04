@@ -53,6 +53,8 @@ pub struct JobResult {
     pub cancelled: u64,
     pub input_bytes: u64,
     pub output_bytes: u64,
+    /// true = Preview（§21：无副作用模拟）；false = Execute。
+    pub preview: bool,
 }
 
 /// 阶段错误（§51 分类）。
@@ -83,7 +85,12 @@ fn stage_name(stage: &StageSpec) -> String {
 }
 
 /// 单阶段执行（§13-§16）。Ok(Some(payload))=前进；Ok(None)=Filter 拒绝。
-fn run_stage(stage: &StageSpec, ctx: &mut ItemContext) -> Result<Option<ItemPayload>, StageError> {
+/// `dry_run`（§21 Preview）：Export 只做碰撞检查，不落盘。
+fn run_stage(
+    stage: &StageSpec,
+    ctx: &mut ItemContext,
+    dry_run: bool,
+) -> Result<Option<ItemPayload>, StageError> {
     match stage {
         StageSpec::Source => {
             let bytes = std::fs::read(&ctx.source_path)
@@ -230,15 +237,20 @@ fn run_stage(stage: &StageSpec, ctx: &mut ItemContext) -> Result<Option<ItemPayl
                 .unwrap_or_else(|| "item".to_string());
             let out_path = destination_dir.join(format!("{stem}.{}", ctx.current_ext));
             if out_path.exists() && !overwrite {
+                // Preview 也报告碰撞——§22 Potential Failures
                 return Err(StageError::new(
                     "Collision",
                     format!("destination already exists: {}", out_path.display()),
                 ));
             }
-            std::fs::write(&out_path, &bytes)
-                .map_err(|e| StageError::new("Write", e.to_string()))?;
-            ctx.stage_log
-                .push(("export".into(), out_path.to_string_lossy().into_owned()));
+            if !dry_run {
+                std::fs::write(&out_path, &bytes)
+                    .map_err(|e| StageError::new("Write", e.to_string()))?;
+            }
+            ctx.stage_log.push((
+                if dry_run { "export:preview" } else { "export" }.into(),
+                out_path.to_string_lossy().into_owned(),
+            ));
             Ok(Some(ItemPayload::Bytes(bytes)))
         }
     }
@@ -276,7 +288,28 @@ fn batch_text_op_to_kind(
 /// - §33 取消：未开始 ⇒ Cancelled；流水线中途 ⇒ 该条 Cancelled；
 /// - Filter 拒绝 ⇒ Skipped（§14 Rejected ≠ Failed）；
 /// - Export 产物路径记入 ItemResult.output（§70 实际产物）。
-pub fn execute_plan(plan: &JobPlan, cancel: &CancellationToken) -> JobResult {
+pub fn execute_plan(
+    plan: &JobPlan,
+    cancel: &CancellationToken,
+    on_progress: Option<&mut dyn FnMut(u64)>,
+) -> JobResult {
+    run_job(plan, cancel, false, on_progress)
+}
+
+/// Preview（§20-§23）：与 Execute 同一引擎、同一 JobPlan，仅 Export 不落盘
+/// （§21 No destructive mutation）；碰撞仍作为潜在失败上报（§22）。
+pub fn preview_plan(plan: &JobPlan) -> JobResult {
+    let mut result = run_job(plan, &CancellationToken::new(), true, None);
+    result.preview = true;
+    result
+}
+
+fn run_job(
+    plan: &JobPlan,
+    cancel: &CancellationToken,
+    dry_run: bool,
+    mut on_progress: Option<&mut dyn FnMut(u64)>,
+) -> JobResult {
     let mut result = JobResult {
         total: plan.input_snapshot.len() as u64,
         ..JobResult::default()
@@ -324,7 +357,7 @@ pub fn execute_plan(plan: &JobPlan, cancel: &CancellationToken) -> JobResult {
                 });
                 break;
             }
-            match run_stage(stage, &mut ctx) {
+            match run_stage(stage, &mut ctx, dry_run) {
                 Ok(Some(payload)) => {
                     ctx.payload = payload;
                     stage_results.push(StageResult {
@@ -386,11 +419,16 @@ pub fn execute_plan(plan: &JobPlan, cancel: &CancellationToken) -> JobResult {
             None
         };
 
-        let output_bytes = output_path
-            .as_ref()
-            .and_then(|p| std::fs::metadata(p).ok())
-            .map(|m| m.len())
-            .unwrap_or(0);
+        // §70：产物字节——Execute 读落盘文件；Preview（未落盘）取内存负载长度
+        let output_bytes = if dry_run {
+            ctx.payload.as_bytes().map_or(0, |b| b.len() as u64)
+        } else {
+            output_path
+                .as_ref()
+                .and_then(|p| std::fs::metadata(p).ok())
+                .map(|m| m.len())
+                .unwrap_or(0)
+        };
 
         match status {
             ItemStatus::Success => result.succeeded += 1,
@@ -408,6 +446,10 @@ pub fn execute_plan(plan: &JobPlan, cancel: &CancellationToken) -> JobResult {
             input_bytes,
             output_bytes,
         });
+        // §30 诚实进度：per-item 已完成计数，不伪造百分比
+        if let Some(cb) = on_progress.as_mut() {
+            cb(result.items.len() as u64);
+        }
     }
     result
 }

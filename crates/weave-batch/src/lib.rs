@@ -13,7 +13,9 @@ pub mod state;
 #[cfg(test)]
 mod engine_tests;
 
-pub use engine::{ItemResult, ItemStatus, JobResult, StageError, StageResult, execute_plan};
+pub use engine::{
+    ItemResult, ItemStatus, JobResult, StageError, StageResult, execute_plan, preview_plan,
+};
 pub use item::{ItemContext, ItemPayload};
 pub use plan::{
     InputSnapshotEntry, JobPlan, PayloadType, Pipeline, StageSpec, TextOpSpec, build_job_plan,

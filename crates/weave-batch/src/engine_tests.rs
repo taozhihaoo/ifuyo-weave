@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    ItemStatus, Pipeline, StageSpec, TextOpSpec, build_job_plan, execute_plan, revalidate_snapshot,
-    snapshot_inputs,
+    ItemStatus, Pipeline, StageSpec, TextOpSpec, build_job_plan, execute_plan, preview_plan,
+    revalidate_snapshot, snapshot_inputs,
 };
 
 use weave_core::prelude::CancellationToken;
@@ -99,7 +99,7 @@ fn text_pipeline_executes_end_to_end() {
     }
     let plan =
         build_job_plan(vec![src.clone()], pipeline, dest.clone(), true, false).expect("plan");
-    let result = execute_plan(&plan, &CancellationToken::new());
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
 
     assert_eq!((result.succeeded, result.failed), (1, 0), "{result:?}");
     let out_file = dest.join("in.txt");
@@ -135,7 +135,7 @@ fn filter_rejection_is_skipped_not_failed() {
         ],
     };
     let plan = build_job_plan(vec![a, b], pipeline, dest.clone(), true, false).expect("plan");
-    let result = execute_plan(&plan, &CancellationToken::new());
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
     assert_eq!((result.succeeded, result.skipped), (1, 1));
 }
 
@@ -169,7 +169,7 @@ fn per_item_failure_isolation() {
     )
     .expect("plan");
     std::fs::remove_file(&doomed).expect("remove");
-    let result = execute_plan(&plan, &CancellationToken::new());
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
     assert_eq!((result.succeeded, result.failed), (1, 1));
     let failed_item = result
         .items
@@ -210,7 +210,7 @@ fn cancellation_marks_unstarted_items() {
     let plan = build_job_plan(inputs, pipeline, dest, true, false).expect("plan");
     let cancel = CancellationToken::new();
     cancel.cancel();
-    let result = execute_plan(&plan, &cancel);
+    let result = execute_plan(&plan, &cancel, None);
     assert_eq!(result.cancelled, 3);
     assert_eq!(result.succeeded, 0);
 }
@@ -237,4 +237,53 @@ fn snapshot_is_deterministically_sorted_and_revalidates() {
     std::fs::remove_file(&a).expect("remove");
     let err = revalidate_snapshot(&snap2).expect_err("missing");
     assert!(err.contains("FileMissing"));
+}
+
+#[test]
+fn preview_runs_same_engine_without_writing() {
+    // §20-§23：Preview 与 Execute 同引擎；§21 无副作用（不落盘）；
+    // 碰撞仍上报（§22 Potential Failures）。
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let src = dir.path().join("in.txt");
+    write_text(&src, "  hello  ");
+
+    let pipeline = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::TextTransform {
+                operations: vec![TextOpSpec::TrimLines],
+            },
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: false,
+            },
+        ],
+    };
+    let plan = build_job_plan(vec![src], pipeline, dest.clone(), true, false).expect("plan");
+    let pv = preview_plan(&plan);
+    assert!(pv.preview);
+    assert_eq!((pv.succeeded, pv.failed, pv.skipped), (1, 0, 0), "{pv:?}");
+    assert_eq!(pv.items[0].output_bytes, 5, "hello 在内存中 5 字节");
+    assert!(!dest.join("in.txt").exists(), "Preview 不得写盘（§21）");
+
+    // Execute 用同一 plan 才真正落盘
+    let ex = execute_plan(&plan, &CancellationToken::new(), None);
+    assert_eq!(ex.succeeded, 1);
+    assert_eq!(
+        std::fs::read_to_string(dest.join("in.txt")).expect("read"),
+        "hello"
+    );
+
+    // 碰撞：Preview 也报 Failed（Collision）
+    let pv2 = preview_plan(&plan);
+    assert_eq!(pv2.failed, 1);
+    assert!(
+        pv2.items[0]
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("Collision:")
+    );
 }
