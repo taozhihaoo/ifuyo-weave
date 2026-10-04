@@ -300,9 +300,12 @@ fn perf_text_batch_1000() {
     let inputs: Vec<PathBuf> = (0..1000)
         .map(|i| {
             let p = dir.path().join(format!("f{i:04}.txt"));
-            write_text(&p, "  line one  
+            write_text(
+                &p,
+                "  line one  
   line two  
-");
+",
+            );
             p
         })
         .collect();
