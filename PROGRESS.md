@@ -836,3 +836,12 @@ Known Limitations:
 - Workflow favorite 点击 = 跳转 workflow 页（Library 打开具体定义），
   未做 deep-open（v1 简化）
 - 全局热键（§56）、全文内容搜索（§59）明确不做
+- tauri build: PASS（4.67 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — Ctrl+K 打开 palette（焦点在
+  搜索框）→ 中文搜索“重命名”命中 → Enter 执行跳转 + palette 关闭（§21/
+  §19）→ Escape 关闭（§21）→ 首页 Recent 区显示真实 History 条目（§43）；
+  console 零错误
+- **冒烟抓出 P0 并修复**：App 重挂载（StrictMode 双调用/HMR）在 effect
+  里重复 registerCommand("navigation.*") ⇒ duplicate id throw ⇒ 整树
+  卸载白屏（body 仅 15 字符）；修复 = upsertCommand 幂等注册（App 重挂
+  场景），测试仍用 registerCommand 保留 duplicate 检测（§17/§54）
