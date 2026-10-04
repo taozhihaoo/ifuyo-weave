@@ -756,3 +756,8 @@ Known Limitations:
 - Workflow 参数绑定（§22-§23 模型留位）执行侧未接；Named tz 工具步骤
   无；导入后自动运行被禁止（§122 需显式 Run）
 - workflow run 复用 BatchOutcome 呈现（workflow 专属 run 视图列（下））
+- tauri build: PASS（4.68 MiB NSIS）
+- Real smoke（CDP 驱动 workflow_* IPC 全链路）: PASS — workflow_validate
+  （[] issues）→ save（workflows/<id>.json 落盘）→ list 含条目 → preview
+  （2 inputs 全 succeed，dry-run 未写盘）→ run（JobTracker 后台，2
+  succeeded）→ 产物 /Rotate 90 元数据断言
