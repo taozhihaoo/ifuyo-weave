@@ -536,3 +536,25 @@ printpdf（生成向）、pdf-writer（生成向）、calamine（xlsx-only）。
   不产生半成品 final。
 - **版本记录（§184）**：lopdf 0.45.0 / zip 8.6.0 / quick-xml 0.38.x
   （Cargo.lock 实际解析）。
+
+## D62 — M9 工具域实现与复用边界（§5-§9/§16-§23）
+
+- **新 crate = weave-utilities**（workspace 无既有 utilities crate ⇒ REUSE
+  无对象 §16）；分层 = UI → utilities_service（IPC）→ weave-utilities 域
+  （§17）；核心语义全在 Rust，React 只做 Input/Presentation/Copy（§18）。
+- **复用不重建（§5-§9）**：文件哈希沿用 M1 流式 hash_file（JobTracker
+  取消/进度），M9 只加文本哈希工具层；GB 族编码转 Base64 输入 → 指向 M4
+  管线（不复制编码层）；正则替换与 M4 TransformKind 同 engine（regex
+  crate，§66/§71）；批量经 M7（§95 无第二引擎）；无 History/Undo（§91
+  纯转换；文件产物才进 M2 事务——本版无文件输出）。
+- **算法选型（§25/§33/§45）**：Hash = MD5/SHA-1/SHA-224/256/384/512
+  （RustCrypto digest）+ BLAKE3，弱算法 Warning 不禁用（§31）；Checksum
+  = CRC-32/ISO-HDLC + CRC-32C（crc crate catalog 标准参数 §35）+ Adler-32
+  手写（RFC 1950，zlib 交叉验证向量 §36）；UUID = v4/v7（uuid crate，
+  getrandom CSPRNG §46/§47，batch ≤10,000 §48）。
+- **诚实能力声明**：正则 lookaround/backref = Unsupported（§67/§68 不
+  模拟）；时间戳 Named Timezone/DST = NOT SUPPORTED（§55-§56 如实；
+  UTC/Fixed Offset/Local 支持）；颜色 = sRGB 基线（§77），HWB W+B≥100%
+  灰阶归一（§83）。
+- **依赖版本（§184）**：md-5/sha1/sha2 0.10、blake3 1.x、crc 3.x、
+  uuid 1.x、time 0.3.x、url 2.x、percent-encoding 2.x、regex 1.x。

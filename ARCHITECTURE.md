@@ -191,3 +191,13 @@ record_creation_transaction 入 History（创建型撤销 = stat 守卫删除）
 UI 不解析文档（§3/§200 parser leakage 禁止）。资源限额集中
 DocumentResourceLimits（§100）。隐私：无网络/无内容快照/日志只记
 operation id 与计数（§164-§166）。
+
+## Utilities 边界（M9）
+
+域 = weave-utilities（hash/checksum/base64/uuid_tool/timestamp/url_tool/
+regex_tool/color —— 每工具一模块，无 God Manager §198）。分层 =
+UI → utilities_service（IPC 映射 + UtilityError→IpcError）→ weave-utilities
+→ 既有底层（M1 文件哈希流式、M4 编码层、regex engine）（§17）。无
+History/Undo（纯转换 §91）；无文件输出（本版）；批量经 M7 既有能力
+（§95）。React 无核心语义（§18）。隐私：全部本地计算，复制内容不进
+日志/遥测（§90）。

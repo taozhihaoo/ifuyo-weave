@@ -30,6 +30,14 @@
 | yaml-rust2 | YAML 真解析（MIT/Apache-2.0，维护中替代 archived serde_yaml，M4/D43） | MIT OR Apache-2.0 |
 | lopdf 0.45.0 | PDF parse/操作（inspect/merge/split/reorder/rotate，M8/D59） | MIT |
 | zip 8.6.0（deflate） | OOXML 容器读取 + §87 炸弹守卫（MIT，M8/D59） | MIT |
+| md-5 / sha1 / sha2 0.10 | Hash 工具摘要算法（RustCrypto digest 统一 API，M9/D62） | MIT OR Apache-2.0 |
+| blake3 1.x | BLAKE3 摘要（M9/D62） | CC0-1.0 OR Apache-2.0 OR MIT |
+| crc 3.x | CRC-32/ISO-HDLC + CRC-32C（catalog 标准参数，M9/D62） | MIT OR Apache-2.0 |
+| uuid 1.x（v4+v7） | UUID 生成（getrandom CSPRNG §46/§47，M9/D62） | MIT OR Apache-2.0 |
+| time 0.3 | Timestamp RFC3339/偏移（M9/D62） | MIT OR Apache-2.0 |
+| url 2 / percent-encoding 2 | URL 解析/百分号编码（WHATWG/RFC 3986，M9/D62） | MIT OR Apache-2.0 |
+| regex 1.x | Regex Tester 唯一引擎（与 M4 同源线性引擎 §66/§73，M9/D62） | MIT OR Apache-2.0 |
+
 
 | regex | 重命名规则正则（M2/D28） | MIT OR Apache-2.0 |
 | chrono | 日期重命名规则（M2/D28） | MIT OR Apache-2.0 |

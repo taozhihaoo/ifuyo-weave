@@ -633,3 +633,44 @@ Known Limitations:
   plan——预览快照被丢弃，§141 TOCTOU 形同虚设；现 preview 缓存
   PdfMergePlan（plan_id），execute 消费缓存 plan（失败放回允许重试），
   UI 传 planId
+
+## M9 Utilities（上）
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-utilities crate（M9 §16 新建——workspace 无既有 utilities crate）：
+  hash（RustCrypto MD5/SHA-1/SHA-224/256/384/512 + BLAKE3；按实际编码
+  字节 §26-§27；弱算法 Warning §31；能力矩阵 §24）；checksum（§32-§36
+  CRC-32/ISO-HDLC + CRC-32C 标准参数 + Adler-32 手写，"123456789"/
+  "Wikipedia" golden 向量，zlib 交叉验证）；base64（§37-§43 Standard/
+  URL-safe × Padded/Unpadded、显式编码 §39、strict/lenient 解码 §40、
+  解码上限 §43）；uuid（§44-§50 v4/v7 CSPRNG、batch ≤10,000、四种格式、
+  validate/parse 版本/variant）；timestamp（§51-§58/§100-§101 显式单位、
+  auto-detect 标注、RFC3339→UTC 归一、Fixed Offset、Clock trait 注入）；
+  url（§59-§64 Component/Query 语义分离、strict/lenient 解码、Full
+  parse、UTF-8 percent 确定性）；regex（§65-§74 唯一 engine、能力矩阵
+  如实——lookaround/backref Unsupported、match 含行/列/组、资源上限、
+  线性引擎反回溯测试）；color（§75-§88 sRGB HEX/RGB/HSL/HSV/HWB strict
+  解析、round-trip 容差、WCAG 对比度）
+- 42 域测试（RFC 4648/RustCrypto/标准 CRC 向量 golden；round-trip；
+  边界/错误路径/确定性 §98/§102-§104）
+- IPC：utilities_service 17 命令（UtilityError→IpcError 映射 §22；DTO
+  f64 约定）；UI：Utilities 统一单入口 8 工具 tabs（§120/§121）+ Copy/
+  Copy All（§30/§89）+ 能力矩阵展示 + 空状态；i18n zh/en
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-utilities 42）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- 真窗口冒烟：见收口记录
+
+Known Limitations:
+
+- 文件哈希 UI 沿用 M1 Inspector（hash_file SHA-256 流式任务）——M9 页
+  只做文本哈希（§5/§28 复用，无第二文件引擎）
+- Named Timezone/DST NOT SUPPORTED（§55-§56 如实；UTC/Fixed Offset/Local
+  支持）；GB 族编码 Base64 输入指向 M4 管线（§39 复用 D38）
+- 文件 Export（§93）不在本批（文本工具 v1 = 剪贴板复制）；批量经 M1
+  hash job / M7 既有能力，M9 专用批量 UI 列（下）

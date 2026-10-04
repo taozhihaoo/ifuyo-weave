@@ -11,6 +11,11 @@ EN: Weave is a local-first desktop utility suite — a set of carefully crafted 
 - **Local-first** — 文件本地处理，默认不联网，无账号无上传
 - **Utility-first** — 首先是工具，不为视觉牺牲效率
 - **Batch-first** — 1 个文件和 10,000 个文件同等对待
+- **Utilities（M9）** — Hash（MD5/SHA-1/SHA-2 族/BLAKE3，弱算法提示）、
+  Checksum（CRC-32/CRC-32C/Adler-32）、Base64（标准/URL-safe、严格解码）、
+  UUID（v4/v7 生成+校验）、时间戳（多单位/RFC 3339/固定偏移）、URL
+  （Component/Query 语义分离+解析）、正则测试（线性引擎+诚实能力矩阵）、
+  颜色（HEX/RGB/HSL/HSV/HWB+对比度）——全部本地、确定性、结构化输出
 - **Documents（M8）** — 支持：PDF（Inspect/Merge/Split/Extract/Reorder/
   Rotate，输出经校验）与 DOCX/XLSX/PPTX（结构化 Inspect）；不支持：
   渲染预览、Office→PDF、加密文档解锁、Office 编辑。本地处理、无上传；
