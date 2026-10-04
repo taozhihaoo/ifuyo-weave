@@ -878,3 +878,34 @@ Known Limitations:
   light→dark，dark bg=#16181d 全局生效 + config 持久化 "theme":"dark"
   §222-§224）；Quick Drop 建议（drop png ⇒ 首页"建议工具：图片"按钮
   §25-§28）；console 零错误
+
+## M11 Polish（下）补充
+
+Status: COMPLETE
+
+Implemented（续）:
+
+- 视觉刷新（用户反馈：时尚柔和）：tokens 全套柔和色板（light 紫罗兰
+  accent + 冷灰蓝中性；dark 柔和深底）+ shadow sm/md/lg tokens +
+  focusRing 柔紫 + radius 增大；global.css 全组件统一（按钮/输入过渡、
+  hover accent、focus-visible ring、滚动条、表格行 hover、reduced-motion）；
+  App 居中 max-width 布局 + Home 卡片化（拖放区/收藏/最近操作）+
+  按钮 nowrap；milestone 标签 M11 Polish（此前滞留 M7）
+- **修复 P0 级视觉 bug**：applyTokens 数值 token 无单位——
+  spacing/radius/typography-size/control 尺寸曾全部以裸数字写入 CSS 变量
+  ⇒ 全应用 padding/margin/radius/font-size 实际为 0（界面简陋的根因）；
+  修复后全局 24px 内边距/圆角/字号真实生效
+- **修复 P0**：App 重挂载重复 registerCommand ⇒ duplicate id throw ⇒
+  整树卸载白屏（StrictMode/HMR）；upsertCommand 幂等注册
+- 冒烟（CDP 截图目检双主题 + 交互）：light 首页卡片化布局 ✓；dark
+  全局 #131419 ✓；Ctrl+K palette ✓；中文搜索命中 ✓；Enter 执行 ✓
+
+Quality:
+
+- Frontend gates: PASS（typecheck；lint；vitest 38 = 31+7 quickDrop）
+- Rust gates: PASS（fmt/clippy/test/deny；tauri build 4.67 MiB）
+
+Known Limitations:
+
+- shadow 层级目前仅用于 palette/home 卡片；各工具面板内嵌 boxStyle
+  仍为轻边框风（统一卡片组件列 M11 收尾或 M12）
