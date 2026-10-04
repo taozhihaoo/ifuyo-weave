@@ -761,3 +761,41 @@ Known Limitations:
   （[] issues）→ save（workflows/<id>.json 落盘）→ list 含条目 → preview
   （2 inputs 全 succeed，dry-run 未写盘）→ run（JobTracker 后台，2
   succeeded）→ 产物 /Rotate 90 元数据断言
+
+## M10 Workflow Composition（下）
+
+Status: COMPLETE
+
+Implemented:
+
+- Schema/Serialization 测试（§126/§128-§130/§238）：golden 稳定序列化、
+  双往返、version round-trip、unknown property 读容忍、wrong version/
+  unknown step type/missing property 拒绝、disabled step 稳定序列化
+- Registry 测试（§131）：唯一 id、resolves、schema 存在、无脚本工具
+- Compatibility 矩阵（§132）：Input→Tool/Filter→Tool/Tool→Tool/Tool→
+  Export/无 Input 全覆盖
+- 真实 E2E（§224/§226/§230-§233/§236-§237）：Input→Filter(pdf)→Rotate
+  →Export 真文件（内容标记/页字典 /Rotate 180 断言）；b.txt 被 filter
+  排除=skipped（§11）；Preview 无 mutation + Execute 同 plan（§230/§33）；
+  运行前取消 = 500 全 Cancelled 零产物（§232 真实状态）；invalid
+  workflow（shell.exec）不可编译执行（§233）；export→import→validate→
+  run 往返 + broken imports（empty/unknown version/unknown tool/
+  malformed json）全部拒绝（§236/§237）
+- Fuzz/Property（§127）：300 确定性种子随机 workflow parse+validate
+  无 panic
+- 性能基准（§241/§242 实测）：steps 1/10/30 × inputs 1/100/1000 —
+  validate µs 级、plan ≤22ms、preview ≤366ms（线性；100 步超 §75
+  max_steps=32 限额为 v1 边界，KNOWN LIMITATION）
+- 文档：PERF workflow 矩阵、PROGRESS M10（下）
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-workflow 10+12+7 测试）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- 真窗口冒烟：M10（上）收口已覆盖 workflow_* IPC 全链路（validate/save/
+  list/preview/run）
+
+Known Limitations:
+
+- max_steps=32（§75 v1 限额）——100 步工作流被 validation 拒绝
+- Named-tz/参数绑定/工作流专属 run 视图仍为（上）遗留限制（DEFERRED）

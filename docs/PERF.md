@@ -296,3 +296,20 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
   1.43 ms/doc 线性
 - 大规模 hash 文件基线：M1 hash job 既有（100 MiB ≈ 66 ms，PERF M1 节）
   ——M9 复用不重测（§5 复用决策）
+
+## M10 Workflow（下）— 2026-10-05
+
+- 复现：`cargo test -p weave-workflow --release -- --ignored --nocapture`
+  （e2e_tests::perf_workflow_matrix）；synthetic 1 页 PDF 输入 §132
+- 环境：Windows 11 (10.0.26200)，x64，release
+
+| steps | inputs | validate | plan | preview |
+| --- | --- | --- | --- | --- |
+| 1 | 1 | 10.4 µs | 53.7 µs | 247.9 µs |
+| 1 | 100 | 0.8 µs | 1.58 ms | 3.67 ms |
+| 1 | 1000 | 2.0 µs | 14.59 ms | 35.87 ms |
+| 10 | 1000 | 4.3 µs | 13.93 ms | 139.58 ms |
+| 30 | 1000 | 8.8 µs | 22.02 ms | 365.40 ms |
+
+- 结论：validate 与 steps 数线性（µs 级）；plan/preview 与输入规模线性
+  （1000 输入 ≤ 366ms，含快照 stat）
