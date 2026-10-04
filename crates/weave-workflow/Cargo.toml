@@ -9,11 +9,15 @@ description = "Workflow composition: linear pipeline definition, validation, com
 weave-core = { path = "../weave-core" }
 weave-batch = { path = "../weave-batch" }
 serde = { workspace = true, features = ["derive"] }
+specta = { version = "=2.0.0-rc.25", optional = true, features = ["derive", "serde_json"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
 lopdf = "0.45"
+
+[features]
+specta = ["dep:specta"]
 
 [lints]
 workspace = true

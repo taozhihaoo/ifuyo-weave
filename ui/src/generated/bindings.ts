@@ -155,6 +155,27 @@ export const commands = {
 	 *  + History 创建型事务（撤销 = 删除，stat 守卫）。禁止 UI 层直接写盘。
 	 */
 	utilitiesExportReport: (entries: FileChecksumEntryDto[], format: string, destinationDir: string, fileName: string) => typedError<FileExportResultDto, IpcError>(__TAURI_INVOKE("utilities_export_report", { entries, format, destinationDir, fileName })),
+	workflowValidate: (workflowJson: string) => typedError<ValidationIssueDto[], IpcError>(__TAURI_INVOKE("workflow_validate", { workflowJson })),
+	/**  保存（§120/§121：serialize → validate → M2 atomic save）。 */
+	workflowSave: (workflowJson: string) => typedError<string, IpcError>(__TAURI_INVOKE("workflow_save", { workflowJson })),
+	/**  Library 列表（§77：扫描目录读 header 字段；损坏文件跳过并如实计数）。 */
+	workflowList: () => typedError<WorkflowListItemDto[], IpcError>(__TAURI_INVOKE("workflow_list")),
+	/**  读取单个 Workflow 定义。 */
+	workflowGet: (id: string) => typedError<string, IpcError>(__TAURI_INVOKE("workflow_get", { id })),
+	/**  §45：Delete Workflow 只删除定义文件（不动文件/History §87）。 */
+	workflowDelete: (id: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("workflow_delete", { id })),
+	/**  §44 Duplicate：新 id（调用方生成/提供）、定义保持、名称可带 Copy。 */
+	workflowDuplicate: (id: string, newId: string, newName: string) => typedError<string, IpcError>(__TAURI_INVOKE("workflow_duplicate", { id, newId, newName })),
+	/**  §122 Import：Parse → Validate（不执行）→ 保存由调用方显式 workflow_save。 */
+	workflowImportJson: (json: string) => typedError<string, IpcError>(__TAURI_INVOKE("workflow_import_json", { json })),
+	/**  §123 Export：确定性 pretty JSON。 */
+	workflowExportJson: (id: string) => typedError<string, IpcError>(__TAURI_INVOKE("workflow_export_json", { id })),
+	/**
+	 *  §30-§33 Preview：compile → weave_batch::preview_plan（同引擎 dry-run）。
+	 *  inputs 由调用方提供（运行时参数，portable workflow §62）。
+	 */
+	workflowPreview: (workflowJson: string, inputs: string[]) => typedError<PreviewSummaryDto, IpcError>(__TAURI_INVOKE("workflow_preview", { workflowJson, inputs })),
+	workflowRun: (workflowJson: string, inputs: string[]) => typedError<WorkflowRunHandleDto, IpcError>(__TAURI_INVOKE("workflow_run", { workflowJson, inputs })),
 };
 
 /* Types */
@@ -841,6 +862,17 @@ export type Pong = {
 	message: string,
 };
 
+export type PreviewSummaryDto = {
+	inputCount: number | null,
+	succeeded: number | null,
+	failed: number | null,
+	skipped: number | null,
+	cancelled: number | null,
+	outputBytes: number | null,
+	/**  潜在失败摘录（§57 有界 20 条）。 */
+	issues: string[],
+};
+
 /**  组内回收选择（M3 §52–§56）。 */
 export type RecycleSelectionDto = {
 	groupId: string,
@@ -1053,6 +1085,32 @@ export type UuidInfoDto = {
 	canonical: string,
 	version: string,
 	variant: string,
+};
+
+/**  §26/§29：校验并返回 issues（severity error|warning；仅 error 阻止）。 */
+export type ValidationIssueDto = {
+	severity: string,
+	code: string,
+	message: string,
+	stepId: string | null,
+};
+
+/**  §77 Workflow Library 条目。 */
+export type WorkflowListItemDto = {
+	id: string,
+	name: string,
+	description: string,
+	schemaVersion: number | null,
+	stepCount: number | null,
+};
+
+/**
+ *  §35/§37 Run：compile → JobTracker 后台执行（§92 取消经 cancel_job，
+ *  §107 进度经 get_job 轮询）。产物经既有 BatchOutcome 呈现。
+ */
+export type WorkflowRunHandleDto = {
+	runId: string,
+	jobId: string,
 };
 
 /* Tauri Specta runtime */

@@ -27,6 +27,7 @@ pub mod text_dto;
 pub mod text_service;
 pub mod tools;
 pub mod utilities_service;
+pub mod workflow_service;
 
 use tauri::Manager;
 use tauri_specta::{Builder, collect_commands};
@@ -104,6 +105,16 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         utilities_service::utilities_color_contrast,
         utilities_service::utilities_checksum_file,
         utilities_service::utilities_export_report,
+        workflow_service::workflow_validate,
+        workflow_service::workflow_save,
+        workflow_service::workflow_list,
+        workflow_service::workflow_get,
+        workflow_service::workflow_delete,
+        workflow_service::workflow_duplicate,
+        workflow_service::workflow_import_json,
+        workflow_service::workflow_export_json,
+        workflow_service::workflow_preview,
+        workflow_service::workflow_run,
     ])
 }
 

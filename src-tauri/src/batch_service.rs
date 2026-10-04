@@ -280,7 +280,7 @@ fn status_str(status: &weave_batch::ItemStatus) -> &'static str {
     }
 }
 
-fn job_result_dto(result: &JobResult) -> BatchJobResultDto {
+pub(crate) fn job_result_dto(result: &JobResult) -> BatchJobResultDto {
     BatchJobResultDto {
         items: result
             .items
