@@ -63,3 +63,35 @@ Regression Test → Document。不删除测试换取绿色，不在 release note
 - Windows readonly 写回 ⇒ 结构化失败（text_integration::readonly_target_write_fails_structured）
 - Latin-1 兜底 + 控制字符密度守卫为两道二进制防线（text_service::detect_binary）
 - macOS/Linux 权限与 symlink 行为未实测（CI windows-latest，如实标注）
+
+### M5 Data 专项（下 §167–§176 同源；M5 docs 轮补记）
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| Path Traversal / Root Escape | ✅ PASS | data_open/export 先过 `validate_absolute_path`（text_service 同源） |
+| Regex Safety | ✅ PASS | Rust regex 线性引擎；用户 pattern 不可信输入处理 |
+| Large Input / Result | ✅ PASS | DataLimits 分档（输入 32 MiB/页 1000/结果 10k 截断标注） |
+| No Shell / No Network | ✅ PASS | 全进程内（weave-data） |
+| Session Not Persisted | ✅ PASS | DataSessions ephemeral ≤8 LRU（§18 不是数据库） |
+| 敏感数据 | ✅ PASS | 历史/日志不记数据集内容（§174/§175） |
+
+### M6 Image 专项（上 §116–§176）
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| Decompression Bomb | ✅ PASS | 解码前 header 守卫：dimension 16384 / pixels 80M / decoded 256 MiB 预算（limits::tests + inspect crafted-header 测试，§7/§118/§119） |
+| Huge Dimension / Columns | ✅ PASS | `data.tooManyColumns` / 维度拒绝（§117/§118） |
+| Huge Metadata | ✅ PARTIAL | max_metadata_bytes 已定义；解析侧完整上限 M6（下）补 |
+| Output Collision | ✅ PASS | 新文件模式 dest-exists ⇒ `image.destinationExists`（§75） |
+| TOCTOU | ✅ PASS | 覆盖源走 TextTransform 管线（§145）；新文件 must_not_exist 双检查 |
+| Atomic Write | ✅ PASS | 复用 weave-files::atomic_write（§146） |
+| Output Verification | ✅ PASS | 导出后 PNG magic/尺寸 roundtrip 测试（§147/§148） |
+| GPS Privacy | ✅ PASS | GPS presence 显式标注 + strip 剥离（§23/§62） |
+| No Shell / No Network | ✅ PASS | 纯 Rust image 管线，无 CLI/网络（§111–§113） |
+| 整数溢出 | ✅ PASS | checked 算术测试（§6 limits::checked_arithmetic_no_overflow） |
+
+### M6 已知边界
+
+- WebP 有损编码 NOT SUPPORTED（纯 Rust 生态，§109 spike，D49）
+- 动画 GIF/WebP Static Only（帧数为事实、转换拒绝保留动画，§59）
+- macOS/Linux 解码行为未实测（CI windows-latest）
