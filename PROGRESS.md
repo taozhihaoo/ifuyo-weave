@@ -624,3 +624,12 @@ Known Limitations:
   更大规模列 M9 复测
 - 单文档同步命令的取消（批量经 M7 已支持）仍为已知限制
 - M6 直接工具与 M8 均无交叉回归面（workspace 29 套全绿 = §195 PASS）
+- tauri build: PASS（4.47 MiB NSIS）
+- Real UI smoke（CDP 驱动真实窗口）: PASS — merge 预览（4+2=7 页口径）→
+  预览后篡改输入 ⇒ 执行报 `pdf.changedSincePlan` 且盘侧零产物（§141
+  TOCTOU，P0 修复验证）→ 重复输入警告 + 执行阻止（§124）→ 上移可用
+  （§123）→ unicode 文件名 inspect（§175）；console 零错误
+- **冒烟抓出 P0 并修复（0393e6a）**：merge execute 原实现从原始输入重建
+  plan——预览快照被丢弃，§141 TOCTOU 形同虚设；现 preview 缓存
+  PdfMergePlan（plan_id），execute 消费缓存 plan（失败放回允许重试），
+  UI 传 planId
