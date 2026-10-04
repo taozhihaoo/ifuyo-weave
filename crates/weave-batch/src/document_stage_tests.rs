@@ -207,3 +207,172 @@ fn batch_rotate_bad_range_is_item_failure_not_job_failure() {
 
 #[allow(unused)]
 fn _keep_pathbuf_import(_: PathBuf) {}
+
+// ── M8（下）§172-§173：混合文档批量 + 不支持格式路由 ──
+
+fn fixture(rel: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../weave-documents/tests/fixtures/documents")
+        .join(rel)
+}
+
+#[test]
+fn batch_inspect_mixed_documents_aggregates() {
+    // §172：PDF/DOCX/XLSX/PPTX 混合进入 DocumentInspect ⇒ 检测/结果正确
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let inputs = vec![
+        fixture("valid/pdf-1page.pdf"),
+        fixture("valid/minimal.docx"),
+        fixture("valid/sheets.xlsx"),
+        fixture("valid/slides.pptx"),
+    ];
+    let pipeline = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::DocumentInspect,
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: false,
+            },
+        ],
+    };
+    let plan = build_job_plan(inputs, pipeline, dest, true, false).expect("plan");
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
+    assert_eq!((result.succeeded, result.failed), (4, 0), "{result:?}");
+    // 每条 inspect 日志含对应格式
+    let mut seen = std::collections::HashSet::new();
+    for item in &result.items {
+        let note = item
+            .stage_results
+            .iter()
+            .find(|s| s.stage == "document_inspect")
+            .map(|s| s.note.clone())
+            .unwrap_or_default();
+        seen.insert(note.split(' ').next().unwrap_or("").to_owned());
+    }
+    for format in ["pdf", "docx", "xlsx", "pptx"] {
+        assert!(seen.contains(format), "missing {format} in {seen:?}");
+    }
+}
+
+#[test]
+fn batch_inspect_unsupported_inputs_routed_not_crashed() {
+    // §173：ZIP/EXE/图片混入 ⇒ Unsupported 事实（不 crash、不中断其余）
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    // 最小 stored-entry zip（手工字节，无 zip 依赖）
+    let zip = dir.path().join("archive.zip");
+    let name = b"x.txt";
+    let data = b"data";
+    let crc = 0u32; // 检测层只看容器/扩展名，不校验内容
+    let mut body: Vec<u8> = Vec::new();
+    body.extend_from_slice(&[0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 0, 0]);
+    body.extend_from_slice(&crc.to_le_bytes());
+    body.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    body.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    body.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    body.extend_from_slice(&[0, 0]);
+    body.extend_from_slice(name);
+    body.extend_from_slice(data);
+    body.extend_from_slice(&[0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, 0, 0]);
+    body.extend_from_slice(&(1u16).to_le_bytes());
+    body.extend_from_slice(&(1u16).to_le_bytes());
+    body.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    body.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    body.extend_from_slice(&[0, 0, 0, 0]);
+    body.extend_from_slice(&22u32.to_le_bytes());
+    std::fs::write(&zip, &body).expect("w");
+    let exe = dir.path().join("prog.exe");
+    std::fs::write(&exe, b"MZ fake executable").expect("w");
+    let pdf = fixture("valid/pdf-1page.pdf");
+
+    let pipeline = Pipeline {
+        stages: vec![
+            StageSpec::Source,
+            StageSpec::DocumentInspect,
+            StageSpec::Export {
+                destination_dir: dest.clone(),
+                overwrite: false,
+            },
+        ],
+    };
+    let plan = build_job_plan(vec![pdf, zip, exe], pipeline, dest, true, false).expect("plan");
+    let result = execute_plan(&plan, &CancellationToken::new(), None);
+    assert_eq!(
+        result.succeeded, 3,
+        "全部通过（inspect 只读旁路，§173 不 crash）"
+    );
+    let zip_item = result
+        .items
+        .iter()
+        .find(|i| i.source.extension().map(|e| e == "zip").unwrap_or(false))
+        .expect("zip item");
+    let note = zip_item
+        .stage_results
+        .iter()
+        .find(|s| s.stage == "document_inspect")
+        .map(|s| s.note.clone())
+        .unwrap_or_default();
+    // §173/§7：zip/exe 如实落 unknown/unsupported（绝不冒充支持）
+    assert!(
+        note.starts_with("unknown") || note.starts_with("unsupported"),
+        "{note}"
+    );
+}
+
+// ── M8（下）§168：批量 inspect 吞吐（10/100/1000）──
+
+#[test]
+#[ignore = "perf: release 手动运行"]
+fn perf_batch_document_inspection() {
+    use std::time::Instant;
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let pdf = fixture("valid/pdf-1page.pdf");
+    let docx = fixture("valid/minimal.docx");
+    let inputs: Vec<PathBuf> = (0..1000)
+        .map(|i| {
+            let src = if i % 2 == 0 { &pdf } else { &docx };
+            let dst = dir.path().join(format!(
+                "doc-{i:04}.{}",
+                if i % 2 == 0 { "pdf" } else { "docx" }
+            ));
+            std::fs::copy(src, &dst).expect("copy");
+            dst
+        })
+        .collect();
+    for n in [10usize, 100, 1000] {
+        let d = dest.join(format!("n{n}"));
+        std::fs::create_dir_all(&d).expect("d");
+        let pipeline = Pipeline {
+            stages: vec![
+                StageSpec::Source,
+                StageSpec::DocumentInspect,
+                StageSpec::Export {
+                    destination_dir: d,
+                    overwrite: false,
+                },
+            ],
+        };
+        let plan = build_job_plan(
+            inputs[..n].to_vec(),
+            pipeline,
+            dest.join(format!("n{n}")),
+            true,
+            false,
+        )
+        .expect("plan");
+        let t0 = Instant::now();
+        let r = execute_plan(&plan, &CancellationToken::new(), None);
+        let dt = t0.elapsed();
+        assert_eq!(r.succeeded, n as u64);
+        eprintln!(
+            "PERF batch document inspect {n} docs: {dt:?} ({:.3} ms/doc)",
+            dt.as_millis() as f64 / n as f64
+        );
+    }
+}

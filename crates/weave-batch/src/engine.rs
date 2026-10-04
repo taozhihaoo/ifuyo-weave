@@ -355,14 +355,14 @@ fn run_stage(
                 Some(weave_documents::Field::Estimated(n)) => format!("~{n}"),
                 _ => "unknown".into(),
             };
-            ctx.stage_log.push((
-                "document_inspect".into(),
-                format!(
-                    "{} pages={pages} size={}",
-                    facts.format.as_str(),
-                    facts.size
-                ),
-            ));
+            let note = format!(
+                "{} pages={pages} size={}",
+                facts.format.as_str(),
+                facts.size
+            );
+            ctx.stage_log
+                .push(("document_inspect".into(), note.clone()));
+            ctx.last_stage_note = note;
             Ok(Some(ctx.payload.clone()))
         }
         StageSpec::PdfRotate { degrees, pages } => {
@@ -618,6 +618,7 @@ fn run_one_item(
         payload: ItemPayload::Bytes(Vec::new()),
         current_ext: String::new(),
         output_replaced: false,
+        last_stage_note: String::new(),
         stage_log: Vec::new(),
     };
     let input_bytes = entry.size;
@@ -645,7 +646,7 @@ fn run_one_item(
                     stage_index: i,
                     stage: stage_name(stage),
                     ok: true,
-                    note: String::new(),
+                    note: std::mem::take(&mut ctx.last_stage_note),
                 });
             }
             Ok(None) => {

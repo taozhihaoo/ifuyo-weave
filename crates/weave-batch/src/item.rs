@@ -42,6 +42,8 @@ pub struct ItemContext {
     pub current_ext: String,
     /// Export 目标在执行前已存在（覆盖写）——History 撤销策略依据（下 C3）。
     pub output_replaced: bool,
+    /// 阶段可读注记（DocumentInspect 等写入；run_one_item 消费进 StageResult.note）。
+    pub last_stage_note: String,
     /// 阶段日志（§28 stage diagnostics 摘要）。
     pub stage_log: Vec<(String, String)>,
 }
