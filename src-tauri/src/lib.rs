@@ -6,6 +6,7 @@
 //! common-controls manifest 才能在 Windows 上启动（见 build.rs）。
 
 pub mod app_info;
+pub mod batch_service;
 pub mod commands;
 pub mod config;
 pub mod data_service;
@@ -70,6 +71,8 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         image_service::image_execute,
         image_service::image_cancel,
         image_batch_service::image_batch_execute,
+        batch_service::batch_preview,
+        batch_service::batch_execute,
     ])
 }
 

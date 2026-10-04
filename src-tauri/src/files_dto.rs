@@ -450,6 +450,8 @@ pub struct JobStatusDto {
     pub undo: Option<super::ops_dto::UndoReportDto>,
     /// M3：重复扫描报告。
     pub duplicate_scan: Option<DuplicateScanReportDto>,
+    /// M7：Batch Job 结果（JobOutcome::BatchExecuted）。
+    pub batch: Option<super::batch_service::BatchJobResultDto>,
     pub error: Option<super::commands::IpcError>,
 }
 

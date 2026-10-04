@@ -88,6 +88,13 @@ export const commands = {
 	imageCancel: (token: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("image_cancel", { token })),
 	/**  批量执行：输入快照 → 逐文件处理（失败隔离/取消安全点）→ 汇总。 */
 	imageBatchExecute: (inputs: string[], options: ImageBatchOptionsDto) => typedError<BatchResultDto, IpcError>(__TAURI_INVOKE("image_batch_execute", { inputs, options })),
+	/**  Preview（§20-§23）：同引擎模拟；Export 不落盘；碰撞 = 潜在失败。 */
+	batchPreview: (inputs: string[], stages: BatchStageDto[], destinationDir: string, options: BatchOptionsDto) => typedError<BatchJobResultDto, IpcError>(__TAURI_INVOKE("batch_preview", { inputs, stages, destinationDir, options })),
+	/**
+	 *  Execute（§24-§26）：任务化执行；任务内先重校验快照（§75，
+	 *  ChangedSincePreview/FileMissing ⇒ Job Failed），再 execute_plan。
+	 */
+	batchExecute: (inputs: string[], stages: BatchStageDto[], destinationDir: string, options: BatchOptionsDto) => typedError<BatchJobHandleDto, IpcError>(__TAURI_INVOKE("batch_execute", { inputs, stages, destinationDir, options })),
 };
 
 /* Types */
@@ -117,6 +124,43 @@ export type BatchFileResultDto = {
 	outputBytes: number | null,
 };
 
+/**  条目结果（§27）。 */
+export type BatchItemResultDto = {
+	itemId: string,
+	source: string,
+	output: string | null,
+	/**  success | failed | skipped | cancelled */
+	status: string,
+	error: string | null,
+	stages: BatchStageOutcomeDto[],
+	inputBytes: number | null,
+	outputBytes: number | null,
+};
+
+/**  任务启动句柄（与 M1 hash/scan、M3 recycle 一致：get_job 轮询）。 */
+export type BatchJobHandleDto = {
+	jobId: string,
+};
+
+/**  Job 结果（§26 Result Model；preview=true 表示模拟结果 §21）。 */
+export type BatchJobResultDto = {
+	items: BatchItemResultDto[],
+	total: number | null,
+	succeeded: number | null,
+	failed: number | null,
+	skipped: number | null,
+	cancelled: number | null,
+	inputBytes: number | null,
+	outputBytes: number | null,
+	preview: boolean,
+};
+
+/**  批处理选项（§19 JobPlan 的 IPC 投影）。 */
+export type BatchOptionsDto = {
+	continueOnError: boolean,
+	overwriteExisting: boolean,
+};
+
 export type BatchResultDto = {
 	results: BatchFileResultDto[],
 	total: number | null,
@@ -126,6 +170,22 @@ export type BatchResultDto = {
 	inputBytes: number | null,
 	outputBytes: number | null,
 };
+
+/**  Pipeline 阶段（镜像 weave_batch::StageSpec；Linear Only，§11-§13）。 */
+export type BatchStageDto = { type: "source" } | { type: "filter"; extensions_in: string[]; max_bytes: number | null } | { type: "textTransform"; operations: BatchTextOpDto[] } | { type: "imageResize"; width: number | null; height: number | null; mode: string; prevent_upscale: boolean } | { type: "encode"; 
+/**  png | jpeg | webp | bmp | tiff | txt */
+format: string; quality: number | null } | { type: "export"; destination_dir: string; overwrite: boolean };
+
+/**  阶段结果（§28）。 */
+export type BatchStageOutcomeDto = {
+	index: number | null,
+	stage: string,
+	ok: boolean,
+	note: string,
+};
+
+/**  批量文本算子（镜像 weave_batch::TextOpSpec；§19 可序列化计划）。 */
+export type BatchTextOpDto = { type: "trimLines" } | { type: "lowercase" } | { type: "uppercase" } | { type: "replace"; find: string; replace_with: string; case_sensitive: boolean };
 
 export type ClassificationDto = {
 	category: string,
@@ -490,6 +550,8 @@ export type JobStatusDto = {
 	undo: UndoReportDto | null,
 	/**  M3：重复扫描报告。 */
 	duplicateScan: DuplicateScanReportDto | null,
+	/**  M7：Batch Job 结果（JobOutcome::BatchExecuted）。 */
+	batch: BatchJobResultDto | null,
 	error: IpcError | null,
 };
 

@@ -4398,6 +4398,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "weave-batch",
  "weave-core",
  "weave-data",
  "weave-files",
