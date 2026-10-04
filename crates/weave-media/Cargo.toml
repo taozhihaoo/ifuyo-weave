@@ -6,6 +6,14 @@ license.workspace = true
 description = "Media tools: image resize / compress / convert / metadata (M6)."
 
 [dependencies]
+weave-core = { path = "../weave-core" }
+image = { version = "0.25", default-features = false, features = [
+    "png", "jpeg", "gif", "webp", "bmp", "tiff",
+] }
+kamadak-exif = "0.6"
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true
