@@ -255,3 +255,16 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
 - [x] 取消延迟毫秒级（§132），未开始条目终态 Cancelled、计数闭合
 - 峰值内存：未做进程级 RSS 分档（§131）——payload 隔离 + workers 上限 8
   构成上界；列入 M11 Polish 复测（KNOWN LIMITATION，不宣称）
+
+## M8 Documents（上）— 2026-10-05
+
+- 复现：weave-documents / weave-batch 单元测试（synthetic fixtures 明确
+  标识，§7）；大文档基线（§101/§102：100/500/1000 页 PDF、大型 Office）
+  列 M8（下）专项——本节不宣称
+- 实测（测试内计时，release）：
+  - PDF inspect（4 页 synthetic）：<1 ms
+  - Merge（3+2 页）+ 输出重解析校验：<2 ms
+  - Split every 5（12 页 → 3 parts，各含重解析校验）：<5 ms
+- 资源限额（§100 集中定义，保守初值）：file 512 MiB / archive 65,536
+  entries / entry 256 MiB / decompressed total 1 GiB / xml part 128 MiB /
+  pages 10,000 / sheets 1,024 / slides 2,048——待大文档实测校准

@@ -516,3 +516,60 @@ Known Limitations:
   引擎侧无第二套批量逻辑
 - 进程级 RSS 分档内存基准未做（payload 隔离 + workers 上限构成上界）——
   KNOWN LIMITATION 如实声明
+
+## M8 Documents（上）
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-documents crate（M0 骨架填充）：DocumentDetector（§94 内容签名
+  %PDF- → OOXML 容器 part 判别 → 文本启发 + 扩展名兜底；§95 mismatch
+  警告）；DocumentIdentity/Facts（§9/§11 Field 四态 Known/Unknown/
+  Unavailable/Estimated——解析失败 ≠ 0）；DocumentDiagnostic（§97）；
+  capabilities(format) 能力矩阵按真实代码生成（§8/§61）；DocumentResource
+  Limits 集中定义（§87/§100 保守初值）
+- PDF 域（lopdf 0.45，D59）：inspect（页数/MediaBox 尺寸/Rotate/Info
+  元数据/版本/加密识别 §16-§17）；PageRange 解析器（§21-§22 结构化错误：
+  0/逆序/越界/坏 token）；Merge（§18-§20 对象重挂+Kids 拼接+首输入元数据
+  策略 §80，**引用重写仅作用于新挂对象——全文档 traverse 因 id 空间重叠
+  损坏 target，测试抓出后修复**）；Split every N / Extract（§23/§28
+  part-NNN 确定性命名）；Reorder（§24 完整置换校验：缺页/重复/越界拒绝）；
+  Rotate（§25 /Rotate 元数据语义累积 mod 360 + §26 如实说明）；输出校验
+  （§27 重解析 + 页数一致）
+- Office 检查（zip 8.6 + quick-xml，Inspect-only §29-§52）：DOCX（段落/
+  标题 pStyle/表格/图片 media 计数/超链接/sectPr + core properties + 词数
+  Estimated §34）；XLSX（sheets + visible/hidden/veryHidden §44、dimension
+  与 populated cells 并列 §41、公式 presence 计数 §42、merged cells）；
+  PPTX（slides + show="0" hidden、文本字符/形状/图片计数、notes presence）
+  ；ZIP 炸弹守卫（§87 条目数/解压总量/单条目）；无 XXE 面（quick-xml 无
+  实体处理 §88）
+- M7 集成（§58-§60/§113-§116）：StageSpec::DocumentInspect（只读事实进
+  stage 日志）+ PdfRotate（经 weave_documents::rotate_pdf_bytes 域函数，
+  §218 无第二套 PDF 逻辑）+ Batch pdfRotate90 预设；§114 混入能力不符 ⇒
+  Filter 拒绝 Skipped
+- IPC（§109）：document_inspect（只读）；pdf_merge_preview/execute（§74
+  单一逻辑操作）；pdf_extract/rotate/split_every_n_execute（output-first
+  §66：只写新文件，目标存在拒绝；§67 Source Replace 不在（上））；产物
+  入 History（§77/§78 what happened；共用 record_creation_transaction
+  §205）
+- UI：Documents 页（打开/路径 → 事实表 + sheets/slides 表 + 元数据 +
+  诊断；PDF 操作区：范围提取/旋转/拆分 N/合并预览+执行）；i18n zh/en
+- 决策：D59 依赖选型、D60 事实诚实化 + IPC f64 约定
+
+Quality:
+
+- Rust gates: PASS（clippy -D warnings；fmt；weave-documents 18 + weave-batch 38
+  含 4 文档 stage 测试）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- docs/PERF.md M8 节（synthetic 实测 + 限额初值）
+
+Known Limitations:
+
+- PDF 渲染预览 NOT SUPPORTED（§51/§53 capability 如实 false）
+- Office → PDF NOT SUPPORTED（§92 保守：不依赖用户安装 Office）
+- Encrypted PDF = 结构化拒绝（§84；密码输入 §85 列（下））
+- 单文档 PDF 操作为同步命令（§105 取消：批量路径经 M7 已支持；单文档
+  大文件取消列（下））
+- Bookmarks/Page Labels/Annotations 保留行为未验证记录（§81/§82 列（下）
+  专项测试）；大文档基线（§101/§102）列（下）

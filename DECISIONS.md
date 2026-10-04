@@ -491,3 +491,33 @@ workers ∈ 1..8（1 = 顺序）。**结果按快照序还原，与 worker 数�
 产物无备份 ⇒ 事务记录 original_modified=None，撤销守卫必报冲突（拒绝
 删除——宁可报冲突也不静默二次破坏，§185）。目的地互斥锁（canonical
 dest dir，同目录第二 Job 拒绝 §202/§204）在 IPC 层实现，不进引擎。
+
+## D59 — M8 依赖选型：lopdf + zip + quick-xml（§6/§91）
+
+PDF = **lopdf 0.45**（纯 Rust，MIT）：parse/save/page-tree 操作覆盖
+inspect/merge/split/reorder/rotate 全部（上）需求；跨文档 merge 官方
+recipe = 对象重挂 + 引用重写 + Pages Kids 拼接（**重写只作用于新挂对象
+——全文档 traverse 会因 src/target id 空间重叠改写 target 自身引用，
+第一次实现即踩此坑，测试抓出**）。Office 三格式 = **zip 8.6（deflate）**
++ **quick-xml 0.38**（无 DOM/无 DTD 实体处理——XXE/实体扩张面天然不存在，
+§88）：Inspect-only 手写 part 读取，不引入大型 Office 库。否决候选：
+printpdf（生成向）、pdf-writer（生成向）、calamine（xlsx-only）。均本地、
+无 Shell、无系统依赖（§91/§93）。
+
+## D60 — 文档事实诚实化与 IPC 数值约定（§7/§11/§34）
+
+- DocumentFacts 字段 = `Field<T>` 四态 Known/Unknown/Unavailable/Estimated：
+  解析失败绝不显示 0（Pages=0 与解析失败必须可区分）；Word count 一律
+  Estimated（whitespace split ≠ Word 统计）；XLSX dimension（声明范围）
+  与 populated cells 并列上报（§41 两者不等价）；公式只报 presence 计数
+  （§42 不建公式引擎、§43 不读 cached value 宣称重算）；veryHidden 单列
+  （§44）。
+- 输出策略 = output-first（§66）：单文档操作只写新文件
+  `{stem}.{rotated|merged|extract}.pdf` / `{stem}.part-NNN.pdf`，目标存在
+  ⇒ `document.destinationExists` 拒绝；Source Replace（§67）不在（上）。
+- 能力矩阵由 `capabilities(format)` 按真实代码生成——PDF 全操作/Office
+  仅 inspect；visual preview 全线 false（§51/§53 不假装渲染）。
+- IPC 数值约定：facts 统计字段 f64（specta 禁 u64 导出 + 前端 number 约定
+  ——与 M6/M7 `?? 0` 惯例同源）；weave-data/weave-documents 的 specta
+  optional dep 需显式 `features=["derive"]`（原先靠 src-tauri feature
+  unification 隐式获得，standalone build 暴露）。
