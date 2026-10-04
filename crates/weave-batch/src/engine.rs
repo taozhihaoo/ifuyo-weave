@@ -21,7 +21,8 @@ use crate::plan::{InputSnapshotEntry, JobPlan, StageSpec};
 use weave_media::ImageLimits;
 
 /// 条目状态（§27）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ItemStatus {
     Success,
     Failed,
@@ -30,7 +31,8 @@ pub enum ItemStatus {
 }
 
 /// 阶段结果（§28：哪个 stage 成功/失败/跳过）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StageResult {
     pub stage_index: usize,
     pub stage: String,
@@ -39,7 +41,8 @@ pub struct StageResult {
 }
 
 /// 条目结果（§27）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ItemResult {
     pub item_id: String,
     pub source: PathBuf,
@@ -56,7 +59,8 @@ pub struct ItemResult {
 }
 
 /// Job 结果（§26 Result Model + 下 pending）。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JobResult {
     pub items: Vec<ItemResult>,
     pub total: u64,

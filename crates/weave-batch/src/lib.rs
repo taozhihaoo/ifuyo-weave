@@ -12,6 +12,10 @@ pub mod plan;
 pub mod state;
 
 #[cfg(test)]
+mod contract_tests;
+#[cfg(test)]
+mod engine_fault_tests;
+#[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
 mod journal_tests;

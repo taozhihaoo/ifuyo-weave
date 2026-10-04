@@ -2,6 +2,7 @@
 //! 取消、确定性枚举。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::{
     ItemStatus, JobExecOptions, Pipeline, StageSpec, TextOpSpec, build_job_plan, execute_plan,
@@ -484,6 +485,7 @@ fn pause_at_safe_point_leaves_pending_not_cancelled() {
             workers: 1,
             pause: Some(&pause),
             dry_run: false,
+            on_item: None,
         },
         &CancellationToken::new(),
         None,
@@ -501,6 +503,7 @@ fn pause_at_safe_point_leaves_pending_not_cancelled() {
             workers: 1,
             pause: None,
             dry_run: false,
+            on_item: None,
         },
         &CancellationToken::new(),
         None,
@@ -555,6 +558,7 @@ fn subset_execution_equals_full_execution() {
             workers: 1,
             pause: None,
             dry_run: false,
+            on_item: None,
         },
         &CancellationToken::new(),
         None,
@@ -613,4 +617,111 @@ fn retryable_reflects_error_category() {
     let r2 = execute_plan(&plan2, &CancellationToken::new(), None);
     assert_eq!(r2.failed, 1);
     assert!(!r2.items[0].retryable, "Validation 失败不可重试");
+}
+
+/// PERF 矩阵（下 §130/§132）：100/1k/10k + cancel latency + workers 对比。
+/// 默认忽略：`cargo test -p weave-batch --release -- --ignored --nocapture`。
+#[test]
+#[ignore = "perf: release 手动运行"]
+fn perf_matrix_and_cancel_latency() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Instant;
+
+    let dir = ws();
+    let dest = dir.path().join("out");
+    std::fs::create_dir_all(&dest).expect("dest");
+    let inputs: Vec<PathBuf> = (0..10_000)
+        .map(|i| {
+            let p = dir.path().join(format!("p{i:05}.txt"));
+            write_text(&p, "  perf line  ");
+            p
+        })
+        .collect();
+
+    for n in [100usize, 1_000, 10_000] {
+        let d = dest.join(format!("n{n}"));
+        std::fs::create_dir_all(&d).expect("d");
+        let plan = build_job_plan(
+            inputs[..n].to_vec(),
+            pipeline_trim_to(&d),
+            d.clone(),
+            true,
+            false,
+        )
+        .expect("plan");
+        let t0 = Instant::now();
+        let r = execute_plan(&plan, &CancellationToken::new(), None);
+        let dt = t0.elapsed();
+        assert_eq!(r.succeeded, n as u64);
+        eprintln!("PERF matrix text {n} files (workers=1): {dt:?}");
+    }
+
+    // workers 对比（§178：不只报 files/sec；4 workers 同结果）
+    for w in [1usize, 4] {
+        let d = dest.join(format!("w{w}k"));
+        std::fs::create_dir_all(&d).expect("d");
+        let plan = build_job_plan(
+            inputs[..2_000].to_vec(),
+            pipeline_trim_to(&d),
+            d.clone(),
+            true,
+            false,
+        )
+        .expect("plan");
+        let t0 = Instant::now();
+        let r = execute_subset(
+            &plan,
+            &(0..2_000).collect::<Vec<_>>(),
+            JobExecOptions {
+                workers: w,
+                pause: None,
+                dry_run: false,
+                on_item: None,
+            },
+            &CancellationToken::new(),
+            None,
+        );
+        let dt = t0.elapsed();
+        assert_eq!(r.succeeded, 2_000);
+        eprintln!(
+            "PERF workers={w}: 2000 files {dt:?} (succeeded={})",
+            r.succeeded
+        );
+    }
+
+    // 取消延迟（§132）：8k 条任务 1s 后 cancel ⇒ 从请求到返回的时延
+    let d = dest.join("cancel");
+    std::fs::create_dir_all(&d).expect("d");
+    let plan = build_job_plan(
+        inputs[..8_000].to_vec(),
+        pipeline_trim_to(&d),
+        d.clone(),
+        true,
+        false,
+    )
+    .expect("plan");
+    let cancel = CancellationToken::new();
+    let cancel2 = cancel.clone();
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = Arc::clone(&flag);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        cancel2.cancel();
+        flag2.store(true, Ordering::SeqCst);
+    });
+    let t0 = Instant::now();
+    let r = execute_plan(&plan, &cancel, None);
+    let total = t0.elapsed();
+    // cancel 已置位后引擎收尾的耗时 = 延迟上界
+    let after_cancel = Instant::now();
+    while !flag.load(Ordering::SeqCst) {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let _ = after_cancel.elapsed();
+    assert_eq!(r.cancelled + r.succeeded, 8_000, "计数闭合 {r:?}");
+    assert!(r.cancelled > 0, "取消必须生效");
+    eprintln!(
+        "PERF cancel: 8000-item job cancelled at 1s; wall={total:?}; succeeded={} cancelled={}",
+        r.succeeded, r.cancelled
+    );
 }
