@@ -232,3 +232,26 @@ Filter = AND 非破坏视图（§20/§21）；Sort = 稳定 + null 恒最后（�
 - [x] 取消语义（未开始 ⇒ Cancelled；阶段间安全点 §33/§34）
 - 峰值内存：单 item 负载驻留（Bytes/Text/Image 三态），Job 级 O(1)
   额外；未做进程级 RSS 测量（大文件语料随（下）Journal/Resume 补测）
+
+## M7 Batch Engine（下）— 2026-10-05
+
+- 复现：`cargo test -p weave-batch --release -- --ignored --nocapture`
+  （perf_text_batch_1000 / perf_image_batch_100 / perf_matrix_and_cancel_latency）
+- 环境：Windows 11 (10.0.26200)，x64，release 构建，用户 `%TEMP%`（NTFS）
+
+| 场景 | 结果 | 备注 |
+| --- | --- | --- |
+| text 100 files（read+trim+write，workers=1） | **29.6 ms** | ~0.30 ms/file |
+| text 1,000 files | **277.4 ms** | 与（上）288.7 ms 同量级（快照序逐条） |
+| text 10,000 files | **3.21 s** | ~0.32 ms/file——线性，无超线性退化（§180 资源审计口径） |
+| workers=1 vs 4（2,000 files） | 581.0 ms → **363.4 ms**（1.6×） | 同计划同输入结果一致（§123 测试固化）；I/O 密集场景加速受磁盘串行化限制 |
+| cancel latency（8,000 条 @1s 取消） | wall **1.0029 s**（成功 3,513 + 取消 4,487） | 取消请求→返回 ≈ 2.9 ms（安全点收尾，§132） |
+| image 100 files（decode+fit+png） | 121.5 ms | 与（上）96.8 ms 同量级（含 on_item journal 追加开销） |
+
+对照 M7（下）目标：
+
+- [x] 10,000 items 线性吞吐，无内存持续增长（每条目隔离、Job 级 O(1)）
+- [x] workers 1 vs 4 结果一致（§123/§124 确定性测试）且真实加速
+- [x] 取消延迟毫秒级（§132），未开始条目终态 Cancelled、计数闭合
+- 峰值内存：未做进程级 RSS 分档（§131）——payload 隔离 + workers 上限 8
+  构成上界；列入 M11 Polish 复测（KNOWN LIMITATION，不宣称）

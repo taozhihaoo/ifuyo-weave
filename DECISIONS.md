@@ -453,3 +453,41 @@ Job Journal/崩溃恢复/Resume（§40-§42/§92/§93）**全部留在 M7（下�
 ChangedSincePreview/FileMissing ⇒ Job Failed）在（上）以重建快照 +
 revalidate_snapshot 实现；崩溃后 Job 不复活（内存态随进程消失）——
 （下）以 Journal 落盘补齐。Pause/Retry/Resume IPC 同（下）。
+
+## D55 — Journal 形态与恢复纪律（下 §42/§126/§183/§197/§185）
+
+每 Job 一个 append-only JSONL（header + item records + finish 行），追加
+即 flush——"已落盘 = 已发生"。Resume 对 in-session paused 与跨进程
+interrupted **统一走 journal**：已有终态事实不重跑（§39）；剩余条目逐一
+重校验 size+mtime，不符 ⇒ 排除 + conflicts 上报（§143 Review Conflicts，
+§185 No Magic Recovery——绝不"看起来没问题就继续"）。损坏 journal 不
+panic 不静默删除：基于完好前缀恢复 + 原件隔离 `.jsonl.corrupt` + 显式
+上报（§197）。schema_version 不符显式拒绝（§196）。第一版不做 Pause
+IPC 之外的队列/调度平台（§0.2）。
+
+## D56 — Retry = 新 Job 新快照（下 §39/§142）
+
+`batch_retry_failed` 取 journal 中 Failed 条目的源路径，重建 JobPlan
+（当前文件事实重新 snapshot）+ 新 Journal——Retry 是新的一次运行，从
+item 起点全管线重跑。不存在 stage 中途续跑 ⇒ 天然无副作用重复（§39
+Retry 必须避免副作用重复：上一轮产物已存在时由 Export Collision/覆盖
+策略裁决，与首跑同一套语义）。retryable 分类：Validation/Unsupported
+（计划/类型错误）不可重试，UI 显式 "Retry unavailable"。
+
+## D57 — 有界并发与确定性（下 §123/§124/§211）
+
+workers ∈ 1..8（1 = 顺序）。**结果按快照序还原，与 worker 数无关**：
+结果槽按快照序分配；批内输出名冲突在执行前预claim（快照序小者胜），
+获胜方与完成时序无关——§124 同计划同输入在 1/2/4 workers 下结果一致
+（含重名 Collision 情形，测试固化）。进度回调只在调用线程触发（worker
+事件经 channel 汇聚），per-item 诚实计数（§30）。IPC 默认 workers=1
+（§211 Concurrency = Bounded；UI 可选 1/2/4）。
+
+## D58 — 批量 History/Undo = 复用 creation-undo（下 §184/§205）
+
+不新增第二套事务机制：Batch Job 成功产物写 weave-history（kind=
+`BatchExecute`，weave-core 新枚举项——稳定契约的最小扩展）。创建型产物
+撤销 = 删除已创建文件（复用 M4/M5 的 creation-undo stat 守卫）；覆盖写
+产物无备份 ⇒ 事务记录 original_modified=None，撤销守卫必报冲突（拒绝
+删除——宁可报冲突也不静默二次破坏，§185）。目的地互斥锁（canonical
+dest dir，同目录第二 Job 拒绝 §202/§204）在 IPC 层实现，不进引擎。

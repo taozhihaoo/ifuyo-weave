@@ -57,3 +57,11 @@ Weave 的隐私边界（charter #19 / M0 §14）。这既是文档也是验收�
 - [x] 路径经过校验（M3 复核：roots 过 validate_absolute_path；选择必须属于扫描结果）
 - [x] 删除默认进入回收站（M3 达成：唯一删除动作）
 - [x] 破坏性操作有 Preview / Confirm（M2 起；M3 回收前 Plan Preview + 确认对话框）
+
+## M7 Batch Engine 实施状态
+
+- Job Journal（`app-data/jobs/*.jsonl`）：仅本地，记录路径/大小/状态——
+  与 History 同级（本地文件，无上传）。
+- 无 Telemetry / 无 Upload / 无 Cloud / 无网络调用：批量执行全程本地
+  （下 §243 Final Audit N：PASS）。
+- 日志：tracing 仅本地 non-blocking 写入器，无路径级敏感内容外发。

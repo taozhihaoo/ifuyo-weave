@@ -11,6 +11,9 @@ EN: Weave is a local-first desktop utility suite — a set of carefully crafted 
 - **Local-first** — 文件本地处理，默认不联网，无账号无上传
 - **Utility-first** — 首先是工具，不为视觉牺牲效率
 - **Batch-first** — 1 个文件和 10,000 个文件同等对待
+- **Batch Engine（M7）** — 统一 Linear Pipeline：Preview（同引擎 dry-run）/
+  Execute / Progress / Cancel / Pause / Resume（journal 驱动，崩溃可恢复）/
+  Retry Failed / 结果过滤搜索 / History & Undo；详见 `docs/BATCH_ENGINE.md`
 - **Preview-first** — Analyze → Preview → Confirm → Apply，先说明再动手
 - **Reversible-first** — 能撤销必须撤销；不能撤销的明确警告
 

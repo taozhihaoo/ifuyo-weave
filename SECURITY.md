@@ -95,3 +95,21 @@ Regression Test → Document。不删除测试换取绿色，不在 release note
 - WebP 有损编码 NOT SUPPORTED（纯 Rust 生态，§109 spike，D49）
 - 动画 GIF/WebP Static Only（帧数为事实、转换拒绝保留动画，§59）
 - macOS/Linux 解码行为未实测（CI windows-latest）
+
+## M7 Batch Engine 专项（下 §189）
+
+- Path Safety：输入/目标目录经 `validate_absolute_path`；Export 输出名 =
+  dest/{source_stem}.{ext}——stem 来自源文件名、ext 来自固定格式串，
+  无用户可控相对路径成分；无 `..` 拼接面。
+- Symlink：导出目标存在性检查按 lstat 语义（exists()）；快照/重校验基于
+  stat（跟随链接的目标事实）——与 M1 既有边界一致。
+- Overwrite：默认 Never（§211）；覆盖需显式 `overwrite_existing`，且覆盖
+  产物在 History 中标记为不可自动撤销（undo 守卫必冲突，D58）。
+- Resource Limits：workers ≤ 8（IPC clamp）；单 item 图像解码受
+  weave-media ImageLimits 守卫（§113 Resource Bomb 同源）；journal 逐行
+  append，无内存放大。
+- No Shell / No Arbitrary Code（下 §153/§154）：Pipeline 定义只有六种
+  Stage 枚举（serde tag=type）——无脚本节点、无命令执行面；未知 stage
+  类型在反序列化即拒绝。
+- Journal Corruption：不 panic；隔离保留原件（§197），恢复仅基于完好
+  前缀——无"损坏即重放"面。

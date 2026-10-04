@@ -450,3 +450,58 @@ Known Limitations:
   预览耗时线性（v1 无预览采样）
 - Export 命名 = 同名.新扩展名（§76 v1）；无冲突重命名策略（§77-§79
   列（下））
+
+## M7 Batch Engine（下）
+
+Status: COMPLETE
+
+Implemented:
+
+- weave-batch journal（下 §42/§92）：append-only JSONL（header=完整
+  JobPlan+schema_version；item 记录逐条 flush；finish 行终态）——崩溃 ⇒
+  Interrupted(Recoverable)（§183）；损坏尾部隔离 `.corrupt` 不 panic
+  （§197）；版本不符显式拒绝（§196）
+- 引擎扩展（下 §39/§123/§124/§143）：`execute_subset`（Retry/Resume 共同
+  机制——结果按快照序还原）；workers 有界并发（1-8，进度回调 channel
+  汇聚到调用线程 §30）；Pause ⇒ pending（非终态）；retryable 分类；
+  批内输出名预claim（快照序小者胜——1/4 workers 结果一致测试固化）
+- History/Undo 集成（下 §184/D58）：OperationKind::BatchExecute；创建型
+  产物撤销 = stat 守卫删除（复用 weave-files creation-undo）；覆盖写产物
+  撤销必报冲突（拒绝删除 §185）；JobResult.operationId 关联入口
+- IPC（下 §90/§202-§204）：batch_pause / batch_resume（journal 驱动，
+  逐条重校验 ⇒ conflicts 排除上报，新 run job_id）/ batch_retry_failed
+  （失败子集 + 全新快照）/ batch_jobs_list（跨重启状态合并）；目的地
+  互斥锁（canonical dest，同目录第二 Job 拒绝）
+- UI（下 §137-§151）：状态过滤五档 + 结果内搜索 + 分页表（100 行/页，
+  有界 DOM §145）；Retry Failed 按钮 + 不可重试显式说明（§142）；暂停
+  按钮；任务清单面板（settled/pending 计数 + Resume，§143）；恢复冲突
+  展示；workers 选择；进度 aria-live；i18n zh/en
+- 测试矩阵（下 §118-§135/§193-§199）：34 活跃 + 3 ignored——真实 fs
+  （Unicode/嵌套/180 字符长名/独占锁句柄）、故障注入（碰撞/解码/写失败/
+  源消失/SourceChanged 经 revalidate）、golden（10 输入 2-stage）+
+  failure golden（7/3 稳定）、不变量（计数闭合/Failed 无产物/终态合法
+  集）、JSON contract（JobResult/JobPlan/StageSpec roundtrip + 字段稳定
+  + schemaVersion）、状态机 fuzz（2000 确定性种子迭代，非法迁移恒拒绝）、
+  journal-resume 集成、perf 矩阵（100/1k/10k + workers 对比 + 取消延迟）
+- docs：docs/BATCH_ENGINE.md（引擎/管线/恢复/错误/限额合一）；D55-D58；
+  SECURITY/PRIVACY M7 专项；README Batch Engine 行；PERF（下）矩阵
+
+Quality:
+
+- Rust gates: PASS（clippy workspace -D warnings；fmt；weave-batch 34+3）
+- Frontend gates: PASS（typecheck/lint/vitest 23）
+- PERF 实测：见 docs/PERF.md M7（下）——10k files 3.21s 线性；workers
+  1→4 同结果 1.6×；取消延迟 ~3ms
+- tauri build + 真窗口冒烟（含 failure→retry、resume）：见收口记录
+
+Known Limitations:
+
+- DiskFull/PartialWrite/进程级 TransactionFailure 故障注入未覆盖（Windows
+  无便携注入手段；Write 失败由"目标为目录"故障覆盖）
+- 目录只读属性在 Windows 不阻止写入（POSIX 语义差异）——写失败用可移植
+  形态测试
+- 单条大图 decode 阶段不可中断（取消生效于条目/阶段边界）
+- M6 独立 image_batch_execute 保留（直接流）；§159 统一适配方向已记录，
+  引擎侧无第二套批量逻辑
+- 进程级 RSS 分档内存基准未做（payload 隔离 + workers 上限构成上界）——
+  KNOWN LIMITATION 如实声明
