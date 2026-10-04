@@ -112,8 +112,7 @@ Status: COMPLETE（见 git 历史）
 
 ## 下一步 / Next
 
-- M6（下）收尾：批量（multi-image/batch preview/per-file result）、
-  转换选项 UI 化、Metadata cleaner UI、性能场景补全（下 §142+ 矩阵）
+- M7（Spec/M7（上）（下）；General Batch Engine）
 
 ## M3 Duplicate Finder
 
@@ -341,7 +340,7 @@ Known Limitations:
 
 ## M6 Image
 
-Status: COMPLETE（（上）范围；（下）收尾项见"下一步"）
+Status: COMPLETE
 
 Implemented:
 
