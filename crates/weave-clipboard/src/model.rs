@@ -185,7 +185,7 @@ pub fn apply_retention(
         }
     }
     // 3) 存储上限：从最旧开始淘汰直到 ≤ 上限
-    let total: u64 = entries.iter().map(|e| payload_bytes_of(e)).sum();
+    let total: u64 = entries.iter().map(payload_bytes_of).sum();
     if total > policy.max_storage_bytes {
         let mut over = total - policy.max_storage_bytes;
         let mut kept: Vec<ClipboardEntry> = Vec::new();

@@ -284,6 +284,7 @@ mod tests {
     use weave_testkit::TempWorkspace;
 
     fn sample(hash: &str, payload: Option<&str>) -> ClipboardEntry {
+        let _ = &payload;
         let now = SystemTime::now();
         ClipboardEntry {
             id: ClipboardEntry::dedup_key(ContentKind::Text, hash),
@@ -293,7 +294,7 @@ mod tests {
             content_hash: hash.to_string(),
             preview: format!("preview {hash}"),
             search_text: format!("preview {hash}"),
-            payload_file: payload.map(|p| format!("{hash}.bin")),
+            payload_file: payload.map(|_p| format!("{hash}.bin")),
             size: payload.map(|p| p.len() as u64).unwrap_or(0),
             source: SourceInfo {
                 state: SourceState::Unknown,

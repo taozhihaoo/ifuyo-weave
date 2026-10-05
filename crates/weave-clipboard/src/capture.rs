@@ -17,8 +17,7 @@ use weave_files::hash::hash_bytes;
 
 use crate::model::{
     ClipboardEntry, ContentKind, EntryStatus, RetentionPolicy, Sensitivity, SourceInfo,
-    SourceState, apply_retention, make_preview, search_text_of, sensitivity_heuristic,
-    storage_error,
+    apply_retention, make_preview, search_text_of, sensitivity_heuristic, storage_error,
 };
 use crate::store::ClipboardStore;
 
@@ -151,32 +150,21 @@ impl CapturePipeline {
     ) -> Result<Option<Vec<u8>>, WeaveError> {
         match &entry.payload_file {
             None => Ok(None),
-            Some(file) => store.read_payload(file).map(Some).map_err(|e| {
+            // 错误不携带内容（§53）：只有 id/kind/size 级诊断
+            Some(file) => store.read_payload(file).map(Some).map_err(|_| {
                 storage_error(
                     "clipboard.cannotRestore",
                     format!("entry {} payload unavailable", entry.id),
                 )
-                .withCause(e)
             }),
         }
-    }
-}
-
-trait ErrorCause {
-    fn withCause(self, cause: WeaveError) -> WeaveError;
-}
-
-impl ErrorCause for WeaveError {
-    fn withCause(self, _cause: WeaveError) -> WeaveError {
-        // WeaveError 无 cause 链字段——把原因并入消息面（不携带内容）。
-        self
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::RetentionPolicy;
+    use crate::model::{RetentionPolicy, SourceState};
     use std::time::Duration;
     use weave_testkit::TempWorkspace;
 
