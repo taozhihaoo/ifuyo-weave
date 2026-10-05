@@ -25,6 +25,7 @@ pub mod organize;
 pub mod recycle;
 pub mod rename;
 pub mod scan;
+pub mod space;
 pub mod undo;
 pub mod verify;
 
