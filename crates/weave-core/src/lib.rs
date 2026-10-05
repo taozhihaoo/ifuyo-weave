@@ -23,6 +23,7 @@ pub mod progress;
 pub mod registry;
 pub mod result;
 pub mod tool;
+pub mod verification;
 
 /// 一次引入最常用的核心类型。
 pub mod prelude {
@@ -42,4 +43,5 @@ pub mod prelude {
     pub use crate::registry::ToolRegistry;
     pub use crate::result::OperationResult;
     pub use crate::tool::{Tool, ToolInput, ToolOptionSpec, UnsupportedTool};
+    pub use crate::verification::{FileFingerprint, VerificationCost, VerificationPolicy};
 }

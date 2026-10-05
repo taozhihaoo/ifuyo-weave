@@ -261,42 +261,21 @@ fn hist_item(
     }
 }
 
-/// Revalidate（M2 §38）：source 存在且 size/modified 与 Plan 快照一致。
+/// Revalidate（M2 §38 / M2.0 §7）：按统一 SizeMtime 策略验证
+/// source 存在 + size/modified 与 Plan 快照一致。
 fn revalidate_source(fs: &dyn Filesystem, item: &PlanItem) -> Result<(), WeaveError> {
-    let stat = fs.stat(Path::new(&item.source_path)).map_err(|e| {
-        let code = match e.kind() {
-            std::io::ErrorKind::NotFound => "rename.sourceNotFound",
-            std::io::ErrorKind::PermissionDenied => "rename.permissionDenied",
-            _ => "rename.statFailed",
-        };
-        WeaveError::io(code, format!("source revalidation failed: {e}"))
-            .with_location("weave-files::execute")
-    })?;
-    if let Some(expected) = item.source_size
-        && stat.size != expected
-    {
-        return Err(WeaveError::conflict(
-            "rename.sourceChanged",
-            format!(
-                "source changed since plan (size {} != {})",
-                stat.size, expected
-            ),
-        )
-        .with_location("weave-files::execute"));
-    }
-    if let (Some(expected), Some(actual)) = (item.source_modified, stat.modified)
-        && expected != actual
-    {
-        return Err(WeaveError::conflict(
-            "rename.sourceChanged",
-            format!(
-                "source was modified after the plan was built (mtime {:?} != {:?})",
-                actual, expected
-            ),
-        )
-        .with_location("weave-files::execute"));
-    }
-    Ok(())
+    let fingerprint = weave_core::prelude::FileFingerprint {
+        path: item.source_path.clone(),
+        size: item.source_size,
+        modified: item.source_modified,
+        digest_hex: None,
+    };
+    crate::verify::verify_fingerprint(
+        fs,
+        &fingerprint,
+        weave_core::prelude::VerificationPolicy::SizeMtime,
+        "rename",
+    )
 }
 
 fn revalidate_and_rename(

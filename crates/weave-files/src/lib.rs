@@ -26,6 +26,7 @@ pub mod recycle;
 pub mod rename;
 pub mod scan;
 pub mod undo;
+pub mod verify;
 
 pub use atomic_write::atomic_write;
 pub use classify::{Classification, ClassificationEvidence, FileCategory, classify};
