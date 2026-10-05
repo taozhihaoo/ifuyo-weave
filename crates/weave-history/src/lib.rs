@@ -13,9 +13,11 @@
 //! History 描述**实际发生的**变更，不是意图（M2 §79 Transaction Accuracy）。
 //! 与应用日志严格分离（M2 §58）。
 
+pub mod audit;
 pub mod model;
 pub mod store;
 
+pub use audit::{AuditAction, AuditEvent, events_from_transaction};
 pub use model::{
     HISTORY_SCHEMA_VERSION, HistoryEntry, OperationStatus, OperationTransaction, Reversibility,
     TransactionItem, TransactionItemStatus,

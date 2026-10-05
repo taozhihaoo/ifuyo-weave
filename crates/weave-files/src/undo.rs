@@ -404,6 +404,41 @@ fn temp_for(source: &Path) -> PathBuf {
     }
 }
 
+/// 派生恢复审计事件（M2.0 §17 Recovered/RecoveryNotPossible）：
+/// Undo 结果按 item_id 对齐事务事实，Before 快照取自事务——恢复的
+/// 成功与失败都是可审计事实（M2.0 §17：Audit 必须描述实际发生了什么）。
+pub fn audit_events(
+    tx: &weave_history::OperationTransaction,
+    report: &UndoReport,
+) -> Vec<weave_history::audit::AuditEvent> {
+    use weave_history::audit::{AuditAction, AuditEvent};
+    report
+        .results
+        .iter()
+        .map(|result| {
+            let item = tx.items.iter().find(|i| i.item_id == result.item_id);
+            let action = match result.status {
+                UndoItemStatus::Restored => AuditAction::Recovered,
+                UndoItemStatus::UndoConflict | UndoItemStatus::Missing => {
+                    AuditAction::RecoveryNotPossible
+                }
+                UndoItemStatus::NotUndoable => AuditAction::NotExecuted,
+            };
+            AuditEvent {
+                timestamp: item.and_then(|i| i.timestamp),
+                operation_id: tx.operation_id.to_string(),
+                kind: tx.kind,
+                item_id: result.item_id.clone(),
+                action,
+                source: item.map(|i| i.source_path.clone()).unwrap_or_default(),
+                target: item.map(|i| i.target_path.clone()),
+                before_size: item.and_then(|i| i.original_size),
+                before_modified: item.and_then(|i| i.original_modified),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod text_undo_tests {
     use super::*;
@@ -582,5 +617,69 @@ mod creation_undo_tests {
             "user kept this",
             "绝不删除用户编辑后的文件"
         );
+    }
+    #[test]
+    fn undo_audit_events_map_recovery_outcomes() {
+        use weave_history::audit::AuditAction;
+        use weave_history::{
+            OperationStatus, OperationTransaction, Reversibility, TransactionItem,
+            TransactionItemStatus,
+        };
+        let tx = OperationTransaction {
+            operation_id: OperationId::parse("op_aa00000002").expect("id"),
+            kind: weave_core::prelude::OperationKind::Rename,
+            status: OperationStatus::Completed,
+            timestamp: SystemTime::UNIX_EPOCH,
+            reversible: Reversibility::Partial,
+            items: vec![
+                TransactionItem {
+                    item_id: "item_0000".to_string(),
+                    source_path: "C:\\w\\a.txt".to_string(),
+                    target_path: "C:\\w\\b.txt".to_string(),
+                    status: TransactionItemStatus::Executed,
+                    timestamp: Some(SystemTime::UNIX_EPOCH),
+                    original_size: Some(3),
+                    original_modified: Some(SystemTime::UNIX_EPOCH),
+                    original_created: None,
+                },
+                TransactionItem {
+                    item_id: "item_0001".to_string(),
+                    source_path: "C:\\w\\c.txt".to_string(),
+                    target_path: "C:\\w\\d.txt".to_string(),
+                    status: TransactionItemStatus::Executed,
+                    timestamp: Some(SystemTime::UNIX_EPOCH),
+                    original_size: None,
+                    original_modified: None,
+                    original_created: None,
+                },
+            ],
+        };
+        let report = UndoReport {
+            operation_id: tx.operation_id.clone(),
+            results: vec![
+                UndoItemResult {
+                    item_id: "item_0000".to_string(),
+                    status: UndoItemStatus::Restored,
+                    reason: None,
+                },
+                UndoItemResult {
+                    item_id: "item_0001".to_string(),
+                    status: UndoItemStatus::Missing,
+                    reason: Some(WeaveError::io("duplicates.recycleEntryMissing", "gone")),
+                },
+            ],
+            restored: 1,
+            conflicts: 0,
+            skipped: 1,
+            leaked_temps: 0,
+            duration_ms: 5,
+        };
+        let events = audit_events(&tx, &report);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].action, AuditAction::Recovered);
+        assert_eq!(events[1].action, AuditAction::RecoveryNotPossible);
+        // Before 事实来自事务
+        assert_eq!(events[0].before_size, Some(3));
+        assert_eq!(events[0].source, "C:\\w\\a.txt");
     }
 }
