@@ -435,3 +435,69 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use crate::model::{ContentKind, Sensitivity, SourceInfo, SourceState};
+    use weave_testkit::TempWorkspace;
+
+    fn entry_at(i: u64) -> ClipboardEntry {
+        let now = SystemTime::now();
+        let text = format!(
+            "clipboard payload number {i} — some searchable words here {}",
+            "x".repeat(64)
+        );
+        ClipboardEntry {
+            id: ClipboardEntry::dedup_key(ContentKind::Text, &format!("{i:016x}")),
+            created_at: now,
+            updated_at: now,
+            kind: ContentKind::Text,
+            content_hash: format!("{i:016x}"),
+            preview: crate::model::make_preview(&text, 120),
+            search_text: crate::model::search_text_of(&text),
+            payload_file: Some(format!("{i:016x}.bin")),
+            thumbnail_file: None,
+            size: text.len() as u64,
+            source: SourceInfo {
+                state: SourceState::Unknown,
+                process: None,
+            },
+            file_paths: vec![],
+            is_favorite: false,
+            sensitivity: Sensitivity::Normal,
+            status: EntryStatus::Persisted,
+        }
+    }
+
+    /// M2.3 §68：1k/10k/50k 条索引读写 + 搜索——验证无 O(n²)/全量 payload 加载。
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_store_and_search_at_scale() {
+        for n in [1_000u64, 10_000, 50_000] {
+            let ws = TempWorkspace::new(&format!("clip-perf-{n}")).expect("ws");
+            let store = ClipboardStore::open(ws.path()).expect("open");
+            let entries: Vec<ClipboardEntry> = (0..n).map(entry_at).collect();
+            for e in &entries {
+                store
+                    .write_payload(e.payload_file.as_ref().expect("file"), b"p")
+                    .expect("w");
+            }
+            let t_save = std::time::Instant::now();
+            store.save_all(&entries).expect("save");
+            let save = t_save.elapsed();
+            let t_load = std::time::Instant::now();
+            let outcome = store.load().expect("load");
+            let load = t_load.elapsed();
+            assert_eq!(outcome.entries.len() as u64, n);
+            let t_search = std::time::Instant::now();
+            let hits = crate::model::search_entries(&outcome.entries, "searchable words");
+            let search = t_search.elapsed();
+            eprintln!(
+                "PERF clipboard@{n}: save={save:?} load={load:?} search={search:?} hits={}",
+                hits.len()
+            );
+            assert!(!hits.is_empty());
+        }
+    }
+}

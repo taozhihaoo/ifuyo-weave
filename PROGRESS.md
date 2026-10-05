@@ -1087,3 +1087,42 @@ Quality:
 Known Limitations（P2）:
 
 - 含空子目录的目录不算空目录（级联判定）；增量 UI 刷新；扫描缓存层未做
+
+## M2.3 Clipboard 剪贴板中心（2.0）
+
+Scope: 可靠记录（Text/Image/File）→ 搜索/预览/重复制 → 保留策略 + 隐私边界
+（暂停/上限/敏感标记）→ Agent 式后台监听。**无第二套后台/存储体系**；监听为
+安全 crate 封装 + 低频轮询 fallback（workspace `unsafe_code=forbid`，§14 允许）。
+
+提交链: C1 1139865 (weave-clipboard crate 22 测试+hash_bytes 共享) /
+8b6356a (lint) / C1b (thumbnail 字段) / C2+C3 e8dd076 (平台服务+IPC+设置) /
+C4 34c607c (ClipboardPanel+i18n) / C5 (perf+实施总结+PROGRESS)。
+
+关键实现:
+
+- **领域模型**：Entry 状态七态（§50）；(kind, sha256) 去重——A×20,B,A ⇒ 2 条、
+  收藏保留（§74/§75 测试固化）；preview/search_text/payload 三分离（§81）
+- **保留**：过期（收藏豁免）→ 条数（收藏最后淘汰）→ 存储字节（200MB 默认）
+  三级 + 孤儿/崩溃 temp GC
+- **敏感启发**：JWT/password=/Bearer/40+hex ⇒ 仅 PotentiallySensitive（绝不说
+  Safe）；日志/审计/报告零内容（§52/§53）
+- **自循环抑制**（§15）：写回前登记 expected fingerprint 命中即消 + 内容去重
+  双保险；重复制提升条目+更新时间
+- **平台层**：arboard（text/image）+ clipboard-win（CF_HDROP）；缩略图
+  weave-media 320px；恢复按 kind 分派，payload 缺失 ⇒ cannotRestore 结构化错误
+- **UI**：●/○ 状态、搜索、6 筛选、分页、详情（hash/文件状态/缩略图）、
+  cannotRestore/fileState 文案（§70 验收全项）
+
+Quality:
+
+- 全工作区 40 套件 0 failed；weave-clipboard 23 单元 + 1 perf
+- perf（release 实测）：50k 条 save=365ms / load=1.43s / **search=28ms**（线性，
+  纯元数据搜索）
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 通过
+- 交付文档：Spec/ifuyo Weave 2.0 M2.3 Clipboard 实施总结.md（§94 十八节全）
+
+Known Limitations（P1/P2）:
+
+- HTML 捕获未做（arboard 无 HTML 读取——模型支持 kind，平台层诚实降级）
+- 来源应用/排除应用未做（§16/§43：模型字段已留位，不伪造检测）
+- 轮询 CPU（1s 文本+5s 图像节流）——事件驱动需 unsafe，留 M2.6 评估
