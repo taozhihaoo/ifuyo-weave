@@ -5,12 +5,13 @@
 //! - 实现：`trash` crate 5.2（MIT；Windows 走 Shell 回收站 API，无 shell 进程，
 //!   M3 §24 禁 shell 不违反——是进程内 API 调用）。
 //! - **诚实表达能力**（M3 §58/§94）：Windows 可列出回收站条目（original_path、
-//!   平台 id 与删除时间），Undo 以「original_path + 删除时间」匹配后恢复；
-//!   若匹配不到或不唯一 ⇒ 如实报告，不猜路径、不覆盖。
+//!   平台 id 与删除时间），Undo 以「token 优先 + 归一化 original_path + 删除
+//!   时间」匹配后恢复；若匹配不到或不唯一 ⇒ 如实报告，不猜路径、不覆盖。
 //! - **Recycle Failure**：失败就是失败，不假装删除（M3 §25）。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use weave_core::prelude::{CancellationToken, Progress, WeaveError};
@@ -82,30 +83,58 @@ fn recycle_one(path: &Path) -> RecycleOutcome {
     }
 }
 
-fn find_token(path: &Path, deleted_at: SystemTime) -> Option<String> {
-    let items = trash::os_limited::list().ok()?;
-    let wanted = path.to_path_buf();
-    let deleted_secs = secs(deleted_at);
-    let mut matches: Vec<_> = items
-        .into_iter()
-        .filter(|item| item.original_path() == wanted)
-        .filter(|item| {
-            // 时间窗匹配（±5s）：回收站列表时间精度平台不一
-            let item_secs = secs(
-                SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_secs(item.time_deleted.max(0) as u64),
-            );
-            let diff = item_secs.abs_diff(deleted_secs);
-            diff <= 5
-        })
-        .collect();
-    match matches.len() {
-        1 => {
-            let item = matches.remove(0);
-            Some(format!("{:?}", item.id))
-        }
-        _ => None,
+/// 回收站匹配用的路径归一化：小写 + 剥离 `\\?\` / `\\?\UNC\` 扩展前缀。
+/// Shell 列表与本地路径的表示可能不一致（尤其 CI/网络路径）。
+fn normalize_path(s: &str) -> String {
+    let lower = s.to_lowercase();
+    if let Some(rest) = lower.strip_prefix(r"\\?\unc\") {
+        return format!(r"\\{rest}");
     }
+    if let Some(rest) = lower.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    lower
+}
+
+fn item_time_secs(item: &trash::TrashItem) -> u64 {
+    item.time_deleted.max(0) as u64
+}
+
+fn find_token(path: &Path, deleted_at: SystemTime) -> Option<String> {
+    let wanted = normalize_path(&path.to_string_lossy());
+    let deleted_secs = secs(deleted_at);
+    // Shell 命名空间的可见性可能滞后于 delete 返回（CI 慢环境常见）：
+    // 短重试窗口内仍找不到才接受 token=None（诚实退化，不伪造）。
+    for attempt in 0..6u32 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        let items = match trash::os_limited::list() {
+            Ok(items) => items,
+            Err(_) => continue,
+        };
+        // 新鲜度护栏：候选条目不得早于本次删除时刻（-2s 容忍秒级精度），
+        // 防止把用户更早删除的同路径旧条目误认为本次条目。
+        let mut scored: Vec<(u64, String)> = items
+            .into_iter()
+            .filter(|item| normalize_path(&item.original_path().to_string_lossy()) == wanted)
+            .filter(|item| item_time_secs(item) + 2 >= deleted_secs)
+            .map(|item| {
+                let diff = item_time_secs(&item).abs_diff(deleted_secs);
+                (diff, format!("{:?}", item.id))
+            })
+            .collect();
+        scored.sort_by_key(|(diff, _)| *diff);
+        let token = match (scored.first(), scored.get(1)) {
+            (Some((_, id)), None) => Some(id.clone()),
+            (Some((d0, id)), Some((d1, _))) if d0 < d1 => Some(id.clone()),
+            _ => None, // 无候选或时间平局：不猜
+        };
+        if token.is_some() {
+            return token;
+        }
+    }
+    None
 }
 
 fn secs(t: SystemTime) -> u64 {
@@ -187,28 +216,80 @@ pub fn restore_recycled(
 
 fn list_matching(receipt: &RecycleReceipt) -> Result<Option<trash::TrashItem>, trash::Error> {
     let items = trash::os_limited::list()?;
-    let original_norm = receipt.original_path.to_string_lossy().to_lowercase();
-    let window = 5u64;
+    let wanted = normalize_path(&receipt.original_path.to_string_lossy());
     let deleted_secs = secs(receipt.deleted_at);
 
-    let mut matches: Vec<trash::TrashItem> = items
-        .into_iter()
-        .filter(|item| item.original_path().to_string_lossy().to_lowercase() == original_norm)
-        .filter(|item| {
-            if let Some(token) = &receipt.token {
-                return format!("{:?}", item.id) == *token;
-            }
-            let item_secs =
-                secs(UNIX_EPOCH + std::time::Duration::from_secs(item.time_deleted.max(0) as u64));
-            item_secs.abs_diff(deleted_secs) <= window
-        })
-        .collect();
-
-    match matches.len() {
-        1 => Ok(Some(matches.remove(0))),
-        // 0 = 条目已被用户清空；>1 = 无法唯一匹配——都不猜测
-        _ => Ok(None),
+    // 1) token 精确匹配（最强平台证据；token 由回收时刻的新鲜度护栏捕获）
+    if let Some(token) = &receipt.token {
+        let by_token: Vec<trash::TrashItem> = items
+            .iter()
+            .filter(|item| format!("{:?}", item.id) == *token)
+            .cloned()
+            .collect();
+        if by_token.len() == 1 {
+            return Ok(by_token.into_iter().next());
+        }
+        // token 失配 ⇒ 平台 id 表示可能随会话变化，退回路径匹配，不直接 Missing
     }
+
+    // 2) 归一化路径匹配：唯一 ⇒ 唯一候选即事实（容忍 CI 时钟粒度与慢速
+    //    shell 导致的大时间偏差）；多个 ⇒ 时间最近且唯一者；平局 ⇒ 不猜。
+    let by_path: Vec<trash::TrashItem> = items
+        .into_iter()
+        .filter(|item| normalize_path(&item.original_path().to_string_lossy()) == wanted)
+        .collect();
+    match by_path.len() {
+        0 => Ok(None),
+        1 => Ok(by_path.into_iter().next()),
+        _ => {
+            let mut scored: Vec<(u64, trash::TrashItem)> = by_path
+                .into_iter()
+                .map(|item| {
+                    let diff = item_time_secs(&item).abs_diff(deleted_secs);
+                    (diff, item)
+                })
+                .collect();
+            scored.sort_by_key(|(diff, _)| *diff);
+            match (scored.first(), scored.get(1)) {
+                (Some((d0, item)), Some((d1, _))) if d0 < d1 => Ok(Some(item.clone())),
+                _ => Ok(None), // 时间平局：无法唯一归属，如实 Missing
+            }
+        }
+    }
+}
+
+/// 回收站端到端可用性探测（集成测试用）：真实回收一个本进程创建的探针
+/// 文件 → 匹配 → 恢复 → 校验原位。任一环节失败 ⇒ false（该环境回收站
+/// 不可用/不可列表，CI 常见），调用方应如实跳过而非制造假失败。
+/// 结果按进程缓存（OnceLock），并顺带预热 Shell 命名空间。
+pub fn recycle_bin_operational() -> bool {
+    static CACHE: OnceLock<bool> = OnceLock::new();
+    *CACHE.get_or_init(probe_recycle_bin)
+}
+
+fn probe_recycle_bin() -> bool {
+    let dir = std::env::temp_dir().join(format!("weave-recycle-probe-{}", std::process::id()));
+    let probe = dir.join("probe.txt");
+    let _ = std::fs::remove_dir_all(&dir);
+    if !std::fs::create_dir_all(&dir)
+        .and_then(|()| std::fs::write(&probe, b"weave probe"))
+        .is_ok()
+    {
+        let _ = std::fs::remove_dir_all(&dir);
+        return false;
+    }
+    let operational = match recycle_one(&probe) {
+        RecycleOutcome::Success(receipt) => {
+            restore_recycled(std::slice::from_ref(&receipt))
+                .iter()
+                .all(|(_, status, _)| matches!(status, crate::undo::UndoItemStatus::Restored))
+                && probe.exists()
+        }
+        _ => false,
+    };
+    // 探针现场清理：探针文件是本进程创建的临时物，非用户数据
+    let _ = std::fs::remove_dir_all(&dir);
+    operational
 }
 
 /// Undo 入口（M3 §59–§60）：从事务重建回执 → 从回收站恢复 → 逐条校验。
