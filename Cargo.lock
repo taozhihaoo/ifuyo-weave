@@ -4759,6 +4759,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "weave-clipboard"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "weave-core",
+ "weave-files",
+ "weave-testkit",
+]
+
+[[package]]
 name = "weave-compare"
 version = "0.1.0"
 dependencies = [

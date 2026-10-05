@@ -25,6 +25,21 @@ use crate::fs::Filesystem;
 /// 未来可统一调整而无需散改（M1 §7.2，理由记入 DECISIONS.md）。
 pub const HASH_CHUNK_SIZE: usize = 256 * 1024;
 
+/// 计算内存字节 SHA-256（M2.3 剪贴板指纹等非文件场景；与 hash_file 同源实现）。
+pub fn hash_bytes(algorithm: HashAlgorithm, bytes: &[u8]) -> Result<String, WeaveError> {
+    if algorithm != HashAlgorithm::Sha256 {
+        return Err(WeaveError::unsupported(
+            "hash.unsupportedAlgorithm",
+            format!("unsupported hash algorithm: {algorithm:?}"),
+        )
+        .with_location("weave-files::hash"));
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
 /// 计算文件 SHA-256（流式 + 协作取消 + 前后一致性检查）。
 ///
 /// 只对 `RegularFile` 生效；目录/符号链接/其他类型返回结构化 Unsupported 错误

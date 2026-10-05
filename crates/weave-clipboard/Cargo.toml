@@ -1,0 +1,18 @@
+[package]
+name = "weave-clipboard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Clipboard history domain: entry model, fingerprint, dedup, retention, sensitivity heuristics, search, versioned payload store (M2.3)."
+
+[dependencies]
+weave-core = { path = "../weave-core" }
+weave-files = { path = "../weave-files" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+weave-testkit = { path = "../weave-testkit" }
+
+[lints]
+workspace = true

@@ -13,6 +13,7 @@ members = [
     "crates/weave-utilities",
     "crates/weave-workflow",
     "crates/weave-compare",
+    "crates/weave-clipboard",
     "crates/weave-testkit",
     "src-tauri",
 ]
@@ -24,6 +25,10 @@ license = "MIT OR Apache-2.0"
 authors = ["ifuyo"]
 
 [workspace.dependencies]
+# M2.3 Clipboard：安全封装（workspace 禁 unsafe，不手写 Win32）。
+arboard = "3"
+clipboard-win = "5"
+
 sysinfo = { version = "0.33", default-features = false, features = ["disk"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
