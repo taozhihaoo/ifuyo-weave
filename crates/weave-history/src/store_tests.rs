@@ -167,18 +167,19 @@ fn detect_interrupted_finds_only_inprogress_and_quarantines_corrupt() {
     // InProgress 事务：模拟"落盘后崩溃"遗留
     let mut interrupted = sample_transaction(&OperationId::parse("op_aa00000000aa").expect("id"));
     interrupted.status = OperationStatus::InProgress;
-    store.save_transaction(&interrupted).expect("save inprogress");
+    store
+        .save_transaction(&interrupted)
+        .expect("save inprogress");
 
     // Completed 事务：不应被报告
     store
-        .save_transaction(&sample_transaction(&OperationId::parse("op_aa00000000bb").expect("id")))
+        .save_transaction(&sample_transaction(
+            &OperationId::parse("op_aa00000000bb").expect("id"),
+        ))
         .expect("save completed");
 
     // 损坏事务：按既有纪律隔离
-    let corrupt = ws
-        .path()
-        .join("transactions")
-        .join("op_aa00000000cc.json");
+    let corrupt = ws.path().join("transactions").join("op_aa00000000cc.json");
     std::fs::write(&corrupt, "{ not json").expect("write corrupt");
 
     let outcome = store.detect_interrupted().expect("detect");
