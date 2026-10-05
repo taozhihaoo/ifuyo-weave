@@ -289,19 +289,15 @@ pub fn compare_sessions(
         .iter()
         .map(|f| f.fingerprint.as_str())
         .collect();
+    // 排序保证报告/测试确定性（集合遍历顺序不保证）
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
     PrivacyScanComparison {
-        resolved: before_set
-            .difference(&after_set)
-            .map(|s| s.to_string())
-            .collect(),
-        remaining: before_set
-            .intersection(&after_set)
-            .map(|s| s.to_string())
-            .collect(),
-        new: after_set
-            .difference(&before_set)
-            .map(|s| s.to_string())
-            .collect(),
+        resolved: sorted(before_set.difference(&after_set).map(|s| s.to_string()).collect()),
+        remaining: sorted(before_set.intersection(&after_set).map(|s| s.to_string()).collect()),
+        new: sorted(after_set.difference(&before_set).map(|s| s.to_string()).collect()),
     }
 }
 
