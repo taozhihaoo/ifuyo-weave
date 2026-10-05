@@ -108,6 +108,29 @@ impl WeaveError {
         self.recoverability = recoverability;
         self
     }
+
+    /// io 错误 → 结构化错误（M2.0 §14）。code = `{base}.` + 分类后缀：
+    /// `sourceNotFound` / `permissionDenied` / `fileLocked` / `insufficientSpace` /
+    /// `filesystemError`。locked/space/permission/missing 需要 用户介入或
+    /// 重新计划 ⇒ recoverability = UserActionRequired；其余 Retryable。
+    pub fn from_io(e: &std::io::Error, base_code: &str, message: impl Into<String>) -> Self {
+        let class = classify_io_error(e);
+        let suffix = match class {
+            IoErrorClass::NotFound => "sourceNotFound",
+            IoErrorClass::Permission => "permissionDenied",
+            IoErrorClass::Locked => "fileLocked",
+            IoErrorClass::InsufficientSpace => "insufficientSpace",
+            IoErrorClass::Other => "filesystemError",
+        };
+        let mut err = WeaveError::io(
+            &format!("{base_code}.{suffix}"),
+            format!("{}: {}", message.into(), e),
+        );
+        if class != IoErrorClass::Other {
+            err.recoverability = Recoverability::UserActionRequired;
+        }
+        err
+    }
 }
 
 impl fmt::Display for WeaveError {
@@ -117,6 +140,36 @@ impl fmt::Display for WeaveError {
             write!(f, " (at {location})")?;
         }
         Ok(())
+    }
+}
+
+/// 平台 io 错误的可识别分类（M2.0 §14）：locked / 空间不足等不再笼统
+/// 归入 `filesystemError`，调用方据此给出精确错误码与恢复建议。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoErrorClass {
+    NotFound,
+    Permission,
+    /// 文件被占用（Windows ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION）。
+    Locked,
+    /// 磁盘空间不足（Windows ERROR_DISK_FULL / POSIX ENOSPC）。
+    InsufficientSpace,
+    Other,
+}
+
+/// 依据 std io 错误分类：原始 OS 错误码优先于粗粒度 ErrorKind。
+pub fn classify_io_error(e: &std::io::Error) -> IoErrorClass {
+    match e.raw_os_error() {
+        // Windows: 32 ERROR_SHARING_VIOLATION / 33 ERROR_LOCK_VIOLATION
+        Some(32) | Some(33) => return IoErrorClass::Locked,
+        // Windows: 112 ERROR_DISK_FULL；POSIX: 28 ENOSPC
+        Some(112) | Some(28) => return IoErrorClass::InsufficientSpace,
+        _ => {}
+    }
+    match e.kind() {
+        std::io::ErrorKind::NotFound => IoErrorClass::NotFound,
+        std::io::ErrorKind::PermissionDenied => IoErrorClass::Permission,
+        std::io::ErrorKind::StorageFull => IoErrorClass::InsufficientSpace,
+        _ => IoErrorClass::Other,
     }
 }
 
@@ -174,6 +227,50 @@ mod tests {
         let e = WeaveError::conflict("rename.targetExists", "target already exists");
         let text = e.to_string();
         assert!(text.contains("[conflict:rename.targetExists]"));
+    }
+
+    #[test]
+    fn io_classification_maps_precise_codes_and_recoverability() {
+        // Windows sharing violation（32）→ fileLocked + 需要用户介入
+        let locked = WeaveError::from_io(
+            &std::io::Error::from_raw_os_error(32),
+            "rename",
+            "rename failed",
+        );
+        assert_eq!(locked.code, "rename.fileLocked");
+        assert_eq!(locked.kind, ErrorKind::Io);
+        assert_eq!(locked.recoverability, Recoverability::UserActionRequired);
+        assert!(locked.message.contains("rename failed"));
+
+        // 磁盘满（112）→ insufficientSpace
+        let full = WeaveError::from_io(
+            &std::io::Error::from_raw_os_error(112),
+            "move",
+            "copy failed",
+        );
+        assert_eq!(full.code, "move.insufficientSpace");
+
+        // POSIX ENOSPC（28）同样识别
+        let enospac = WeaveError::from_io(
+            &std::io::Error::from_raw_os_error(28),
+            "move",
+            "copy failed",
+        );
+        assert_eq!(enospac.code, "move.insufficientSpace");
+
+        // NotFound → sourceNotFound（保持既有约定），需要用户重新计划
+        let missing = WeaveError::from_io(
+            &std::io::Error::from(std::io::ErrorKind::NotFound),
+            "rename",
+            "stat failed",
+        );
+        assert_eq!(missing.code, "rename.sourceNotFound");
+        assert_eq!(missing.recoverability, Recoverability::UserActionRequired);
+
+        // 其他错误 → filesystemError + Retryable（保持既有默认）
+        let other = WeaveError::from_io(&std::io::Error::other("boom"), "rename", "io");
+        assert_eq!(other.code, "rename.filesystemError");
+        assert_eq!(other.recoverability, Recoverability::Retryable);
     }
 
     #[test]

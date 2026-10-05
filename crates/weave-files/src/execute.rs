@@ -351,14 +351,9 @@ fn revalidate_and_rename(
 }
 
 fn rename_error(e: std::io::Error, path: &str) -> WeaveError {
-    let code = match e.kind() {
-        std::io::ErrorKind::NotFound => "rename.sourceNotFound",
-        std::io::ErrorKind::PermissionDenied => "rename.permissionDenied",
-        _ => "rename.filesystemError",
-    };
-    WeaveError::io(code, format!("rename failed on '{path}': {e}"))
+    // M2.0 §14：locked/space 等按平台错误码精确分类，不再笼统 filesystemError
+    WeaveError::from_io(&e, "rename", format!("rename failed on '{path}'"))
         .with_location("weave-files::execute")
-        .with_recoverability(weave_core::prelude::Recoverability::UserActionRequired)
 }
 
 /// 两阶段临时名：同目录 `.weave-tmp-{op 短 id}-{item 序}.{ext}`；
