@@ -4746,6 +4746,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "weave-compare"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "weave-core",
+ "weave-files",
+ "weave-testkit",
+ "weave-text",
+]
+
+[[package]]
 name = "weave-core"
 version = "0.1.0"
 dependencies = [

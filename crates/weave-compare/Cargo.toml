@@ -1,0 +1,19 @@
+[package]
+name = "weave-compare"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Unified compare/difference engine: file & directory comparison over the shared difference model (M2.1)."
+
+[dependencies]
+weave-core = { path = "../weave-core" }
+weave-files = { path = "../weave-files" }
+weave-text = { path = "../weave-text" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+weave-testkit = { path = "../weave-testkit" }
+
+[lints]
+workspace = true
