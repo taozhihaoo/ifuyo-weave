@@ -1012,3 +1012,43 @@ M2.1 Handoff（§31.8 前置条件）:
   事务+AuditEvent 派生（审计）；Compare 只读分析不产生 mutation，
   无 Undo 需求（reversible=true 但无可撤销内容时如实 reversible=false）。
 - 无阻塞前置条件：M2.1 不需要等待任何 M2.0 遗留项。
+
+## M2.1 Compare 对比中心（2.0）
+
+Scope: 统一 Compare/Diff 能力 + 统一差异模型 + M2.0 执行底座的首个真实业务复用
+验证。Read-only（分析）与 Actionable（Plan→Preview→Apply→Audit→Recovery→Report）
+严格分离；**不设第二执行引擎**（Copy 语义进共享执行器；Delete 复用 M3 回收站）。
+
+提交链（6 笔 + 稳定化）: ac91c1a (K1 Copy 契约+PlanItem.source_digest) /
+713aea0 (K2 Copy 执行器+undo 分派+6 测试) / 65eddf2 (K3 weave-compare crate
+19 测试) / c5e751c (K4 compare_service IPC+bindings) / 6facda3 (K5 ComparePanel
++路由+i18n) / 5b4ef3f (K6 perf+实施总结+稳定化)。
+
+关键实现:
+
+- **统一差异模型**（weave-compare::model）：DifferenceKind 11 桶 + Evidence
+  + Session builder 强制计数一致；Moved/Renamed 仅 Hash 档唯一证据改判。
+- **分层策略**（§8）：existence→size→SHA-256 流式→文本详情按需（复用
+  weave-text 有界 LCS；超限诚实 tooLarge）；FileFingerprint/VerificationPolicy
+  （M2.0 C2）直接消费。
+- **Safe Replace**：pre-stat 目标 → 备份 → 备份窗口复检 → temp 复制+Verify →
+  原子 rename → 写后状态记录（M4 §94 同源撤销）；stale digest ⇒ copy.sourceChanged/
+  hashMismatch 拒绝（P0-5 有测试）。
+- **容错**（§11）：消失/无权限 ⇒ 单条事实条目，会话照常产出（有 Vanish 测试）；
+  symlink/junction 不跟随 ⇒ 无循环。
+- **UI**：ComparePanel（文件/目录自动判定、chips 汇总、筛选、文本详情、左右
+  应用/回收站删除）；导航 + palette；i18n zh/en 同笔。
+
+Quality:
+
+- 全工作区 cargo test 38 套件 0 failed；weave-compare 19 + Copy 执行器 6 新测试
+- perf（release 实测）：目录比较 Hash 档线性——100=20ms / 1k=262ms / 10k=1.83s
+  （双侧 SHA-256）
+- tsc/eslint/vitest 38 绿；fmt/clippy workspace 0 警告；tauri build 见下
+- 交付文档：Spec/ifuyo Weave 2.0 M2.1 Compare 实施总结.md（§37 八节全）
+
+Known Limitations（P2）:
+
+- 双对象拖拽入 Compare / 目录增量 UI 刷新未做（导航+palette 入口已满足"至少"）
+- Copy 崩溃恢复未重复造用例（与 M2 事务同构，detect_interrupted 直接适用——
+  如实区分：基础设施已测事实，非本阶段新证）
