@@ -40,10 +40,16 @@ pub struct AppState {
     pub compare_results: std::sync::Arc<crate::compare_service::CompareResultCache>,
     /// M2.2：空间扫描结果缓存（job_id 为键，space_get_result 领取）。
     pub space_results: std::sync::Arc<crate::space_service::SpaceResultCache>,
+    /// M2.3：剪贴板运行时（条目/存储/暂停/抑制）。
+    pub clipboard: std::sync::Arc<crate::clipboard_service::ClipboardRuntime>,
 }
 
 impl AppState {
-    pub fn new(log_guard: LogGuard, tools: ToolRegistry) -> Self {
+    pub fn new(
+        log_guard: LogGuard,
+        tools: ToolRegistry,
+        clipboard: crate::clipboard_service::ClipboardRuntime,
+    ) -> Self {
         Self {
             _log_guard: log_guard,
             jobs: JobTracker::new(),
@@ -57,6 +63,7 @@ impl AppState {
             document_plans: Mutex::new(HashMap::new()),
             compare_results: std::sync::Arc::new(crate::compare_service::CompareResultCache::new()),
             space_results: std::sync::Arc::new(crate::space_service::SpaceResultCache::new()),
+            clipboard: std::sync::Arc::new(clipboard),
         }
     }
 }

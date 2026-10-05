@@ -68,6 +68,26 @@ export const commands = {
 	spaceGetResult: (jobId: string) => typedError<SpaceReportDto, IpcError>(__TAURI_INVOKE("space_get_result", { jobId })),
 	/**  清理选中候选：Stale 重验 → recycle（Quarantine）→ 事务/历史 → freed 双报告。 */
 	spaceCleanup: (items: CleanupItemDto[]) => typedError<CleanupResultDto, IpcError>(__TAURI_INVOKE("space_cleanup", { items })),
+	/**  历史列表（§44/§45：只动元数据/preview，不读 payload；分页）。 */
+	clipboardList: (request: ClipboardListRequestDto) => typedError<ClipboardListResponseDto, IpcError>(__TAURI_INVOKE("clipboard_list", { request })),
+	/**  详情（§25：Content/时间/类型/大小/状态/hash；payload 不在列表加载）。 */
+	clipboardDetail: (id: string) => typedError<ClipboardDetailDto, IpcError>(__TAURI_INVOKE("clipboard_detail", { id })),
+	/**  重新复制（§26 P0）：读 payload → 写系统剪贴板 → 抑制自循环 → 提升条目。 */
+	clipboardRecopy: (id: string) => typedError<null, IpcError>(__TAURI_INVOKE("clipboard_recopy", { id })),
+	/**  删除历史条目（§28/§65：只删元数据+payload，绝不触碰原文件）。 */
+	clipboardDelete: (id: string) => typedError<null, IpcError>(__TAURI_INVOKE("clipboard_delete", { id })),
+	/**  清空历史（§29：与清空系统剪贴板完全分离——本命令不动系统剪贴板）。 */
+	clipboardClearHistory: () => typedError<number | null, IpcError>(__TAURI_INVOKE("clipboard_clear_history")),
+	/**  状态（§17：用户能清楚看到 ● monitoring / ○ paused）。 */
+	clipboardStatus: () => typedError<ClipboardStatusDto, IpcError>(__TAURI_INVOKE("clipboard_status")),
+	/**  暂停/恢复监听（§17 隐私 P0：用户必须能停）。 */
+	clipboardSetPaused: (paused: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("clipboard_set_paused", { paused })),
+	/**  收藏切换（§21）。 */
+	clipboardSetFavorite: (id: string, favorite: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("clipboard_set_favorite", { id, favorite })),
+	/**  读缩略图（§8：列表只加载缩略图；按需取用）。 */
+	clipboardThumbnail: (id: string) => typedError<number[], IpcError>(__TAURI_INVOKE("clipboard_thumbnail", { id })),
+	/**  监控设置立即生效（§42；设置持久化走既有 set_app_config）。 */
+	clipboardApplyConfig: (config: ClipboardConfig) => __TAURI_INVOKE<void>("clipboard_apply_config", { config }),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -215,6 +235,8 @@ export type AppConfig = {
 	theme?: string,
 	/**  M11 §34：用户收藏（本地配置持久化；无云无同步 §36）。 */
 	favorites?: FavoriteEntry[],
+	/**  M2.3：剪贴板历史设置（§42：设置持久化，变更立即生效）。 */
+	clipboard?: ClipboardConfig,
 };
 
 /**  应用信息（品牌 + 版本 + 运行环境）。 */
@@ -369,6 +391,63 @@ export type CleanupResultDto = {
 	expectedLogicalFreed: number | null,
 	/**  卷空闲字节前后差（§37 Observed；同卷可测时才有，否则 None）。 */
 	observedFreeDeltaBytes: number | null,
+};
+
+/**  剪贴板捕获设置（§17/§20/§42：隐私 P0——可停、可清、增长有界）。 */
+export type ClipboardConfig = {
+	enabled?: boolean,
+	captureText?: boolean,
+	captureImages?: boolean,
+	captureFiles?: boolean,
+	maxEntries?: number,
+	retentionDays?: number,
+};
+
+export type ClipboardDetailDto = {
+	entry: ClipboardEntryDto,
+	contentHash: string,
+	filePaths: string[],
+	/**  File 条目：每个路径的当前状态（§10：available/missing/inaccessible）。 */
+	fileStates: ([string, string])[],
+};
+
+export type ClipboardEntryDto = {
+	id: string,
+	createdAtMs: number | null,
+	updatedAtMs: number | null,
+	kind: string,
+	preview: string,
+	size: number | null,
+	isFavorite: boolean,
+	sensitivity: string,
+	status: string,
+	fileCount: number | null,
+};
+
+export type ClipboardListRequestDto = {
+	/**  all | text | image | file | favorite | sensitive */
+	filter: string,
+	query: string,
+	offset: number | null,
+	limit: number | null,
+};
+
+export type ClipboardListResponseDto = {
+	total: number | null,
+	items: ClipboardEntryDto[],
+	paused: boolean,
+};
+
+export type ClipboardStatusDto = {
+	enabled: boolean,
+	paused: boolean,
+	total: number | null,
+	textCount: number | null,
+	imageCount: number | null,
+	fileCount: number | null,
+	favoriteCount: number | null,
+	sensitiveCount: number | null,
+	storageBytes: number | null,
 };
 
 export type ColorRequestDto = { kind: "hex"; value: string } | { kind: "rgb"; r: number | null; g: number | null; b: number | null; a: number | null } | { kind: "hsl"; h: number | null; s: number | null; l: number | null; a: number | null } | { kind: "hsv"; h: number | null; s: number | null; v: number | null; a: number | null } | { kind: "hwb"; h: number | null; w: number | null; b: number | null; a: number | null };

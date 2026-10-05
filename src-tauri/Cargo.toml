@@ -24,12 +24,15 @@ weave-data = { path = "../crates/weave-data", features = ["specta"] }
 weave-media = { path = "../crates/weave-media" }
 weave-batch = { path = "../crates/weave-batch" }
 weave-compare = { path = "../crates/weave-compare" }
+weave-clipboard = { path = "../crates/weave-clipboard" }
 sysinfo = { workspace = true }
+arboard = { workspace = true }
+clipboard-win = { workspace = true }
+image = { workspace = true }
 weave-documents = { path = "../crates/weave-documents", features = ["specta"] }
 weave-utilities = { path = "../crates/weave-utilities" }
 weave-workflow = { path = "../crates/weave-workflow", features = ["specta"] }
 csv = "1.4"
-image = { version = "0.25", default-features = false, features = ["png"] }
 encoding_rs = { workspace = true }
 weave-history = { path = "../crates/weave-history" }
 tauri = { version = "2", features = [] }

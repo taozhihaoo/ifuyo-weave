@@ -26,7 +26,7 @@ pub struct FavoriteEntry {
 }
 
 /// 应用级最小配置。工具参数永远跟随工具本身，不进入全局配置（charter #37）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub version: u32,
@@ -34,6 +34,34 @@ pub struct AppConfig {
     pub theme: String,
     /// M11 §34：用户收藏（本地配置持久化；无云无同步 §36）。
     pub favorites: Vec<FavoriteEntry>,
+    /// M2.3：剪贴板历史设置（§42：设置持久化，变更立即生效）。
+    #[serde(default)]
+    pub clipboard: ClipboardConfig,
+}
+
+/// 剪贴板捕获设置（§17/§20/§42：隐私 P0——可停、可清、增长有界）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ClipboardConfig {
+    pub enabled: bool,
+    pub capture_text: bool,
+    pub capture_images: bool,
+    pub capture_files: bool,
+    pub max_entries: u32,
+    pub retention_days: u32,
+}
+
+impl Default for ClipboardConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            capture_text: true,
+            capture_images: true,
+            capture_files: true,
+            max_entries: 500,
+            retention_days: 30,
+        }
+    }
 }
 
 impl Default for AppConfig {
@@ -43,6 +71,7 @@ impl Default for AppConfig {
             language: "zh-CN".to_string(),
             theme: "system".to_string(),
             favorites: Vec::new(),
+            clipboard: ClipboardConfig::default(),
         }
     }
 }

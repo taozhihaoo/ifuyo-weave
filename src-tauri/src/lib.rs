@@ -7,6 +7,7 @@
 
 pub mod app_info;
 pub mod batch_service;
+pub mod clipboard_service;
 pub mod commands;
 pub mod compare_service;
 pub mod config;
@@ -64,6 +65,16 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         space_service::space_scan,
         space_service::space_get_result,
         space_service::space_cleanup,
+        clipboard_service::clipboard_list,
+        clipboard_service::clipboard_detail,
+        clipboard_service::clipboard_recopy,
+        clipboard_service::clipboard_delete,
+        clipboard_service::clipboard_clear_history,
+        clipboard_service::clipboard_status,
+        clipboard_service::clipboard_set_paused,
+        clipboard_service::clipboard_set_favorite,
+        clipboard_service::clipboard_thumbnail,
+        clipboard_service::clipboard_apply_config,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -158,10 +169,22 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
             let log_guard = logging::init(app.handle())?;
+            // M2.3：剪贴板运行时（设置驱动；§37 生命周期——启动加载、线程启动）
+            let config = config::load(app.handle()).unwrap_or_default();
+            let history_dir = rename_service::resolve_history_dir(app.handle())?;
+            let clipboard_runtime = clipboard_service::ClipboardRuntime::open(
+                &history_dir.join("clipboard"),
+                &config.clipboard,
+            )?;
+            let enabled = config.clipboard.enabled;
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
+                clipboard_runtime,
             ));
+            if enabled {
+                clipboard_service::start_monitor(app.handle().clone());
+            }
             tracing::info!("Weave started (M1 File Core)");
             Ok(())
         })

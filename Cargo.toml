@@ -30,6 +30,7 @@ arboard = "3"
 clipboard-win = "5"
 
 sysinfo = { version = "0.33", default-features = false, features = ["disk"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
