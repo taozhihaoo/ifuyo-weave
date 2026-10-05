@@ -14,9 +14,7 @@ use std::time::SystemTime;
 use weave_core::prelude::OperationId;
 use weave_core::prelude::WeaveError;
 
-use crate::model::{
-    HISTORY_SCHEMA_VERSION, HistoryEntry, OperationStatus, OperationTransaction,
-};
+use crate::model::{HISTORY_SCHEMA_VERSION, HistoryEntry, OperationStatus, OperationTransaction};
 
 /// 条目列表容量上限（最旧者被淘汰；事务文件保留——淘汰条目的 Undo 仍可用）。
 pub const MAX_ENTRIES: usize = 500;
@@ -251,7 +249,7 @@ impl HistoryStore {
         }
         outcome
             .interrupted
-            .sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+            .sort_by_key(|tx| std::cmp::Reverse(tx.timestamp));
         Ok(outcome)
     }
 }
