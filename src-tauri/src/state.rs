@@ -38,6 +38,8 @@ pub struct AppState {
     pub document_plans: Mutex<HashMap<String, weave_documents::PdfMergePlan>>,
     /// M2.1：目录比较结果缓存（job_id 为键，compare_get_result 领取）。
     pub compare_results: std::sync::Arc<crate::compare_service::CompareResultCache>,
+    /// M2.2：空间扫描结果缓存（job_id 为键，space_get_result 领取）。
+    pub space_results: std::sync::Arc<crate::space_service::SpaceResultCache>,
 }
 
 impl AppState {
@@ -54,6 +56,7 @@ impl AppState {
             batch_dest_locks: Mutex::new(HashMap::new()),
             document_plans: Mutex::new(HashMap::new()),
             compare_results: std::sync::Arc::new(crate::compare_service::CompareResultCache::new()),
+            space_results: std::sync::Arc::new(crate::space_service::SpaceResultCache::new()),
         }
     }
 }

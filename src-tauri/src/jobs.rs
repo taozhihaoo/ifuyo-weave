@@ -38,6 +38,8 @@ pub enum JobOutcome {
     BatchExecuted(Box<crate::batch_service::BatchJobResultDto>),
     /// M2.1：目录比较完成（结果经 CompareResultCache 领取，终态仅登记）。
     CompareCompleted,
+    /// M2.2：空间扫描完成（结果经 SpaceResultCache 领取，终态仅登记）。
+    SpaceCompleted,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,9 @@ impl JobTracker {
                         None,
                     ),
                     JobOutcome::CompareCompleted => {
+                        ("completed", None, None, None, None, None, None, None, None)
+                    }
+                    JobOutcome::SpaceCompleted => {
                         ("completed", None, None, None, None, None, None, None, None)
                     }
                     JobOutcome::TextExecuted(report) => (

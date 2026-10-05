@@ -23,6 +23,7 @@ pub mod m3_commands;
 pub mod m4_commands;
 pub mod ops_dto;
 pub mod rename_service;
+pub mod space_service;
 pub mod state;
 pub mod text_dto;
 pub mod text_service;
@@ -59,6 +60,10 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         compare_service::compare_get_result,
         compare_service::compare_build_plan,
         compare_service::compare_recycle,
+        space_service::space_list_volumes,
+        space_service::space_scan,
+        space_service::space_get_result,
+        space_service::space_cleanup,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
