@@ -189,4 +189,39 @@ mod tests {
         assert_eq!(err.code, "rename.sourceNotFound");
         assert_eq!(fs.trips(FsFault::StatVanished), 1);
     }
+
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_verify_policy_at_10k_files_is_stat_bound() {
+        // M2.0 §25：验证策略不得让普通操作明显变慢——SizeMtime 档是
+        // 纯 stat，10k 文件应为亚秒级；FullHash 档仅供对照（预期显著更贵）。
+        use std::time::Instant;
+        let ws = TempWorkspace::new("verify-perf-10k").expect("ws");
+        for i in 0..10_000u32 {
+            std::fs::write(ws.path().join(format!("f{i}.txt")), "payload").expect("seed");
+        }
+        let fs = StdFilesystem;
+        let mut fps = Vec::with_capacity(10_000);
+        let t_capture = Instant::now();
+        for i in 0..10_000u32 {
+            fps.push(
+                capture_fingerprint(
+                    &fs,
+                    &ws.path().join(format!("f{i}.txt")),
+                    VerificationPolicy::SizeMtime,
+                    "verify",
+                )
+                .expect("capture"),
+            );
+        }
+        let t_verify = Instant::now();
+        for fp in &fps {
+            verify_fingerprint(&fs, fp, VerificationPolicy::SizeMtime, "rename").expect("verify");
+        }
+        eprintln!(
+            "PERF verify@10k: capture={:?} verify={:?} (SizeMtime, stat-bound)",
+            t_capture.elapsed(),
+            t_verify.elapsed()
+        );
+    }
 }

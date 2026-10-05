@@ -581,3 +581,42 @@ printpdf（生成向）、pdf-writer（生成向）、calamine（xlsx-only）。
   模型已留位，执行侧 v1 只收静态 inputs+dest）。
 - TOCTOU（§141 同源）：workflow_run 执行前对编译 plan 的输入快照
   重校验 ⇒ `workflow.changedSincePlan`。
+
+## D64 — M2.0 可逆性契约 L1/L2/L3（M2.0 §8）
+
+`ReversibilityLevel`（OperationLog=L1 / RecoveryRequired=L2 / Irreversible=L3）
+在 weave-core 按种类声明：Rename/Move=L1（事务旧路径即可反向）；
+DuplicateRecycle/TextTransform/BatchExecute=L2（回收站/备份/覆盖恢复件，
+可能缺失）。当前无 L3 操作；契约预留 `requires_explicit_confirmation` 门
+——未来模块引入 L3 时必须走显式确认，UI 不得把 L3 伪装成普通操作。
+`RiskLevel` 由等级派生（Low/Medium/High），Plan 内有 Conflict 条目上调一级。
+`weave_history::Reversibility`（Full/Partial/None）保持事务结果语义不变
+——两者是声明与事实的关系，不合并。
+
+## D65 — 分层验证策略（M2.0 §7/§25）
+
+`VerificationPolicy`：Exists（Cheap）/ SizeMtime（Moderate，默认档，
+与 M2 §38 行为一致）/ FullHash（Expensive，场景显式选择）。成本档是
+契约的一部分——禁止"安全起见"全量 Hash。`FileFingerprint` 为期望侧
+快照（字段可 None ⇒ 验证时跳过该字段，不猜测）。weave-files::execute
+的 Revalidate 改为委托统一策略（错误码保持 `rename.*` 不变）。
+
+## D66 — 跨卷安全移动（取代 D30 拒绝策略）（M2.0 §15）
+
+Copy → Verify（size+SHA-256）→ rename 落位 → Remove Source → Final
+Verify；目标侧先落唯一临时名（`.weave-xmove-*`）再原子 rename，绝不
+半文件。诚实语义：Copy/Verify 失败 ⇒ 源完好+临时件清理+条目
+NotExecuted；Remove 失败 ⇒ `move.sourceRemoveFailed`，已验证副本与
+源双份并存如实报告，条目仍 NotExecuted（Undo 不碰）。volumes_match
+归一化扩展长度前缀（`\\?\C:\x` 与 `C:\x` 不再误判跨卷）。
+D30 的"拒绝 copy+delete"在具备 verify 事实与结构化失败语义后由本
+决策取代；`move.crossVolumeUnsupported` 错误码退役。
+
+## D67 — Audit/Report 派生纪律（M2.0 §17/§18）
+
+1.0 已有事实源：OperationTransaction（文件操作）、Batch Job Journal
+（逐条完成事实）、HistoryEntry。2.0 的统一 Audit（AuditAction/AuditEvent）
+与 Report（ExecutionSummary）是这些事实的**派生词汇**，不是第二份
+持久化/第二报告系统——禁止把派生结果落盘成平行的审计存储；新模块
+接入时先写事务/journal 事实，再派生摘要。weave-files 执行器把取消
+条目计入 skipped（M2 §44），摘要层如实保留该语义而非伪造分离计数。
