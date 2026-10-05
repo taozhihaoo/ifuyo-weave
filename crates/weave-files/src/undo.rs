@@ -120,10 +120,12 @@ pub fn undo_transaction(
             TransactionItemStatus::Executed => {
                 if transaction.kind == OperationKind::TextTransform
                     || transaction.kind == OperationKind::BatchExecute
+                    || transaction.kind == OperationKind::Copy
                 {
-                    // M4 §94：文本覆盖写的原位**必然**被占（写回即覆盖）——
-                    // 专用还原：校验当前 stat == 事务记录的写后状态（用户
-                    // 未再改动）⇒ 备份 rename 覆盖原位；否则 UndoConflict。
+                    // M4 §94：文本覆盖写/复制替换的原位**必然**被占（写回即
+                    // 覆盖）——专用还原：校验当前 stat == 事务记录的写后状态
+                    // （用户未再改动）⇒ 备份 rename 覆盖原位；否则 UndoConflict。
+                    // 创建型（target 为空）= 删除未触碰的创建件（同源语义）。
                     undo_text_item(fs, item)
                 } else {
                     undo_executed_item(fs, item, &mut current, &transaction.items)

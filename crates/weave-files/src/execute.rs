@@ -63,6 +63,7 @@ impl ExecutionReport {
                     weave_core::prelude::OperationKind::DuplicateRecycle => "Recycle",
                     weave_core::prelude::OperationKind::TextTransform => "Text write-back",
                     weave_core::prelude::OperationKind::BatchExecute => "Batch",
+                    weave_core::prelude::OperationKind::Copy => "Copy",
                 },
                 self.plan.items.len()
             ),
@@ -88,6 +89,340 @@ impl ExecutionReport {
 /// 顶层不返回条目级错误（M2 §40 部分成功语义）：一切条目失败都在
 /// 返回的 Plan/事务里结构化呈现。
 pub fn execute_plan(
+    fs: &dyn Filesystem,
+    plan: &Plan,
+    cancel: &CancellationToken,
+    report_progress: &mut dyn FnMut(Progress),
+) -> ExecutionReport {
+    // M2.1：Copy 语义（Compare 的 Actionable 差异）与 Rename/Move 共享
+    // 同一执行入口/报告/事务契约——不设第二引擎（P0-4）。
+    if plan.kind == weave_core::prelude::OperationKind::Copy {
+        return execute_copy_plan(fs, plan, cancel, report_progress);
+    }
+    execute_move_plan(fs, plan, cancel, report_progress)
+}
+
+/// 复制/替换执行（M2.1 §15 Safe Replace）：
+///
+/// ```text
+/// Revalidate source（SizeMtime，或 digest 记录时 FullHash）
+/// → [目标已存在] backup 目标 → 复检 target 未变 → 复制 source→temp
+/// → Verify（size / digest）→ rename 落位（原子替换）→ 校验
+/// → 事务：source=target 文件、target=备份件、original=写后状态（M4 §94 同源）
+///   [目标不存在] 创建型：事务 target 为空 ⇒ 撤销 = 删除未触碰的创建件
+/// ```
+///
+/// 失败语义：备份前失败 ⇒ 无任何变更；落位前失败 ⇒ 清理 temp/备份，
+/// 目标原样；落位后失败 ⇒ 备份在盘（可恢复），如实报告。
+fn execute_copy_plan(
+    fs: &dyn Filesystem,
+    plan: &Plan,
+    cancel: &CancellationToken,
+    report_progress: &mut dyn FnMut(Progress),
+) -> ExecutionReport {
+    let started = Instant::now();
+    let started_wall = SystemTime::now();
+    let mut out_plan = plan.clone();
+    let op_short: String = plan
+        .operation_id
+        .as_str()
+        .trim_start_matches("op_")
+        .chars()
+        .take(8)
+        .collect();
+
+    let mut history_items: Vec<weave_history::TransactionItem> = Vec::new();
+    let mut cancelled = false;
+    let (mut executed, mut failed, mut skipped) = (0u64, 0u64, 0u64);
+    let total = out_plan.items.len() as u64;
+    let mut processed: u64 = 0;
+
+    for idx in 0..out_plan.items.len() {
+        let (status, _) = {
+            let item = &out_plan.items[idx];
+            (item.status, item.collision)
+        };
+        match status {
+            PlanItemStatus::Conflict | PlanItemStatus::Invalid => {
+                skipped += 1;
+                history_items.push(hist_item(
+                    &out_plan.items[idx],
+                    TransactionItemStatus::NotExecuted,
+                    None,
+                ));
+                continue;
+            }
+            PlanItemStatus::NoOp => {
+                history_items.push(hist_item(
+                    &out_plan.items[idx],
+                    TransactionItemStatus::NoOp,
+                    None,
+                ));
+                continue;
+            }
+            PlanItemStatus::Ready => {}
+        }
+        if cancel.is_cancelled() {
+            cancelled = true;
+        }
+        if cancelled {
+            skipped += 1;
+            history_items.push(hist_item(
+                &out_plan.items[idx],
+                TransactionItemStatus::NotExecuted,
+                None,
+            ));
+            continue;
+        }
+        processed += 1;
+        report_progress(Progress::running(
+            out_plan.operation_id.clone(),
+            processed,
+            Some(total),
+        ));
+        let item = out_plan.items[idx].clone();
+        match copy_one(fs, &item, &op_short, idx) {
+            Ok(tx_item) => {
+                executed += 1;
+                history_items.push(tx_item);
+            }
+            Err(e) => {
+                failed += 1;
+                out_plan.items[idx].errors.push(e);
+                history_items.push(hist_item(&item, TransactionItemStatus::NotExecuted, None));
+            }
+        }
+    }
+
+    let reversible = if executed == 0 {
+        Reversibility::None
+    } else if failed == 0 {
+        Reversibility::Full
+    } else {
+        Reversibility::Partial
+    };
+    ExecutionReport {
+        plan: out_plan,
+        transaction: OperationTransaction {
+            operation_id: plan.operation_id.clone(),
+            kind: plan.kind,
+            status: OperationStatus::Completed,
+            timestamp: started_wall,
+            reversible,
+            items: history_items,
+        },
+        duration_ms: started.elapsed().as_millis() as u64,
+        executed,
+        failed,
+        skipped,
+    }
+}
+
+/// 单条复制/替换。返回该条目的事务事实（Executed），失败返回结构化错误。
+fn copy_one(
+    fs: &dyn Filesystem,
+    item: &PlanItem,
+    op_short: &str,
+    idx: usize,
+) -> Result<weave_history::TransactionItem, WeaveError> {
+    let source = Path::new(&item.source_path);
+    let target = PathBuf::from(&item.target_path);
+
+    // 1) Revalidate source：digest 记录时按 FullHash 档（M2.1 §16）
+    let policy = if item.source_digest.is_some() {
+        weave_core::prelude::VerificationPolicy::FullHash(
+            weave_core::prelude::HashAlgorithm::Sha256,
+        )
+    } else {
+        weave_core::prelude::VerificationPolicy::SizeMtime
+    };
+    let fingerprint = weave_core::prelude::FileFingerprint {
+        path: item.source_path.clone(),
+        size: item.source_size,
+        modified: item.source_modified,
+        digest_hex: item.source_digest.clone(),
+    };
+    crate::verify::verify_fingerprint(fs, &fingerprint, policy, "copy")?;
+
+    // 2) 目标目录就绪（新子目录场景）
+    if let Some(parent) = target.parent()
+        && !fs.exists(parent)
+    {
+        fs.create_dir_all(parent).map_err(|e| {
+            WeaveError::io(
+                "copy.createDestinationFailed",
+                format!("cannot create destination dir {}: {e}", parent.display()),
+            )
+            .with_location("weave-files::execute")
+        })?;
+    }
+
+    let target_existed = fs.exists(&target);
+
+    // 3) 覆盖场景：先记录目标 stat → 备份（旧内容保全）→ 复检目标在备份
+    //    窗口内未被外部改动（对比目标自身前后 stat，而非备份件——copy 会
+    //    刷新备份件的 mtime，不可作为对照）。
+    let backup: Option<PathBuf> = if target_existed {
+        let pre_stat = fs.stat(&target).ok();
+        let b = sibling_unique(&target, op_short, idx, ".weave-backup-", fs);
+        fs.copy(&target, &b).map_err(|e| {
+            WeaveError::from_io(
+                &e,
+                "copy",
+                format!("backup failed for {}", target.display()),
+            )
+            .with_location("weave-files::execute")
+        })?;
+        let post_stat = fs.stat(&target).ok();
+        match (pre_stat, post_stat) {
+            (None, _) | (_, None) => {
+                let _ = fs.remove_file(&b);
+                return Err(WeaveError::conflict(
+                    "copy.targetUnverifiable",
+                    format!("target disappeared during backup: {}", target.display()),
+                )
+                .with_location("weave-files::execute"));
+            }
+            (Some(pre), Some(post)) if pre != post => {
+                let _ = fs.remove_file(&b);
+                return Err(WeaveError::conflict(
+                    "copy.targetChangedDuringApply",
+                    format!(
+                        "target changed between backup and write: {}; nothing was modified",
+                        target.display()
+                    ),
+                )
+                .with_location("weave-files::execute"));
+            }
+            _ => {}
+        }
+        Some(b)
+    } else {
+        None
+    };
+
+    // 4) 复制 source → temp → Verify → 原子落位
+    let temp = sibling_unique(&target, op_short, idx, ".weave-copy-", fs);
+    if let Err(e) = fs.copy(source, &temp) {
+        let _ = fs.remove_file(&temp);
+        if let Some(b) = &backup {
+            let _ = fs.remove_file(b); // 尚未发生任何变更，备份不留残件
+        }
+        return Err(WeaveError::from_io(
+            &e,
+            "copy",
+            format!("copy failed for {}", source.display()),
+        )
+        .with_location("weave-files::execute"));
+    }
+    let source_stat = match fs.stat(source) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = fs.remove_file(&temp);
+            if let Some(b) = &backup {
+                let _ = fs.remove_file(b);
+            }
+            return Err(WeaveError::from_io(
+                &e,
+                "copy",
+                format!("source stat failed after copy: {}", source.display()),
+            )
+            .with_location("weave-files::execute"));
+        }
+    };
+    let temp_stat = fs.stat(&temp).ok();
+    let verified = match temp_stat {
+        Some(ts) => {
+            ts.size == source_stat.size
+                && match &item.source_digest {
+                    Some(expected) => crate::verify::capture_fingerprint(
+                        fs,
+                        &temp,
+                        weave_core::prelude::VerificationPolicy::FullHash(
+                            weave_core::prelude::HashAlgorithm::Sha256,
+                        ),
+                        "copy",
+                    )
+                    .ok()
+                    .and_then(|fp| fp.digest_hex)
+                    .map(|d| &d == expected)
+                    .unwrap_or(false),
+                    None => true,
+                }
+        }
+        None => false,
+    };
+    if !verified {
+        let _ = fs.remove_file(&temp);
+        if let Some(b) = &backup {
+            let _ = fs.remove_file(b);
+        }
+        return Err(WeaveError::conflict(
+            "copy.verifyFailed",
+            format!(
+                "copied content could not be verified for {}; nothing was modified",
+                target.display()
+            ),
+        )
+        .with_location("weave-files::execute"));
+    }
+    if let Err(e) = fs.rename(&temp, &target) {
+        let _ = fs.remove_file(&temp);
+        if let Some(b) = &backup {
+            let _ = fs.remove_file(b); // rename 失败 ⇒ 目标未被替换，无变更
+        }
+        return Err(WeaveError::from_io(
+            &e,
+            "copy",
+            format!("finalize failed for {}", target.display()),
+        )
+        .with_location("weave-files::execute"));
+    }
+
+    // 5) 写后状态记录（M4 §94 同源：original = 写后状态 ⇒ Undo 占位检查天然成立）
+    let post = fs.stat(&target).ok();
+    let tx_target = backup
+        .map(|b| b.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    Ok(weave_history::TransactionItem {
+        item_id: item.item_id.clone(),
+        // 事务语义与 TextTransform 对齐：source = 被写入的文件（撤销对象），
+        // target = 备份件（撤销依据；空 = 创建型）。
+        source_path: target.to_string_lossy().into_owned(),
+        target_path: tx_target,
+        status: TransactionItemStatus::Executed,
+        timestamp: Some(SystemTime::now()),
+        original_size: post.as_ref().map(|s| s.size),
+        original_modified: post.and_then(|s| s.modified),
+        original_created: None,
+    })
+}
+
+/// 同目录唯一名：`{prefix}{op}-{idx:04}-{name}`，冲突时追加序号。
+fn sibling_unique(
+    target: &Path,
+    op_short: &str,
+    idx: usize,
+    prefix: &str,
+    fs: &dyn Filesystem,
+) -> PathBuf {
+    let parent = target.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "file".to_string());
+    let base = format!("{prefix}{op_short}-{idx:04}-{name}");
+    let mut candidate = parent.join(&base);
+    let mut n = 1u32;
+    while fs.exists(&candidate) {
+        candidate = parent.join(format!("{base}.{n}"));
+        n += 1;
+    }
+    candidate
+}
+
+fn execute_move_plan(
     fs: &dyn Filesystem,
     plan: &Plan,
     cancel: &CancellationToken,
@@ -311,18 +646,25 @@ fn hist_item(
 /// Revalidate（M2 §38 / M2.0 §7）：按统一 SizeMtime 策略验证
 /// source 存在 + size/modified 与 Plan 快照一致。
 fn revalidate_source(fs: &dyn Filesystem, item: &PlanItem) -> Result<(), WeaveError> {
+    // M2.1 §16：Plan 携带 hash 证据（Compare 生成）⇒ 按 FullHash 档重验；
+    // 未携带 ⇒ 保持 SizeMtime 档，不为安全追加默认全量 Hash（M2.0 §25）。
+    let (policy, digest) = if item.source_digest.is_some() {
+        (
+            weave_core::prelude::VerificationPolicy::FullHash(
+                weave_core::prelude::HashAlgorithm::Sha256,
+            ),
+            item.source_digest.clone(),
+        )
+    } else {
+        (weave_core::prelude::VerificationPolicy::SizeMtime, None)
+    };
     let fingerprint = weave_core::prelude::FileFingerprint {
         path: item.source_path.clone(),
         size: item.source_size,
         modified: item.source_modified,
-        digest_hex: None,
+        digest_hex: digest,
     };
-    crate::verify::verify_fingerprint(
-        fs,
-        &fingerprint,
-        weave_core::prelude::VerificationPolicy::SizeMtime,
-        "rename",
-    )
+    crate::verify::verify_fingerprint(fs, &fingerprint, policy, "rename")
 }
 
 fn revalidate_and_rename(

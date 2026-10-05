@@ -128,6 +128,7 @@ fn cycle_rename_two_phase_no_data_loss() {
                 collision: CollisionKind::Cycle,
                 source_size: Some(9),
                 source_modified: None,
+                source_digest: None,
                 warnings: vec![],
                 errors: vec![],
             },
@@ -139,6 +140,7 @@ fn cycle_rename_two_phase_no_data_loss() {
                 collision: CollisionKind::Cycle,
                 source_size: Some(9),
                 source_modified: None,
+                source_digest: None,
                 warnings: vec![],
                 errors: vec![],
             },
@@ -411,6 +413,7 @@ fn undo_cycle_rename_swaps_back() {
                 collision: CollisionKind::Cycle,
                 source_size: Some(9),
                 source_modified: None,
+                source_digest: None,
                 warnings: vec![],
                 errors: vec![],
             },
@@ -422,6 +425,7 @@ fn undo_cycle_rename_swaps_back() {
                 collision: CollisionKind::Cycle,
                 source_size: Some(9),
                 source_modified: None,
+                source_digest: None,
                 warnings: vec![],
                 errors: vec![],
             },
@@ -673,6 +677,264 @@ fn organizer_executes_move_with_destination_creation_and_undo() {
     assert!(ws.path().join("a.jpg").exists());
 }
 
+// ── M2.1：Copy / Replace 执行（Compare Actionable 差异的共享执行原语）──
+
+fn copy_plan(
+    ws: &TempWorkspace,
+    src: &str,
+    tgt: &str,
+    digest: Option<String>,
+) -> weave_core::prelude::Plan {
+    weave_core::prelude::Plan {
+        operation_id: weave_core::prelude::OperationId::generate(),
+        kind: weave_core::prelude::OperationKind::Copy,
+        created_at: std::time::SystemTime::now(),
+        items: vec![weave_core::prelude::PlanItem {
+            item_id: "item_0000".to_string(),
+            source_path: ws.path().join(src).to_string_lossy().into_owned(),
+            target_path: ws.path().join(tgt).to_string_lossy().into_owned(),
+            status: PlanItemStatus::Ready,
+            collision: CollisionKind::None,
+            source_size: Some(std::fs::metadata(ws.path().join(src)).expect("stat").len()),
+            source_modified: None,
+            source_digest: digest,
+            warnings: vec![],
+            errors: vec![],
+        }],
+    }
+}
+
+#[test]
+fn copy_creates_new_file_and_undo_removes_untouched_creation() {
+    let ws = TempWorkspace::new("ex-copy-create").expect("ws");
+    ws.file("left.txt", "left content").expect("write");
+
+    let plan = copy_plan(&ws, "left.txt", "sub/right.txt", None);
+    let report = execute_plan(
+        &StdFilesystem,
+        &plan,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(
+        (report.executed, report.failed, report.skipped),
+        (1, 0, 0),
+        "{report:?}"
+    );
+    // source 保持不变；target 内容正确；新子目录被创建
+    assert!(ws.path().join("left.txt").exists(), "source must stay");
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("sub/right.txt")).expect("read"),
+        "left content"
+    );
+    // 创建型事务：target 为空 ⇒ 撤销 = 删除未触碰的创建件
+    let undo = undo_transaction(
+        &StdFilesystem,
+        &report.transaction,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(undo.restored, 1, "{undo:?}");
+    assert!(!ws.path().join("sub/right.txt").exists(), "creation undone");
+}
+
+#[test]
+fn copy_replace_backs_up_and_undo_restores_old_content() {
+    let ws = TempWorkspace::new("ex-copy-replace").expect("ws");
+    ws.file("left.txt", "new version").expect("write");
+    ws.file("right.txt", "old version").expect("write");
+
+    let plan = copy_plan(&ws, "left.txt", "right.txt", None);
+    let report = execute_plan(
+        &StdFilesystem,
+        &plan,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!((report.executed, report.failed), (1, 0), "{report:?}");
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("right.txt")).expect("read"),
+        "new version"
+    );
+    assert!(ws.path().join("left.txt").exists(), "source untouched");
+    // 备份件在盘（事务 target），temp 不残留
+    let tx = &report.transaction;
+    let backup = &tx.items[0].target_path;
+    assert!(!backup.is_empty(), "replace must record backup in tx");
+    assert!(
+        std::path::Path::new(backup).exists(),
+        "backup kept for undo"
+    );
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(backup)).expect("read backup"),
+        "old version",
+        "backup holds pre-apply content"
+    );
+    // 撤销：备份 rename 覆盖原位（用户未再改动）
+    let undo = undo_transaction(
+        &StdFilesystem,
+        &report.transaction,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(undo.restored, 1, "{undo:?}");
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("right.txt")).expect("read"),
+        "old version",
+        "undo restores pre-apply content"
+    );
+    assert!(!std::path::Path::new(backup).exists(), "backup consumed");
+}
+
+#[test]
+fn copy_stale_digest_is_rejected_before_any_write() {
+    let ws = TempWorkspace::new("ex-copy-stale").expect("ws");
+    ws.file("left.txt", "v1").expect("write");
+    ws.file("right.txt", "keep").expect("write");
+    // 计划时记录 "v1" 的 digest；随后外部程序修改 source ⇒ 计划过期
+    let stale_digest = {
+        use crate::verify::capture_fingerprint;
+        use weave_core::prelude::{HashAlgorithm, VerificationPolicy};
+        capture_fingerprint(
+            &StdFilesystem,
+            &ws.path().join("left.txt"),
+            VerificationPolicy::FullHash(HashAlgorithm::Sha256),
+            "copy",
+        )
+        .expect("capture")
+        .digest_hex
+        .expect("digest")
+    };
+    std::fs::write(ws.path().join("left.txt"), "v2 modified").expect("tamper");
+
+    let plan = copy_plan(&ws, "left.txt", "right.txt", Some(stale_digest));
+    let report = execute_plan(
+        &StdFilesystem,
+        &plan,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(report.failed, 1, "{report:?}");
+    // size 与 digest 证据按序比对：测试在取 digest 后篡改（新 size 同时入
+    // plan），此处失配落点 = hashMismatch；纯 size 变化则 = sourceChanged。
+    assert!(
+        report.plan.items[0].errors[0].code == "copy.sourceChanged"
+            || report.plan.items[0].errors[0].code == "copy.hashMismatch",
+        "stale plan must be rejected: {report:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("right.txt")).expect("read"),
+        "keep",
+        "target untouched on stale plan"
+    );
+    // 无备份/temp 残留
+    let leftovers: Vec<_> = std::fs::read_dir(ws.path())
+        .expect("dir")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".weave-"))
+        .collect();
+    assert!(leftovers.is_empty(), "no residue: {leftovers:?}");
+}
+
+#[test]
+fn copy_finalize_failure_keeps_target_and_leaves_no_residue() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct DenyRename {
+        denied: AtomicBool,
+    }
+    impl crate::fs::Filesystem for DenyRename {
+        fn exists(&self, p: &std::path::Path) -> bool {
+            StdFilesystem.exists(p)
+        }
+        fn stat(&self, p: &std::path::Path) -> std::io::Result<crate::metadata::FileStat> {
+            StdFilesystem.stat(p)
+        }
+        fn read_dir(&self, p: &std::path::Path) -> std::io::Result<Vec<String>> {
+            StdFilesystem.read_dir(p)
+        }
+        fn open_read(&self, p: &std::path::Path) -> std::io::Result<Box<dyn crate::fs::ReadSeek>> {
+            StdFilesystem.open_read(p)
+        }
+        fn rename(&self, _f: &std::path::Path, _t: &std::path::Path) -> std::io::Result<()> {
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+        }
+        fn create_dir_all(&self, p: &std::path::Path) -> std::io::Result<()> {
+            StdFilesystem.create_dir_all(p)
+        }
+        fn copy(&self, f: &std::path::Path, t: &std::path::Path) -> std::io::Result<u64> {
+            if !self.denied.swap(true, Ordering::SeqCst) {
+                StdFilesystem.copy(f, t)
+            } else {
+                StdFilesystem.copy(f, t)
+            }
+        }
+        fn remove_file(&self, p: &std::path::Path) -> std::io::Result<()> {
+            StdFilesystem.remove_file(p)
+        }
+    }
+
+    let ws = TempWorkspace::new("ex-copy-deny").expect("ws");
+    ws.file("left.txt", "new").expect("write");
+    ws.file("right.txt", "old").expect("write");
+
+    let plan = copy_plan(&ws, "left.txt", "right.txt", None);
+    let report = execute_plan(
+        &DenyRename {
+            denied: AtomicBool::new(false),
+        },
+        &plan,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(report.failed, 1, "{report:?}");
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("right.txt")).expect("read"),
+        "old",
+        "target intact when finalize denied"
+    );
+    let leftovers: Vec<_> = std::fs::read_dir(ws.path())
+        .expect("dir")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".weave-"))
+        .collect();
+    assert!(leftovers.is_empty(), "backup+temp cleaned: {leftovers:?}");
+}
+
+#[test]
+fn copy_noop_and_conflict_items_are_not_executed() {
+    let ws = TempWorkspace::new("ex-copy-mixed").expect("ws");
+    ws.file("a.txt", "same").expect("write");
+    let mut plan = copy_plan(&ws, "a.txt", "a.txt", None); // source==target ⇒ NoOp 语义
+    plan.items[0].status = PlanItemStatus::NoOp;
+    plan.items.push(weave_core::prelude::PlanItem {
+        item_id: "item_0001".to_string(),
+        source_path: ws.path().join("a.txt").to_string_lossy().into_owned(),
+        target_path: ws.path().join("b.txt").to_string_lossy().into_owned(),
+        status: PlanItemStatus::Conflict,
+        collision: CollisionKind::ExistingTarget,
+        source_size: None,
+        source_modified: None,
+        source_digest: None,
+        warnings: vec![],
+        errors: vec![],
+    });
+    std::fs::write(ws.path().join("b.txt"), "occupied").expect("write");
+    let report = execute_plan(
+        &StdFilesystem,
+        &plan,
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
+    assert_eq!(report.executed, 0);
+    assert_eq!(report.skipped, 1);
+    assert_eq!(
+        std::fs::read_to_string(ws.path().join("b.txt")).expect("read"),
+        "occupied"
+    );
+}
+
 #[test]
 fn cross_volume_move_copies_verifies_then_removes_source() {
     // M2.0 §15 / D60：跨卷 Move = Copy → Verify(size+hash) → Remove Source
@@ -833,6 +1095,7 @@ fn cross_volume_destination_missing_fails_without_touching_source() {
             collision: CollisionKind::None,
             source_size: Some(1),
             source_modified: None,
+            source_digest: None,
             warnings: vec![],
             errors: vec![],
         }],
