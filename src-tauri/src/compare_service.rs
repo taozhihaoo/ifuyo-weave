@@ -319,10 +319,11 @@ pub fn compare_directories(
             "both compare roots must exist and be directories",
         ));
     }
-    let state_cell = app.state::<crate::state::AppState>();
-    let (job_id, cancel, sink, _) = state_cell.jobs.register();
+    let (job_id, cancel, sink, _) = {
+        let state_cell = app.state::<crate::state::AppState>();
+        state_cell.jobs.register()
+    };
     let handle = app.clone();
-    drop(state_cell);
     let job_id_for_task = job_id.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
