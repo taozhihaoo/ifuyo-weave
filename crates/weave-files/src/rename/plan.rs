@@ -171,6 +171,7 @@ pub fn build_rename_plan(
             collision: CollisionKind::None,
             source_size: Some(stat.size),
             source_modified: stat.modified,
+            source_digest: None,
             warnings,
             errors: Vec::new(),
         });
@@ -208,6 +209,7 @@ fn invalid_item(item_id: &str, requested: &str, error: WeaveError) -> PlanItem {
         collision: CollisionKind::None,
         source_size: None,
         source_modified: None,
+        source_digest: None,
         warnings: Vec::new(),
         errors: vec![error],
     }

@@ -736,6 +736,7 @@ pub fn data_export(
             collision: weave_core::prelude::CollisionKind::None,
             source_size: None,
             source_modified: None,
+            source_digest: None,
             warnings: Vec::new(),
             errors: Vec::new(),
         }],

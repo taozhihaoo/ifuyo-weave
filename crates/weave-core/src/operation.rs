@@ -61,6 +61,9 @@ pub enum OperationKind {
     TextTransform,
     /// M7：Batch Engine 统一执行（Linear Pipeline 批量产物）。
     BatchExecute,
+    /// M2.1：复制/替换执行（Compare 的 Actionable 差异 → Copy 语义；
+    /// source 保持不变，target 被写入；覆盖时先备份）。
+    Copy,
 }
 
 impl OperationKind {
@@ -71,6 +74,7 @@ impl OperationKind {
             OperationKind::DuplicateRecycle => "duplicateRecycle",
             OperationKind::TextTransform => "textTransform",
             OperationKind::BatchExecute => "batchExecute",
+            OperationKind::Copy => "copy",
         }
     }
 
@@ -78,7 +82,7 @@ impl OperationKind {
     ///
     /// - Rename/Move = L1：事务记录旧路径即可反向。
     /// - DuplicateRecycle = L2：回收站 = Quarantine（条目可能被用户清空）。
-    /// - TextTransform = L2：依赖事务备份件恢复（备份可能被清理）。
+    /// - TextTransform/Copy = L2：依赖事务备份件恢复（备份可能被清理）。
     /// - BatchExecute = L2（保守声明）：管线可能覆盖/导出到既有目标。
     ///
     /// 当前没有 L3 操作；未来模块引入 L3 时必须走显式确认门。
@@ -87,7 +91,8 @@ impl OperationKind {
             OperationKind::Rename | OperationKind::Move => ReversibilityLevel::OperationLog,
             OperationKind::DuplicateRecycle
             | OperationKind::TextTransform
-            | OperationKind::BatchExecute => ReversibilityLevel::RecoveryRequired,
+            | OperationKind::BatchExecute
+            | OperationKind::Copy => ReversibilityLevel::RecoveryRequired,
         }
     }
 }
@@ -145,6 +150,10 @@ pub struct PlanItem {
     /// 计划时源快照——Execute 前的 Revalidate 依据（M2 §38；变化 ⇒ PreconditionFailed）。
     pub source_size: Option<u64>,
     pub source_modified: Option<SystemTime>,
+    /// 计划时源内容摘要（M2.1 §16：Compare 携带 hash 证据 ⇒ Apply 前按
+    /// FullHash 档重验；None ⇒ 保持 SizeMtime 档，不追加成本）。
+    #[serde(default)]
+    pub source_digest: Option<String>,
     pub warnings: Vec<String>,
     pub errors: Vec<WeaveError>,
 }
@@ -255,6 +264,7 @@ mod tests {
                 },
                 source_size: None,
                 source_modified: None,
+                source_digest: None,
                 warnings: vec![],
                 errors: vec![],
             }],
@@ -298,6 +308,7 @@ mod tests {
                     collision: CollisionKind::None,
                     source_size: Some(10),
                     source_modified: None,
+                    source_digest: None,
                     warnings: vec![],
                     errors: vec![],
                 },
@@ -309,6 +320,7 @@ mod tests {
                     collision: CollisionKind::InternalTarget,
                     source_size: None,
                     source_modified: None,
+                    source_digest: None,
                     warnings: vec![],
                     errors: vec![WeaveError::conflict("rename.internalCollision", "dup")],
                 },
@@ -320,6 +332,7 @@ mod tests {
                     collision: CollisionKind::None,
                     source_size: None,
                     source_modified: None,
+                    source_digest: None,
                     warnings: vec![],
                     errors: vec![],
                 },
