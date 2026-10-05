@@ -1052,3 +1052,38 @@ Known Limitations（P2）:
 - 双对象拖拽入 Compare / 目录增量 UI 刷新未做（导航+palette 入口已满足"至少"）
 - Copy 崩溃恢复未重复造用例（与 M2 事务同构，detect_interrupted 直接适用——
   如实区分：基础设施已测事实，非本阶段新证）
+
+## M2.2 Space 空间分析中心（2.0）
+
+Scope: 空间分析 → 定位占用 → 识别异常 → 清理候选 → 预览 → 安全执行 → 可恢复。
+Analysis-first（默认只分析，候选 ≠ 垃圾）；**无第二套执行/删除引擎**——清理 =
+逐项 stale 重验 → M3 recycle（Quarantine）→ 既有 undo。
+
+提交链: S1 2167475 (weave-files::space 聚合扫描+候选+快照 9 测试) /
+c0494b0 (lint) / S2 151c7c2 (space_service IPC+sysinfo 卷概览+cleanup 双释放
+报告) / S3 4ffd1ec (SpacePanel+钻取+候选 Evidence+i18n) / S4 4c9eb79 (perf) /
+K6b (实施总结+PROGRESS)。
+
+关键实现:
+
+- **自底向上聚合**：迭代 DFS + 发现序逆序折叠（O(n)）；DirNode 递归总量语义
+- **内存控制**：有界 Top-N 堆；不保留全量文件对象（100k 文件安全）
+- **容错**：不可读/消失 ⇒ 计数事实；symlink 不跟随无循环；consistency=bestEffort
+- **候选 Evidence**：reasons=事实清单；risk 不按扩展名断言；confidence ≤ Medium
+- **清理安全链**：SizeMtime 重验（失配 ⇒ stale_skipped 不删）→ recycle →
+  `recycle-bin:{token}` 事务 → 既有 undo；Expected/Observed freed 分离
+- **快照/增长**：history_dir/space-snapshots.json（原子写 500 条有界）；
+  prev=0 ⇒ 无百分比
+- **卷概览**：sysinfo（workspace `unsafe_code=forbid`，FFI 方案弃用）
+
+Quality:
+
+- 全工作区 38 套件 0 failed；space 9 单元 + 1 perf
+- perf（release 实测）：1k=14ms / 10k=136ms / **100k=1.40s**（线性）
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 4.76→见下
+- 交付文档：Spec/ifuyo Weave 2.0 M2.2 Space 实施总结.md（§65 十七节全，
+  含 §66 架构验收 Q1-Q8 逐答）
+
+Known Limitations（P2）:
+
+- 含空子目录的目录不算空目录（级联判定）；增量 UI 刷新；扫描缓存层未做
