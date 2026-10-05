@@ -133,7 +133,7 @@ export function SpacePanel({ locale, onOperationDone }: SpacePanelProps) {
                 setBusy(false);
                 setError(e instanceof Error ? e.message : String(e));
             });
-    }, [root, t]);
+    }, [root]);
 
     const doCancel = useCallback(() => {
         if (scanJobId) {

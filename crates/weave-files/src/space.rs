@@ -886,3 +886,41 @@ mod tests {
         f.set_modified(t).expect("set_modified");
     }
 }
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use crate::fs::StdFilesystem;
+    use weave_testkit::TempWorkspace;
+
+    /// M2.2 §54：1k/10k/100k 文件规模扫描（Hash 无关——纯 stat+聚合），
+    /// 找 O(n²)/不受控内存；数字不追求极致，重点无架构性爆炸。
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_space_scan_at_scale() {
+        for n in [1_000u32, 10_000, 100_000] {
+            let ws = TempWorkspace::new(&format!("space-perf-{n}")).expect("ws");
+            let sub = ws.dir("data").expect("dir");
+            for i in 0..n {
+                let dir = if i % 10 == 0 { &sub } else { ws.path() };
+                std::fs::write(dir.join(format!("f{i}.txt")), b"payload").expect("w");
+            }
+            let started = std::time::Instant::now();
+            let session = scan_space(
+                &StdFilesystem,
+                ws.path(),
+                &SpaceScanOptions::default(),
+                &CancellationToken::new(),
+                &mut |_, _| {},
+            );
+            eprintln!(
+                "PERF space@{n}: {:?} bytes={} files={} dirs={}",
+                started.elapsed(),
+                session.logical_bytes,
+                session.file_count,
+                session.dir_count
+            );
+            assert_eq!(session.file_count, n as u64);
+        }
+    }
+}
