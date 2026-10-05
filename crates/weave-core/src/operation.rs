@@ -9,6 +9,46 @@
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+/// 可逆性契约等级（M2.0 §8 Reversibility Contract）。
+///
+/// 每种 OperationKind 必须声明自己的可恢复能力等级；UI/计划摘要必须
+/// 如实呈现，不得把高等级风险伪装成普通操作（M2.0 §8/§20）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReversibilityLevel {
+    /// L1 — Operation-log reversible：记录旧状态即可反向（Rename/Move）。
+    OperationLog,
+    /// L2 — Recovery/Quarantine reversible：需要备份/隔离件/回收站才能恢复。
+    RecoveryRequired,
+    /// L3 — Irreversible：无法可靠自动恢复；Apply 前必须显式用户确认。
+    Irreversible,
+}
+
+impl ReversibilityLevel {
+    /// 等级对应的默认风险（预览摘要呈现用；模块可依据策略上调）。
+    pub fn default_risk(self) -> RiskLevel {
+        match self {
+            ReversibilityLevel::OperationLog => RiskLevel::Low,
+            ReversibilityLevel::RecoveryRequired => RiskLevel::Medium,
+            ReversibilityLevel::Irreversible => RiskLevel::High,
+        }
+    }
+
+    /// L3 操作必须在 Apply 前获得显式用户确认（M2.0 §8）。
+    pub fn requires_explicit_confirmation(self) -> bool {
+        matches!(self, ReversibilityLevel::Irreversible)
+    }
+}
+
+/// 操作风险等级（M2.0 §5/§20：Preview 必须呈现预计风险）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+}
+
 /// 操作种类（M2 §9）。M2 只实现 Rename / Move（Organizer = Move 的一种规划）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +71,23 @@ impl OperationKind {
             OperationKind::DuplicateRecycle => "duplicateRecycle",
             OperationKind::TextTransform => "textTransform",
             OperationKind::BatchExecute => "batchExecute",
+        }
+    }
+
+    /// 可逆性契约（M2.0 §8）：种类级声明。
+    ///
+    /// - Rename/Move = L1：事务记录旧路径即可反向。
+    /// - DuplicateRecycle = L2：回收站 = Quarantine（条目可能被用户清空）。
+    /// - TextTransform = L2：依赖事务备份件恢复（备份可能被清理）。
+    /// - BatchExecute = L2（保守声明）：管线可能覆盖/导出到既有目标。
+    ///
+    /// 当前没有 L3 操作；未来模块引入 L3 时必须走显式确认门。
+    pub fn reversibility_level(self) -> ReversibilityLevel {
+        match self {
+            OperationKind::Rename | OperationKind::Move => ReversibilityLevel::OperationLog,
+            OperationKind::DuplicateRecycle
+            | OperationKind::TextTransform
+            | OperationKind::BatchExecute => ReversibilityLevel::RecoveryRequired,
         }
     }
 }
@@ -118,6 +175,29 @@ impl Plan {
         }
         (ready, conflict, invalid, noop)
     }
+
+    /// 计划的可逆性等级 = 种类契约（M2.0 §6 Plan.Reversibility）。
+    pub fn reversibility_level(&self) -> ReversibilityLevel {
+        self.kind.reversibility_level()
+    }
+
+    /// 计划的风险等级 = 可逆性契约默认值；存在碰撞条目时上调一级
+    /// （目标已占用 ⇒ 恢复路径更复杂，如实升级，M2.0 §20 预计影响）。
+    pub fn risk_level(&self) -> RiskLevel {
+        let base = self.kind.reversibility_level().default_risk();
+        let has_conflict = self
+            .items
+            .iter()
+            .any(|i| i.status == PlanItemStatus::Conflict);
+        if has_conflict {
+            match base {
+                RiskLevel::Low => RiskLevel::Medium,
+                _ => RiskLevel::High,
+            }
+        } else {
+            base
+        }
+    }
 }
 
 #[cfg(test)]
@@ -125,6 +205,67 @@ mod tests {
     use super::*;
     use crate::error::WeaveError;
     use crate::id::OperationId;
+
+    #[test]
+    fn reversibility_contract_declares_levels_and_risk() {
+        // L1：Rename/Move —— 记录旧状态即可反向
+        assert_eq!(
+            OperationKind::Rename.reversibility_level(),
+            ReversibilityLevel::OperationLog
+        );
+        assert_eq!(
+            OperationKind::Move.reversibility_level(),
+            ReversibilityLevel::OperationLog
+        );
+        // L2：回收站/备份/管线覆盖 —— 需要恢复件
+        for kind in [
+            OperationKind::DuplicateRecycle,
+            OperationKind::TextTransform,
+            OperationKind::BatchExecute,
+        ] {
+            assert_eq!(
+                kind.reversibility_level(),
+                ReversibilityLevel::RecoveryRequired,
+                "{kind:?}"
+            );
+        }
+        // L3 确认门：当前无 L3 操作，但契约必须存在并被执行
+        assert!(ReversibilityLevel::Irreversible.requires_explicit_confirmation());
+    }
+
+    #[test]
+    fn plan_risk_defaults_from_contract_and_bumps_on_conflict() {
+        let plan = |conflict: bool| Plan {
+            operation_id: OperationId::generate(),
+            kind: OperationKind::Rename,
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            items: vec![PlanItem {
+                item_id: "item_0000".to_string(),
+                source_path: "C:\\a.jpg".to_string(),
+                target_path: "C:\\b.jpg".to_string(),
+                status: if conflict {
+                    PlanItemStatus::Conflict
+                } else {
+                    PlanItemStatus::Ready
+                },
+                collision: if conflict {
+                    CollisionKind::ExistingTarget
+                } else {
+                    CollisionKind::None
+                },
+                source_size: None,
+                source_modified: None,
+                warnings: vec![],
+                errors: vec![],
+            }],
+        };
+        assert_eq!(plan(false).risk_level(), RiskLevel::Low);
+        assert_eq!(plan(true).risk_level(), RiskLevel::Medium);
+        assert_eq!(
+            plan(false).reversibility_level(),
+            ReversibilityLevel::OperationLog
+        );
+    }
 
     #[test]
     fn enums_serialize_camel_case() {

@@ -51,6 +51,8 @@ impl Tool for InspectTool {
             estimated_output: None,
             // 只读操作没有可撤销的变更；reversible=false 表示"没有东西可撤销"。
             reversible: false,
+            reversibility: weave_core::prelude::ReversibilityLevel::OperationLog,
+            risk: weave_core::prelude::RiskLevel::Low,
         })
     }
 
@@ -133,6 +135,8 @@ impl Tool for AnalyzeTool {
             conflicts: vec![],
             estimated_output: None,
             reversible: false,
+            reversibility: weave_core::prelude::ReversibilityLevel::OperationLog,
+            risk: weave_core::prelude::RiskLevel::Low,
         })
     }
 
@@ -209,6 +213,8 @@ impl Tool for HashTool {
             conflicts: vec![],
             estimated_output: None,
             reversible: false,
+            reversibility: weave_core::prelude::ReversibilityLevel::OperationLog,
+            risk: weave_core::prelude::RiskLevel::Low,
         })
     }
 

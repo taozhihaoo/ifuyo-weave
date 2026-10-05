@@ -34,6 +34,7 @@ pub mod prelude {
     pub use crate::id::{InputKind, JobId, OperationId, ToolCategory, ToolId};
     pub use crate::operation::{
         CollisionKind, ItemOutcome, OperationKind, Plan, PlanItem, PlanItemStatus,
+        ReversibilityLevel, RiskLevel,
     };
     pub use crate::path::{PathValidation, validate_absolute_path, validate_path};
     pub use crate::preview::{Preview, PreviewItem};
