@@ -909,3 +909,106 @@ Known Limitations:
 
 - shadow 层级目前仅用于 palette/home 卡片；各工具面板内嵌 boxStyle
   仍为轻边框风（统一卡片组件列 M11 收尾或 M12）
+
+## M2.0 Foundation（2.0 基础执行底座）
+
+Scope: 统一执行生命周期（Input→Analyze→Plan→Preview/DryRun→Apply→Audit→Recover→Report）
+的契约正式化。**Adapter > Refactor > Rewrite**——1.0 已有的执行设施全部保留并
+派生复用，无第二引擎/第二 Undo/第二 Report/第二 Audit 存储（D64–D67）。
+
+Phase A 审计结论（FACT/HYPOTHESIS/INFERENCE）:
+
+- **FACT**：1.0 已具备——统一 Plan/Operation 语言（weave-core::operation，
+  Preview/Execute 同一 Plan 铁律）；事务 InProgress/Completed 两阶段落盘（M2
+  §82/§83 crash safety）；Job 状态机显式迁移校验（weave-batch::state，含
+  Paused）；崩溃 Journal append-only+fsync+损坏隔离+Interrupted 检测+跨重启
+  resume（weave-batch::journal）；WeaveError 五字段结构化错误；atomic_write
+  （temp+fsync+rename）；协作取消安全点；HistoryStore 版本化+损坏隔离。
+- **GAP（M2.0 实际工作）**：可逆性等级契约缺失；验证策略各模块各写各的；
+  io 错误无 locked/space 精确分类；跨卷 Move 被 D30 拒绝；InProgress 遗留
+  无启动检测/呈现；Report/Audit 无统一词汇。
+- **INFERENCE**：跨卷测试用 Q: 盘符在 CI 不可假设；取消计数在 M2 §44 语义
+  中并入 skipped（摘要层如实保留）。
+
+Commits（逻辑边界拆分）:
+
+- 3df3769 C1 可逆性契约：ReversibilityLevel L1/L2/L3 + 每种类声明 +
+  RiskLevel 派生（Conflict 上调）+ Preview 契约字段（reversibility/risk）
+  + L3 显式确认门（requires_explicit_confirmation）
+- 8a710d0 C3 io 错误分类：IoErrorClass + WeaveError::from_io（raw OS 码
+  32/33→fileLocked、112/28→insufficientSpace、NotFound/Permission 精确码）
+- 21b038b C2 分层验证：VerificationPolicy（Exists/SizeMtime/FullHash，
+  成本档 Cheap/Moderate/Expensive 为契约）+ FileFingerprint +
+  weave-files::verify capture/verify；execute Revalidate 委托统一策略
+- 799ba08 C4 跨卷安全移动：Copy→Verify(size+SHA-256)→Remove Source，
+  目标侧唯一临时名；volumes_match 归一化扩展前缀（同卷误判修复）；
+  FsFault CopyDenied/RemoveDenied；诚实部分失败语义（D66 取代 D30）
+- 81d5d43 C5 中断检测：HistoryStore::detect_interrupted（只读 InProgress
+  扫描+损坏隔离）+ detect_interrupted IPC + History 面板中断区（诚实
+  部分撤销入口；i18n zh/en 同笔）
+- f92cc67 C6 ExecutionSummary：模块无关统一摘要（to_json/summary_line）+
+  weave-files::ExecutionReport 派生适配
+- 3568f0a C7 审计事件：AuditAction/AuditEvent 从事务派生（Applied/
+  NotExecuted/NoOp + Before 事实），从 UndoReport 派生（Recovered/
+  RecoveryNotPossible）——纯派生，无第二存储（D67）
+- 26d1c67 lint + 200112a C8a perf 证据（10k 文件 SizeMtime：capture
+  272ms / verify 133ms，stat-bound）+ DECISIONS D64–D67
+
+Execution Lifecycle（最终实际形态，全部已存在并被 M2.0 正式化）:
+
+```text
+Input → Analyze(各模块扫描/分析) → Plan(weave-core::Plan, 快照+碰撞)
+  → Preview(同一 Plan 呈现数量/目标/风险/可逆级别) → [用户确认]
+  → Apply(执行器逐条 Revalidate=SizeMtime 策略 → 操作；InProgress 落盘)
+  → Audit(事务=实际变更事实；journal=逐条完成事实；派生 AuditEvent)
+  → Recover(undo_transaction 按事务事实恢复；中断由 detect_interrupted 呈现)
+  → Report(ExecutionReport + 派生 ExecutionSummary)
+```
+
+State Machines:
+
+- Job（weave-batch::state，既有）：Created→Planned→Ready→Running→
+  Completed/CompletedWithFailures/Failed | Cancelling→Cancelled；Running↔Paused
+- 事务（weave-history，既有）：InProgress（执行前落盘）→ Completed；
+  崩溃遗留 InProgress ⇒ detect_interrupted 识别（M2.0 §11 新呈现）
+- 条目：Ready/Conflict/Invalid/NoOp（Plan 侧）→ Executed/NotExecuted/NoOp
+  （事务事实）→ Restored/UndoConflict/Missing/NotUndoable（Undo 结果）
+- Recovery：L1=操作日志可逆；L2=恢复件（回收站/备份）可逆且可能缺失；
+  L3=必须显式确认（当前无 L3 操作）
+
+1.0 兼容与迁移（§31.5）:
+
+- 无 schema 迁移：HistoryFile/Journal schema 版本未变；Preview 新增字段
+  仅进绑定（serde 默认向下兼容）；错误码新增（rename.fileLocked 等），
+  既有码全部保留；move.crossVolumeUnsupported 退役（D66），其消费测试
+  改写为 createDestinationFailed 语义。1.0 全部功能门禁照常全绿。
+
+Tests（§31.6 实际执行）:
+
+- cargo test --workspace：36 套件全绿 0 failed（含新增：reversibility
+  契约 2、错误分类 1、verify 5+1 ignored perf、detect_interrupted 2、
+  audit 派生 2、跨卷移动 6）
+- vitest 38 全绿；tsc/eslint 干净；tauri build 通过（体积见下）
+- perf 证据：verify@10k SizeMtime capture=272ms / verify=133ms（§25：
+  验证不拖慢普通操作）
+
+Remaining Issues（§31.7）:
+
+- P0：无
+- P1：无（证据不足以标记——跨卷/中断/审计路径均有 fault 注入与真实
+  文件测试覆盖）
+- P2：ExecutionSummary 的 cancelled 分离计数恒 0（M2 §44 语义并入
+  skipped，如实保留非伪造；若 M2.1+ 需要分离计数须先改执行器事实结构）；
+  Preview risk/reversibility 字段已入契约但 UI 尚未逐一展示（现有面板
+  已显示冲突计数与可撤销性，风险芯片留给 M2.13 Unified Experience）；
+  batch 引擎的 ExecutionSummary 派生适配未写（batch 已有 DTO 报告，接入
+  列 M2.1+ 按需）
+
+M2.1 Handoff（§31.8 前置条件）:
+
+- Compare 直接复用：Plan/Operation（weave-core）、VerificationPolicy
+  （大文件对比建议 Exists/SizeMtime 档，FullHash 仅完整性需要时）、
+  WeaveError::from_io（权限/锁定精确分类）、ExecutionSummary（报告）、
+  事务+AuditEvent 派生（审计）；Compare 只读分析不产生 mutation，
+  无 Undo 需求（reversible=true 但无可撤销内容时如实 reversible=false）。
+- 无阻塞前置条件：M2.1 不需要等待任何 M2.0 遗留项。
