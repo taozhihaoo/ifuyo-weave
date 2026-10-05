@@ -680,6 +680,15 @@ fn fault_undo_conflict_when_original_occupied_and_missing_when_absent() {
 fn integration_closed_loop_scan_group_select_recycle_history_undo() {
     use weave_history::{HistoryEntry, HistoryStore, OperationStatus, Reversibility};
 
+    // 真实回收站集成：环境不可用（CI 部分runner 回收站被禁用/不可列表）时
+    // 如实跳过，不制造假失败（§104 诚实测试；本地/正常环境照常全跑）
+    if !crate::recycle::recycle_bin_operational() {
+        eprintln!(
+            "skip integration_closed_loop_*: recycle bin not operational in this environment"
+        );
+        return;
+    }
+
     // create temp root: A/B/C 重复 + 独立 D（中文/emoji/括号名，§96 Unicode）
     let ws = TempWorkspace::new("dup-loop").expect("ws");
     let sub = ws.dir("子目录").expect("dir");
@@ -796,6 +805,12 @@ fn integration_closed_loop_scan_group_select_recycle_history_undo() {
 #[test]
 fn integration_fault_source_vanishes_between_scan_and_execute() {
     // §146：scan 与 execute 之间删除 source ⇒ 该条 skipped，绝不误回收
+    if !crate::recycle::recycle_bin_operational() {
+        eprintln!(
+            "skip integration_fault_source_vanishes_*: recycle bin not operational in this environment"
+        );
+        return;
+    }
     let (ws, all) = dup_ws("fault-vanish", 4);
     let paths = &all[..3]; // 选中 3 条（含将消失的一条），保留 1 条
     let report = scan(&ws);
