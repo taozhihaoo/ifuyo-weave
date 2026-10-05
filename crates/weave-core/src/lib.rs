@@ -21,6 +21,7 @@ pub mod path;
 pub mod preview;
 pub mod progress;
 pub mod registry;
+pub mod report;
 pub mod result;
 pub mod tool;
 pub mod verification;
@@ -41,6 +42,7 @@ pub mod prelude {
     pub use crate::preview::{Preview, PreviewItem};
     pub use crate::progress::{OperationStatus, Progress};
     pub use crate::registry::ToolRegistry;
+    pub use crate::report::{ExecutionSummary, SummaryStatistics};
     pub use crate::result::OperationResult;
     pub use crate::tool::{Tool, ToolInput, ToolOptionSpec, UnsupportedTool};
     pub use crate::verification::{FileFingerprint, VerificationCost, VerificationPolicy};

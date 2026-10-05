@@ -36,6 +36,53 @@ pub struct ExecutionReport {
     pub skipped: u64,
 }
 
+impl ExecutionReport {
+    /// 派生统一执行摘要（M2.0 §18）：计数按 M2 §44 语义如实映射
+    /// （取消条目在本执行器计入 skipped，摘要层不伪造分离计数）。
+    pub fn summary(&self) -> weave_core::prelude::ExecutionSummary {
+        use weave_core::prelude::{ExecutionSummary, SummaryStatistics};
+        let level = self.plan.kind.reversibility_level();
+        let mut warnings = Vec::new();
+        let mut errors = Vec::new();
+        let mut no_op = 0u64;
+        for item in &self.plan.items {
+            warnings.extend(item.warnings.iter().cloned());
+            errors.extend(item.errors.iter().cloned());
+            if item.status == PlanItemStatus::NoOp {
+                no_op += 1;
+            }
+        }
+        ExecutionSummary {
+            operation_id: self.plan.operation_id.to_string(),
+            kind: self.plan.kind,
+            summary: format!(
+                "{} {} items",
+                match self.plan.kind {
+                    weave_core::prelude::OperationKind::Rename => "Rename",
+                    weave_core::prelude::OperationKind::Move => "Move",
+                    weave_core::prelude::OperationKind::DuplicateRecycle => "Recycle",
+                    weave_core::prelude::OperationKind::TextTransform => "Text write-back",
+                    weave_core::prelude::OperationKind::BatchExecute => "Batch",
+                },
+                self.plan.items.len()
+            ),
+            statistics: SummaryStatistics {
+                total: self.plan.items.len() as u64,
+                succeeded: self.executed,
+                failed: self.failed,
+                skipped: self.skipped,
+                cancelled: 0,
+                no_op,
+            },
+            warnings,
+            errors,
+            duration_ms: self.duration_ms,
+            reversibility: level,
+            risk: level.default_risk(),
+        }
+    }
+}
+
 /// 执行一个已确认的 Plan。
 ///
 /// 顶层不返回条目级错误（M2 §40 部分成功语义）：一切条目失败都在

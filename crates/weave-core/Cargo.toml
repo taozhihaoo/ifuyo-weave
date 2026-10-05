@@ -7,6 +7,7 @@ description = "Weave stable domain contracts: ids, errors, tool trait, registry,
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
