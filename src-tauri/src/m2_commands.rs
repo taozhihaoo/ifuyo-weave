@@ -9,7 +9,10 @@
 use crate::commands::IpcError;
 use crate::files_dto::JobHandleDto;
 use crate::jobs::JobOutcome;
-use crate::ops_dto::{HistoryEntryDto, OrganizerRuleDto, PlanDto, RenameRuleDto, TransactionDto};
+use crate::ops_dto::{
+    HistoryEntryDto, InterruptedOperationDto, InterruptedReportDto, OrganizerRuleDto, PlanDto,
+    RenameRuleDto, TransactionDto,
+};
 use tauri::Manager;
 use weave_core::prelude::{OperationId, WeaveError};
 
@@ -191,4 +194,22 @@ pub fn get_operation(
         )
     })?;
     Ok(TransactionDto::from_transaction(&tx))
+}
+
+/// 中断检测（M2.0 §11）：InProgress 事务 = Apply 中被中断的操作。
+/// 只读事实呈现；Undo 入口仍走 undo_operation（逐条事实纪律）。
+#[tauri::command]
+#[specta::specta]
+pub fn detect_interrupted(app: tauri::AppHandle) -> Result<InterruptedReportDto, IpcError> {
+    let dir = crate::rename_service::resolve_history_dir(&app)?;
+    let store = weave_history::HistoryStore::open(&dir)?;
+    let outcome = store.detect_interrupted()?;
+    Ok(InterruptedReportDto {
+        interrupted: outcome
+            .interrupted
+            .iter()
+            .map(InterruptedOperationDto::from_transaction)
+            .collect(),
+        quarantined_count: outcome.quarantined.len() as f64,
+    })
 }

@@ -157,3 +157,49 @@ fn entry_capacity_is_bounded_oldest_evicted() {
             .ends_with(&format!("{}", crate::MAX_ENTRIES))
     );
 }
+
+#[test]
+fn detect_interrupted_finds_only_inprogress_and_quarantines_corrupt() {
+    use crate::model::OperationStatus;
+    let ws = TempWorkspace::new("hist-interrupted").expect("ws");
+    let store = HistoryStore::open(ws.path()).expect("open");
+
+    // InProgress 事务：模拟"落盘后崩溃"遗留
+    let mut interrupted = sample_transaction(&OperationId::parse("op_aa00000000aa").expect("id"));
+    interrupted.status = OperationStatus::InProgress;
+    store.save_transaction(&interrupted).expect("save inprogress");
+
+    // Completed 事务：不应被报告
+    store
+        .save_transaction(&sample_transaction(&OperationId::parse("op_aa00000000bb").expect("id")))
+        .expect("save completed");
+
+    // 损坏事务：按既有纪律隔离
+    let corrupt = ws
+        .path()
+        .join("transactions")
+        .join("op_aa00000000cc.json");
+    std::fs::write(&corrupt, "{ not json").expect("write corrupt");
+
+    let outcome = store.detect_interrupted().expect("detect");
+    assert_eq!(outcome.interrupted.len(), 1);
+    assert_eq!(
+        outcome.interrupted[0].operation_id.to_string(),
+        "op_aa00000000aa"
+    );
+    assert_eq!(outcome.quarantined.len(), 1);
+    assert!(outcome.quarantined[0].contains("op_aa00000000cc"));
+    // 隔离后重测：只剩 InProgress 事实，损坏文件不再干扰
+    let again = store.detect_interrupted().expect("re-detect");
+    assert_eq!(again.interrupted.len(), 1);
+    assert!(again.quarantined.is_empty());
+}
+
+#[test]
+fn detect_interrupted_on_empty_store_is_empty_not_error() {
+    let ws = TempWorkspace::new("hist-interrupted-empty").expect("ws");
+    let store = HistoryStore::open(ws.path()).expect("open");
+    let outcome = store.detect_interrupted().expect("detect");
+    assert!(outcome.interrupted.is_empty());
+    assert!(outcome.quarantined.is_empty());
+}

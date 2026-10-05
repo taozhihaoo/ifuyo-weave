@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import type { HistoryEntryDto } from "../../generated/bindings";
+import type { HistoryEntryDto, InterruptedOperationDto } from "../../generated/bindings";
 import { commands } from "../../generated/bindings";
 import { useT } from "../../i18n";
 import { formatTimestamp } from "../../lib/jobs";
@@ -10,12 +10,14 @@ interface HistoryPanelProps {
   refreshSignal: number;
 }
 
-/** Recent Operations（M2 §56 latest first）+ 每条 Undo 入口。 */
+/** Recent Operations（M2 §56 latest first）+ 每条 Undo 入口 + 中断检测（M2.0 §11）。 */
 export function HistoryPanel({ locale, onUndoDone, refreshSignal }: HistoryPanelProps) {
   const t = useT();
   const [entries, setEntries] = useState<HistoryEntryDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [undoBusy, setUndoBusy] = useState<string | null>(null);
+  const [interrupted, setInterrupted] = useState<InterruptedOperationDto[]>([]);
+  const [quarantinedCount, setQuarantinedCount] = useState(0);
 
   const load = useCallback(() => {
     commands
@@ -28,6 +30,18 @@ export function HistoryPanel({ locale, onUndoDone, refreshSignal }: HistoryPanel
         }
       })
       .catch(() => setError("history load failed"));
+    // 中断检测（M2.0 §11）：InProgress 事务 = Apply 中被中断的操作
+    commands
+      .detectInterrupted()
+      .then((r) => {
+        if (r.status === "ok") {
+          setInterrupted(r.data.interrupted);
+          setQuarantinedCount(r.data.quarantinedCount ?? 0);
+        }
+      })
+      .catch(() => {
+        // 检测失败不打断历史列表（诚实降级：本区块隐藏）
+      });
   }, []);
 
   useEffect(() => {
@@ -74,6 +88,54 @@ export function HistoryPanel({ locale, onUndoDone, refreshSignal }: HistoryPanel
       style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}
     >
       <h2 style={{ margin: 0, fontSize: "var(--typography-size-xl)" }}>{t("history.title")}</h2>
+      {interrupted.length > 0 ? (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--spacing-xs)",
+            padding: "var(--spacing-sm) var(--spacing-md)",
+            border: "1px solid var(--color-warning, var(--color-border))",
+            borderRadius: "var(--radius-sm)",
+            fontSize: "var(--typography-size-sm)",
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>{t("history.interrupted.title")}</span>
+          <span style={{ color: "var(--color-text-muted)" }}>
+            {t("history.interrupted.hint")}
+          </span>
+          {interrupted.map((op) => (
+            <div key={op.operationId} style={{ display: "flex", gap: "var(--spacing-md)", alignItems: "center" }}>
+              <span>{t(`operation.kind.${op.kind}`)}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>
+                {formatTimestamp(op.timestampMs, locale)}
+              </span>
+              <span style={{ color: "var(--color-text-muted)" }}>
+                {t("history.interrupted.item", {
+                  executed: op.executedCount ?? 0,
+                  total: op.itemCount ?? 0,
+                })}
+              </span>
+              {(op.executedCount ?? 0) > 0 ? (
+                <button
+                  type="button"
+                  disabled={undoBusy === op.operationId}
+                  onClick={() => doUndo(op.operationId)}
+                  style={undoButtonStyle}
+                >
+                  {undoBusy === op.operationId ? t("history.undoing") : t("history.undo")}
+                </button>
+              ) : null}
+            </div>
+          ))}
+          {quarantinedCount > 0 ? (
+            <span style={{ color: "var(--color-text-muted)" }}>
+              {t("history.interrupted.quarantined", { count: quarantinedCount })}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {error ? (
         <div
           role="alert"

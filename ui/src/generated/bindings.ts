@@ -40,6 +40,11 @@ export const commands = {
 	/**  读取某操作的事务详情（Undo 前检查）。 */
 	getOperation: (operationId: string) => typedError<TransactionDto, IpcError>(__TAURI_INVOKE("get_operation", { operationId })),
 	/**
+	 *  中断检测（M2.0 §11）：InProgress 事务 = Apply 中被中断的操作。
+	 *  只读事实呈现；Undo 入口仍走 undo_operation（逐条事实纪律）。
+	 */
+	detectInterrupted: () => typedError<InterruptedReportDto, IpcError>(__TAURI_INVOKE("detect_interrupted")),
+	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
 	 */
@@ -756,6 +761,23 @@ export type ImagePreviewDto = {
 	/**  §59 动画不保留警示。 */
 	animationDropped: boolean,
 	warnings: string[],
+};
+
+/**  中断操作（M2.0 §11）：Apply 中被中断（InProgress 遗留）的事务摘要。 */
+export type InterruptedOperationDto = {
+	operationId: string,
+	kind: string,
+	timestampMs: number | null,
+	itemCount: number | null,
+	/**  事务中标记为 Executed 的条目数——Undo 只恢复这些。 */
+	executedCount: number | null,
+	reversible: string,
+};
+
+/**  中断检测结果（含损坏隔离计数，供 UI 明示）。 */
+export type InterruptedReportDto = {
+	interrupted: InterruptedOperationDto[],
+	quarantinedCount: number | null,
 };
 
 /**

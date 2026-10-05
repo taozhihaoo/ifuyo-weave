@@ -14,7 +14,9 @@ use std::time::SystemTime;
 use weave_core::prelude::OperationId;
 use weave_core::prelude::WeaveError;
 
-use crate::model::{HISTORY_SCHEMA_VERSION, HistoryEntry, OperationTransaction};
+use crate::model::{
+    HISTORY_SCHEMA_VERSION, HistoryEntry, OperationStatus, OperationTransaction,
+};
 
 /// 条目列表容量上限（最旧者被淘汰；事务文件保留——淘汰条目的 Undo 仍可用）。
 pub const MAX_ENTRIES: usize = 500;
@@ -208,4 +210,56 @@ impl HistoryStore {
         entries.truncate(limit);
         Ok(entries)
     }
+
+    /// 中断检测（M2.0 §11）：扫描事务目录，返回 status == InProgress 的事务。
+    ///
+    /// 两阶段写入（M2 §82/§83：执行前先落盘 InProgress、结束后更新终态）
+    /// 保证"落盘后崩溃"的遗留可识别。**只读检测**：不猜测、不改写事实；
+    /// UI 可对其中已执行项发起 Undo——由 Undo 的逐条事实纪律保证不伪造
+    /// 恢复。解析失败的事务按既有纪律隔离（与 load_transaction 一致）。
+    pub fn detect_interrupted(&self) -> Result<DetectInterruptedOutcome, WeaveError> {
+        let dir = self.dir.join("transactions");
+        let mut outcome = DetectInterruptedOutcome {
+            interrupted: Vec::new(),
+            quarantined: Vec::new(),
+        };
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            // 目录不存在 = 从未有过事务 = 无中断
+            Err(_) => return Ok(outcome),
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let raw = match fs::read_to_string(&path) {
+                Ok(raw) => raw,
+                Err(_) => continue, // 不可读：留给 load_transaction 的按需语义
+            };
+            match serde_json::from_str::<OperationTransaction>(&raw) {
+                Ok(tx) if tx.status == OperationStatus::InProgress => {
+                    outcome.interrupted.push(tx);
+                }
+                Ok(_) => {}
+                Err(_) => {
+                    if let Some(q) = Self::quarantine(&path) {
+                        outcome.quarantined.push(q);
+                    }
+                }
+            }
+        }
+        outcome
+            .interrupted
+            .sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(outcome)
+    }
+}
+
+/// 中断检测结果（M2.0 §11）：InProgress 事务 + 检测中隔离的损坏文件。
+#[derive(Debug, Clone, PartialEq)]
+pub struct DetectInterruptedOutcome {
+    pub interrupted: Vec<OperationTransaction>,
+    /// 检测过程中被隔离的事务文件（相对文件名），供 UI 明示。
+    pub quarantined: Vec<String>,
 }

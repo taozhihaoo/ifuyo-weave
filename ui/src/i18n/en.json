@@ -533,5 +533,14 @@
   "app.themeName.system": "Theme: System",
   "app.themeName.light": "Theme: Light",
   "app.themeName.dark": "Theme: Dark",
-  "quickDrop.suggestions": "Suggested tools:"
+  "quickDrop.suggestions": "Suggested tools:",
+  "history.interrupted.title": "Interrupted operations",
+  "history.interrupted.hint": "The app was interrupted while applying (crash/power loss). These operations may be partially applied; undo restores only confirmed executed items.",
+  "history.interrupted.item": "{executed} / {total} executed",
+  "history.interrupted.quarantined": "{count} corrupted history files were quarantined",
+  "operation.kind.rename": "Rename",
+  "operation.kind.move": "Move",
+  "operation.kind.duplicateRecycle": "Duplicate recycle",
+  "operation.kind.textTransform": "Text write-back",
+  "operation.kind.batchExecute": "Batch execute"
 }

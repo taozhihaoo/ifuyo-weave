@@ -310,6 +310,52 @@ pub fn history_status_str(status: OperationStatus) -> String {
     }
 }
 
+/// 中断操作（M2.0 §11）：Apply 中被中断（InProgress 遗留）的事务摘要。
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InterruptedOperationDto {
+    pub operation_id: String,
+    pub kind: String,
+    pub timestamp_ms: Option<f64>,
+    pub item_count: f64,
+    /// 事务中标记为 Executed 的条目数——Undo 只恢复这些。
+    pub executed_count: f64,
+    pub reversible: String,
+}
+
+impl InterruptedOperationDto {
+    pub fn from_transaction(tx: &OperationTransaction) -> Self {
+        Self {
+            operation_id: tx.operation_id.to_string(),
+            kind: tx.kind.as_str().to_string(),
+            timestamp_ms: tx
+                .timestamp
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_millis() as f64),
+            item_count: tx.items.len() as f64,
+            executed_count: tx
+                .items
+                .iter()
+                .filter(|i| i.status == TransactionItemStatus::Executed)
+                .count() as f64,
+            reversible: match tx.reversible {
+                Reversibility::Full => "full".to_string(),
+                Reversibility::Partial => "partial".to_string(),
+                Reversibility::None => "none".to_string(),
+            },
+        }
+    }
+}
+
+/// 中断检测结果（含损坏隔离计数，供 UI 明示）。
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InterruptedReportDto {
+    pub interrupted: Vec<InterruptedOperationDto>,
+    pub quarantined_count: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionItemDto {

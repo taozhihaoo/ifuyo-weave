@@ -20,7 +20,7 @@ pub use model::{
     HISTORY_SCHEMA_VERSION, HistoryEntry, OperationStatus, OperationTransaction, Reversibility,
     TransactionItem, TransactionItemStatus,
 };
-pub use store::{HistoryStore, LoadOutcome, MAX_ENTRIES};
+pub use store::{DetectInterruptedOutcome, HistoryStore, LoadOutcome, MAX_ENTRIES};
 
 #[cfg(test)]
 mod store_tests;

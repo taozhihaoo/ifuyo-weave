@@ -51,6 +51,7 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         m2_commands::undo_operation,
         m2_commands::get_history,
         m2_commands::get_operation,
+        m2_commands::detect_interrupted,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,

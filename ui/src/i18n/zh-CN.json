@@ -533,5 +533,14 @@
   "app.themeName.system": "主题：跟随系统",
   "app.themeName.light": "主题：浅色",
   "app.themeName.dark": "主题：深色",
-  "quickDrop.suggestions": "建议工具："
+  "quickDrop.suggestions": "建议工具：",
+  "history.interrupted.title": "上次执行被中断的操作",
+  "history.interrupted.hint": "应用在执行中被中断（崩溃/断电等）。以下操作可能已部分完成；撤销只会恢复确认执行过的条目，绝不伪造恢复。",
+  "history.interrupted.item": "已执行 {executed} / {total} 条",
+  "history.interrupted.quarantined": "另有 {count} 个损坏的历史文件已隔离",
+  "operation.kind.rename": "重命名",
+  "operation.kind.move": "移动",
+  "operation.kind.duplicateRecycle": "重复文件回收",
+  "operation.kind.textTransform": "文本写回",
+  "operation.kind.batchExecute": "批量执行"
 }
