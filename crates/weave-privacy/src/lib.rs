@@ -19,4 +19,4 @@ pub use model::{
     masked_preview,
 };
 pub use patterns::{PatternHit, PatternKind, scan_line};
-pub use scanners::{ScanLimits, scan_bytes_auto, scan_path};
+pub use scanners::{ScanLimits, scan_bytes_auto};

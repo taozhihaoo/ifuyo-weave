@@ -12,6 +12,7 @@ weave-media = { path = "../weave-media" }
 weave-clipboard = { path = "../weave-clipboard" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+image = { workspace = true }
 lopdf = "0.45"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 

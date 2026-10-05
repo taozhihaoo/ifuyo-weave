@@ -295,9 +295,24 @@ pub fn compare_sessions(
         v
     };
     PrivacyScanComparison {
-        resolved: sorted(before_set.difference(&after_set).map(|s| s.to_string()).collect()),
-        remaining: sorted(before_set.intersection(&after_set).map(|s| s.to_string()).collect()),
-        new: sorted(after_set.difference(&before_set).map(|s| s.to_string()).collect()),
+        resolved: sorted(
+            before_set
+                .difference(&after_set)
+                .map(|s| s.to_string())
+                .collect(),
+        ),
+        remaining: sorted(
+            before_set
+                .intersection(&after_set)
+                .map(|s| s.to_string())
+                .collect(),
+        ),
+        new: sorted(
+            after_set
+                .difference(&before_set)
+                .map(|s| s.to_string())
+                .collect(),
+        ),
     }
 }
 
@@ -401,7 +416,7 @@ mod tests {
     #[test]
     fn masked_preview_never_shows_full_value() {
         assert_eq!(masked_preview("sk-1234567890abcdef"), "sk…ef");
-        assert_eq!(masked_preview("abc").chars().all(|c| c == '•'), true);
+        assert!(masked_preview("abc").chars().all(|c| c == '•'));
         let long = "a".repeat(100);
         assert!(!masked_preview(&long).contains(&long));
     }
