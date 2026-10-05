@@ -44,6 +44,22 @@ export const commands = {
 	 *  只读事实呈现；Undo 入口仍走 undo_operation（逐条事实纪律）。
 	 */
 	detectInterrupted: () => typedError<InterruptedReportDto, IpcError>(__TAURI_INVOKE("detect_interrupted")),
+	/**  文件比较（同步；有界：hash 流式，文本详情另行按需）。 */
+	compareFiles: (left: string, right: string, options: CompareOptionsDto) => typedError<CompareReportDto, IpcError>(__TAURI_INVOKE("compare_files", { left, right, options })),
+	/**  文本详情（按需 L3；超限如实 tooLarge，不假装比较成功）。 */
+	compareFileDetail: (left: string, right: string, options: CompareOptionsDto) => typedError<TextDetailDto, IpcError>(__TAURI_INVOKE("compare_file_detail", { left, right, options })),
+	/**  目录比较（Job 化：进度 + 取消；结果经 compare_get_result 领取）。 */
+	compareDirectories: (left: string, right: string, options: CompareOptionsDto) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("compare_directories", { left, right, options })),
+	/**  领取目录比较结果（未完成 ⇒ compare.notReady）。 */
+	compareGetResult: (jobId: string) => typedError<CompareReportDto, IpcError>(__TAURI_INVOKE("compare_get_result", { jobId })),
+	/**  从差异构建 Copy 计划（进入既有 PlanCache；执行走既有 execute_plan IPC）。 */
+	compareBuildPlan: (leftRoot: string, rightRoot: string, actions: CompareActionDto[]) => typedError<PlanDto, IpcError>(__TAURI_INVOKE("compare_build_plan", { leftRoot, rightRoot, actions })),
+	/**
+	 *  从差异删除条目（安全回收 = Quarantine，M2.1 §20）：
+	 *  复用 M3 recycle_one + `recycle-bin:{token}` 事务目标 ⇒ 既有
+	 *  undo_operation（回收站恢复）原样可用——不是第二套删除。
+	 */
+	compareRecycle: (root: string, relativePaths: string[]) => typedError<CompareRecycleResultDto, IpcError>(__TAURI_INVOKE("compare_recycle", { root, relativePaths })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -351,6 +367,57 @@ export type ColumnProfileDto = {
 	leadingZeroNumeric: boolean,
 };
 
+export type CompareActionDto = {
+	relativePath: string,
+	/**  leftToRight | rightToLeft */
+	direction: string,
+	/**  比较时的源快照证据（stale 检测依据；可空 ⇒ SizeMtime 档降级） */
+	size: number | null,
+	modifiedMs: number | null,
+	digestHex: string | null,
+};
+
+export type CompareOptionsDto = {
+	/**  metadata | hash */
+	contentCheck: string,
+	ignoreUser: string[],
+	maxTextDetailBytes: number | null,
+};
+
+export type CompareRecycleResultDto = {
+	operationId: string,
+	recycled: number | null,
+	failed: number | null,
+	skipped: number | null,
+};
+
+export type CompareReportDto = {
+	operationId: string,
+	sessionKind: string,
+	leftRoot: string,
+	rightRoot: string,
+	effectiveIgnores: string[],
+	items: DifferenceItemDto[],
+	summary: CompareSummaryDto,
+	durationMs: number | null,
+	cancelled: boolean,
+};
+
+export type CompareSummaryDto = {
+	total: number | null,
+	same: number | null,
+	added: number | null,
+	removed: number | null,
+	modified: number | null,
+	typeChanged: number | null,
+	moved: number | null,
+	renamed: number | null,
+	unreadable: number | null,
+	ignored: number | null,
+	unsupported: number | null,
+	error: number | null,
+};
+
 export type DataColumnDto = {
 	id: string,
 	name: string,
@@ -467,6 +534,19 @@ export type DiffStatsDto = {
 	equal: number | null,
 };
 
+export type DifferenceItemDto = {
+	relativePath: string,
+	node: string,
+	kind: string,
+	content: string,
+	left: EntryFactsDto | null,
+	right: EntryFactsDto | null,
+	method: string | null,
+	leftDigest: string | null,
+	rightDigest: string | null,
+	errorCode: string | null,
+};
+
 /**  DocumentDiagnostic（§97）。 */
 export type DocumentDiagnostic = {
 	/**  info | warning | error */
@@ -563,6 +643,15 @@ export type DuplicateScanReportDto = {
 	errors: string[],
 	partialResult: boolean,
 	groups: DuplicateGroupDto[],
+};
+
+export type EntryFactsDto = {
+	path: string,
+	size: number | null,
+	modifiedMs: number | null,
+	digestHex: string | null,
+	encoding: string | null,
+	lineCount: number | null,
 };
 
 export type ExtractMatchDto = {
@@ -1022,6 +1111,16 @@ export type SortSpecDto = {
 	columnId: string,
 	descending: boolean,
 	ignoreCase: boolean,
+};
+
+export type TextDetailDto = {
+	leftEncoding: string | null,
+	rightEncoding: string | null,
+	lineEndingDiffers: boolean,
+	/**  true ⇒ 超出尺寸上限，report 为 None（M2.1 §9 诚实降级）。 */
+	tooLarge: boolean,
+	/**  Diff 形状复用 text_dto::DiffReportDto（M4 已导出同一契约，不重复定义）。 */
+	report: DiffReportDto | null,
 };
 
 export type TextDiagnosticDto = {

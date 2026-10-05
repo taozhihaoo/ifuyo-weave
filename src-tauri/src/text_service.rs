@@ -423,6 +423,7 @@ pub fn build_text_write_plan(
                 snapshot_modified_ms
                     .map(|ms| std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64))
             },
+            source_digest: None,
             warnings: Vec::new(),
             errors: Vec::new(),
         }],

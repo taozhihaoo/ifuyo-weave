@@ -36,6 +36,8 @@ pub enum JobOutcome {
     TextExecuted(Box<crate::ops_dto::PlanReportDto>),
     /// M7：Batch Job 结果（JobPlan 同引擎 Execute）。
     BatchExecuted(Box<crate::batch_service::BatchJobResultDto>),
+    /// M2.1：目录比较完成（结果经 CompareResultCache 领取，终态仅登记）。
+    CompareCompleted,
 }
 
 #[derive(Debug)]
@@ -174,6 +176,9 @@ impl JobTracker {
                         None,
                         None,
                     ),
+                    JobOutcome::CompareCompleted => {
+                        ("completed", None, None, None, None, None, None, None, None)
+                    }
                     JobOutcome::TextExecuted(report) => (
                         "completed",
                         None,

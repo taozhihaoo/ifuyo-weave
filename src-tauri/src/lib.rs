@@ -8,6 +8,7 @@
 pub mod app_info;
 pub mod batch_service;
 pub mod commands;
+pub mod compare_service;
 pub mod config;
 pub mod data_service;
 pub mod document_service;
@@ -52,6 +53,12 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         m2_commands::get_history,
         m2_commands::get_operation,
         m2_commands::detect_interrupted,
+        compare_service::compare_files,
+        compare_service::compare_file_detail,
+        compare_service::compare_directories,
+        compare_service::compare_get_result,
+        compare_service::compare_build_plan,
+        compare_service::compare_recycle,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,

@@ -393,6 +393,7 @@ pub fn image_execute(
             source_modified: std::fs::metadata(&destination)
                 .ok()
                 .and_then(|m| m.modified().ok()),
+            source_digest: None,
             warnings: Vec::new(),
             errors: Vec::new(),
         }],

@@ -23,6 +23,7 @@ weave-text = { path = "../crates/weave-text" }
 weave-data = { path = "../crates/weave-data", features = ["specta"] }
 weave-media = { path = "../crates/weave-media" }
 weave-batch = { path = "../crates/weave-batch" }
+weave-compare = { path = "../crates/weave-compare" }
 weave-documents = { path = "../crates/weave-documents", features = ["specta"] }
 weave-utilities = { path = "../crates/weave-utilities" }
 weave-workflow = { path = "../crates/weave-workflow", features = ["specta"] }

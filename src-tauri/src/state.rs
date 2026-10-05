@@ -36,6 +36,8 @@ pub struct AppState {
     /// M8（下 §141）：merge plan 服务端缓存（preview 建、execute 用——
     /// TOCTOU 重校验依据；execute 取走即删，失败放回）。
     pub document_plans: Mutex<HashMap<String, weave_documents::PdfMergePlan>>,
+    /// M2.1：目录比较结果缓存（job_id 为键，compare_get_result 领取）。
+    pub compare_results: std::sync::Arc<crate::compare_service::CompareResultCache>,
 }
 
 impl AppState {
@@ -51,6 +53,7 @@ impl AppState {
             batch_jobs: Mutex::new(HashMap::new()),
             batch_dest_locks: Mutex::new(HashMap::new()),
             document_plans: Mutex::new(HashMap::new()),
+            compare_results: std::sync::Arc::new(crate::compare_service::CompareResultCache::new()),
         }
     }
 }

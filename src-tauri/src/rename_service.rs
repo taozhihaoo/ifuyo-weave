@@ -148,10 +148,11 @@ pub fn run_plan_job(
         timestamp: tx.timestamp,
         summary: format!(
             "{} {} files",
-            if tx.kind == OperationKind::Rename {
-                "Rename"
-            } else {
-                "Move"
+            match tx.kind {
+                OperationKind::Rename => "Rename",
+                OperationKind::Move => "Move",
+                OperationKind::Copy => "Copy",
+                _ => "Apply",
             },
             executed_items
         ),
