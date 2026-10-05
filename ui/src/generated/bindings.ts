@@ -60,6 +60,14 @@ export const commands = {
 	 *  undo_operation（回收站恢复）原样可用——不是第二套删除。
 	 */
 	compareRecycle: (root: string, relativePaths: string[]) => typedError<CompareRecycleResultDto, IpcError>(__TAURI_INVOKE("compare_recycle", { root, relativePaths })),
+	/**  本机可访问的本地卷（§4.1：常规本地盘；容量 0 的剔除——不伪造）。 */
+	spaceListVolumes: () => typedError<VolumeInfoDto[], IpcError>(__TAURI_INVOKE("space_list_volumes")),
+	/**  空间扫描（Job 化：进度 + 取消；完成后自动落一条快照供增长对比）。 */
+	spaceScan: (request: SpaceScanRequestDto) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("space_scan", { request })),
+	/**  领取扫描结果（未完成 ⇒ space.notReady）。 */
+	spaceGetResult: (jobId: string) => typedError<SpaceReportDto, IpcError>(__TAURI_INVOKE("space_get_result", { jobId })),
+	/**  清理选中候选：Stale 重验 → recycle（Quarantine）→ 事务/历史 → freed 双报告。 */
+	spaceCleanup: (items: CleanupItemDto[]) => typedError<CleanupResultDto, IpcError>(__TAURI_INVOKE("space_cleanup", { items })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -334,6 +342,35 @@ export type ClassificationDto = {
 	mime: string | null,
 };
 
+export type CleanupCandidateDto = {
+	path: string,
+	kind: string,
+	size: number | null,
+	modifiedMs: number | null,
+	reasons: string[],
+	risk: string,
+	confidence: string,
+};
+
+export type CleanupItemDto = {
+	path: string,
+	/**  扫描时的源快照（stale 检测依据，§36）。 */
+	size: number | null,
+	modifiedMs: number | null,
+};
+
+export type CleanupResultDto = {
+	operationId: string,
+	recycled: number | null,
+	/**  stale（扫描后已变化/消失）被拒条目数——绝不静默删除新内容。 */
+	staleSkipped: number | null,
+	failed: number | null,
+	/**  回收成功项逻辑大小合计（§37 Expected）。 */
+	expectedLogicalFreed: number | null,
+	/**  卷空闲字节前后差（§37 Observed；同卷可测时才有，否则 None）。 */
+	observedFreeDeltaBytes: number | null,
+};
+
 export type ColorRequestDto = { kind: "hex"; value: string } | { kind: "rgb"; r: number | null; g: number | null; b: number | null; a: number | null } | { kind: "hsl"; h: number | null; s: number | null; l: number | null; a: number | null } | { kind: "hsv"; h: number | null; s: number | null; v: number | null; a: number | null } | { kind: "hwb"; h: number | null; w: number | null; b: number | null; a: number | null };
 
 export type ColorResultDto = {
@@ -545,6 +582,15 @@ export type DifferenceItemDto = {
 	leftDigest: string | null,
 	rightDigest: string | null,
 	errorCode: string | null,
+};
+
+export type DirNodeDto = {
+	rel: string,
+	parent: string | null,
+	logicalSize: number | null,
+	fileCount: number | null,
+	dirCount: number | null,
+	unreadable: number | null,
 };
 
 /**  DocumentDiagnostic（§97）。 */
@@ -906,6 +952,15 @@ export type JobStatusDto = {
 	error: IpcError | null,
 };
 
+export type LargestFileDto = {
+	path: string,
+	name: string,
+	size: number | null,
+	extension: string | null,
+	category: string,
+	modifiedMs: number | null,
+};
+
 /**
  *  空值定义（§30/§31：哪些表示计入"空"——绝不默认把 "NULL"/"N/A"/"0"
  *  与空串混同）。
@@ -1113,6 +1168,37 @@ export type SortSpecDto = {
 	ignoreCase: boolean,
 };
 
+export type SpaceReportDto = {
+	operationId: string,
+	root: string,
+	durationMs: number | null,
+	cancelled: boolean,
+	consistency: string,
+	logicalBytes: number | null,
+	fileCount: number | null,
+	dirCount: number | null,
+	unreadableDirs: number | null,
+	unreadableFiles: number | null,
+	disappeared: number | null,
+	directories: DirNodeDto[],
+	largestFiles: LargestFileDto[],
+	typeStats: TypeStatDto[],
+	candidates: CleanupCandidateDto[],
+	/**  与上一条同根快照的增长（§27；无先前快照 ⇒ None）。 */
+	growthDeltaBytes: number | null,
+	growthPercent: number | null,
+};
+
+export type SpaceScanRequestDto = {
+	root: string,
+	/**  Top-N（默认 100；§9）。 */
+	topN: number | null,
+	/**  候选阈值覆盖（None = 默认规则）。 */
+	largeFileBytes: number | null,
+	oldFileDays: number | null,
+	candidates: boolean | null,
+};
+
 export type TextDetailDto = {
 	leftEncoding: string | null,
 	rightEncoding: string | null,
@@ -1197,6 +1283,13 @@ export type TransformResultDto = {
 	removedLines: number | null,
 };
 
+export type TypeStatDto = {
+	extension: string,
+	category: string,
+	count: number | null,
+	bytes: number | null,
+};
+
 export type UndoReportDto = {
 	restored: number | null,
 	conflicts: number | null,
@@ -1227,6 +1320,16 @@ export type ValidationIssueDto = {
 	code: string,
 	message: string,
 	stepId: string | null,
+};
+
+export type VolumeInfoDto = {
+	/**  盘符（如 "C:"）。 */
+	drive: string,
+	totalBytes: number | null,
+	freeBytes: number | null,
+	usedBytes: number | null,
+	/**  0-100；容量 0 ⇒ None（不伪造百分比）。 */
+	usedPercent: number | null,
 };
 
 /**  §77 Workflow Library 条目。 */
