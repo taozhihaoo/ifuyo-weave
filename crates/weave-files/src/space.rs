@@ -180,10 +180,10 @@ impl TopN {
         self.seq += 1;
         self.items.insert(id, file);
         self.heap.push(std::cmp::Reverse((size, id)));
-        if self.heap.len() > self.cap {
-            if let Some(std::cmp::Reverse((_, evicted))) = self.heap.pop() {
-                self.items.remove(&evicted);
-            }
+        if self.heap.len() > self.cap
+            && let Some(std::cmp::Reverse((_, evicted))) = self.heap.pop()
+        {
+            self.items.remove(&evicted);
         }
     }
 
@@ -256,7 +256,7 @@ pub fn scan_space(
                 break;
             }
             processed += 1;
-            if processed % 512 == 0 {
+            if processed.is_multiple_of(512) {
                 progress(processed, None);
             }
             let child_abs = dir_abs.join(&name);
@@ -332,15 +332,15 @@ pub fn scan_space(
                         stat.size,
                     );
                     // 候选评估（§29-§32）
-                    if options.candidates {
-                        if let Some(c) = evaluate_file_candidate(
+                    if options.candidates
+                        && let Some(c) = evaluate_file_candidate(
                             &child_abs,
                             stat.size,
                             stat.modified,
                             &options.rules,
-                        ) {
-                            candidates.push(c);
-                        }
+                        )
+                    {
+                        candidates.push(c);
                     }
                 }
             }
@@ -392,8 +392,8 @@ pub fn scan_space(
 
     // 目录节点展开（含聚合后总数）
     let mut directories: Vec<DirNode> = aggs
-        .into_iter()
-        .map(|(_, agg)| DirNode {
+        .into_values()
+        .map(|agg| DirNode {
             rel: agg.rel,
             parent: agg.parent,
             logical_size: agg.own_size,
@@ -421,7 +421,7 @@ pub fn scan_space(
         .collect();
     type_stats.sort_by(|a, b| b.bytes.cmp(&a.bytes).then(a.extension.cmp(&b.extension)));
 
-    candidates.sort_by(|a, b| b.size.cmp(&a.size));
+    candidates.sort_by_key(|c| std::cmp::Reverse(c.size));
     candidates.truncate(options.top_n.max(100));
 
     progress(processed, Some(processed));
@@ -481,10 +481,10 @@ fn evaluate_file_candidate(
     if size >= rules.large_file_bytes {
         reasons.push(format!("size = {} bytes（≥ large 阈值）", size));
     }
-    if let Some(age) = age {
-        if age >= rules.old_file_age {
-            reasons.push(format!("未修改 {} 天（≥ old 阈值）", age.as_secs() / 86400));
-        }
+    if let Some(age) = age
+        && age >= rules.old_file_age
+    {
+        reasons.push(format!("未修改 {} 天（≥ old 阈值）", age.as_secs() / 86400));
     }
     let is_temp = matches!(&ext, Some(e) if rules.temp_extensions.iter().any(|t| t == e));
     if is_temp {
@@ -510,9 +510,7 @@ fn evaluate_file_candidate(
     };
     let kind = if is_temp {
         CandidateKind::TempFile
-    } else if reasons.len() >= 2 {
-        CandidateKind::LargeFile
-    } else if reasons[0].starts_with("size") {
+    } else if reasons.iter().any(|r| r.starts_with("size")) {
         CandidateKind::LargeFile
     } else {
         CandidateKind::OldFile
