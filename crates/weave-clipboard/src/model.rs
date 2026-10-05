@@ -210,38 +210,52 @@ pub fn apply_retention(
     report
 }
 
+/// ── 共享敏感模式原语（M2.3 §53：Detection 与 Response 分离；M2.4/M2.9
+/// 复用同一组规则原语防漂移 §63）。只回答"命中什么"，不做处置。──
+
+/// JWT 形态（eyJ 开头 base64url 三段式）。
+pub fn looks_like_jwt(token: &str) -> bool {
+    token.starts_with("eyJ") && token.matches('.').count() >= 2
+}
+
+/// password/token/secret/api_key 类键值赋值形态（key: value / key=value）。
+pub fn looks_like_secret_assignment(lower_text: &str) -> bool {
+    for key in ["password", "passwd", "secret", "api_key", "apikey", "token"] {
+        if lower_text.contains(&format!("{key}:")) || lower_text.contains(&format!("{key}=")) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Bearer 头形态。
+pub fn looks_like_bearer(lower_text: &str) -> bool {
+    lower_text.contains("bearer ")
+}
+
+/// 40+ 连续 hex（疑似密钥/哈希原文）。
+pub fn has_long_hex_run(text: &str) -> bool {
+    text.split(|c: char| !c.is_ascii_hexdigit())
+        .any(|seg| seg.len() >= 40)
+}
+
 /// 有限敏感启发式（§18/§19）：只标记 PotentiallySensitive；
 /// 误报可接受，漏报如实（不宣称检测能力）。
+/// 规则原语见上（M2.4 weave-privacy 在其上构建位置级 Finding）。
 pub fn sensitivity_heuristic(kind: ContentKind, text: &str) -> Sensitivity {
     if kind != ContentKind::Text && kind != ContentKind::Html {
         return Sensitivity::Unknown;
     }
     let lower = text.to_lowercase();
-    // JWT 形态（eyJ 开头两段 base64url + 点）
-    if text
-        .split_whitespace()
-        .any(|tok| tok.starts_with("eyJ") && tok.matches('.').count() >= 2)
-    {
-        return Sensitivity::PotentiallySensitive;
+    let hit = text.split_whitespace().any(looks_like_jwt)
+        || looks_like_secret_assignment(&lower)
+        || looks_like_bearer(&lower)
+        || has_long_hex_run(text);
+    if hit {
+        Sensitivity::PotentiallySensitive
+    } else {
+        Sensitivity::Normal
     }
-    // password/token/secret/api_key 类赋值或键值形态
-    for key in ["password", "passwd", "secret", "api_key", "apikey", "token"] {
-        if lower.contains(&format!("{key}:")) || lower.contains(&format!("{key}=")) {
-            return Sensitivity::PotentiallySensitive;
-        }
-    }
-    // Bearer 头形态
-    if lower.contains("bearer ") {
-        return Sensitivity::PotentiallySensitive;
-    }
-    // 40+ 连续 hex（疑似密钥/哈希原文）
-    let hex_run = text
-        .split(|c: char| !c.is_ascii_hexdigit())
-        .any(|seg| seg.len() >= 40);
-    if hex_run {
-        return Sensitivity::PotentiallySensitive;
-    }
-    Sensitivity::Normal
 }
 
 /// 截断预览（§6/§80）：换行规范化仅影响展示；原始 payload 原样。

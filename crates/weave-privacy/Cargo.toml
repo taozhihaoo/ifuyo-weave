@@ -1,0 +1,22 @@
+[package]
+name = "weave-privacy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Privacy / Share Preflight: unified findings model, position-level sensitive-pattern detection, format scanners, cleanup/safe-copy content transforms (M2.4)."
+
+[dependencies]
+weave-core = { path = "../weave-core" }
+weave-files = { path = "../weave-files" }
+weave-media = { path = "../weave-media" }
+weave-clipboard = { path = "../weave-clipboard" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+lopdf = "0.45"
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+weave-testkit = { path = "../weave-testkit" }
+
+[lints]
+workspace = true

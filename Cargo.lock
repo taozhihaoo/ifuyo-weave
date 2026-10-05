@@ -4900,6 +4900,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "weave-privacy"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
+ "serde",
+ "serde_json",
+ "weave-clipboard",
+ "weave-core",
+ "weave-files",
+ "weave-media",
+ "weave-testkit",
+ "zip",
+]
+
+[[package]]
 name = "weave-search"
 version = "0.1.0"
 

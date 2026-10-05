@@ -14,6 +14,7 @@ members = [
     "crates/weave-workflow",
     "crates/weave-compare",
     "crates/weave-clipboard",
+    "crates/weave-privacy",
     "crates/weave-testkit",
     "src-tauri",
 ]
