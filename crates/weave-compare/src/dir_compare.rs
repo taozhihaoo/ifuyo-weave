@@ -713,3 +713,54 @@ mod tests {
         assert!(session.cancelled);
     }
 }
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use crate::options::CompareOptions;
+    use weave_files::fs::StdFilesystem;
+    use weave_testkit::TempWorkspace;
+
+    /// M2.1 §30：100/1k/10k 文件目录比较（Hash 档）——找 O(N²)/重复 I/O，
+    /// 数字不追求极致但必须无爆炸曲线。release 手动运行。
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_directory_compare_at_scale() {
+        for n in [100u32, 1_000, 10_000] {
+            let ws = TempWorkspace::new(&format!("cmp-perf-{n}")).expect("ws");
+            let l = ws.dir("l").expect("l");
+            let r = ws.dir("r").expect("r");
+            for i in 0..n {
+                let content = format!("content-{i}");
+                std::fs::write(l.join(format!("f{i}.txt")), &content).expect("w");
+                std::fs::write(r.join(format!("f{i}.txt")), &content).expect("w");
+            }
+            // 每 10 个文件制造一个差异
+            for i in (0..n).step_by(10) {
+                std::fs::write(r.join(format!("f{i}.txt")), format!("changed-{i}")).expect("w");
+            }
+            let started = std::time::Instant::now();
+            let session = compare_directories(
+                &StdFilesystem,
+                &l,
+                &r,
+                &CompareOptions {
+                    content_check: crate::options::ContentCheck::Hash,
+                    ..CompareOptions::default()
+                },
+                &CancellationToken::new(),
+                &mut |_, _| {},
+            );
+            let elapsed = started.elapsed();
+            eprintln!(
+                "PERF compare@{n}: {:?} same={} modified={} removed={} added={}",
+                elapsed,
+                session.summary.same,
+                session.summary.modified,
+                session.summary.removed,
+                session.summary.added
+            );
+            assert_eq!(session.summary.modified, (n / 10) as u64);
+        }
+    }
+}

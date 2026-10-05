@@ -863,11 +863,9 @@ fn copy_finalize_failure_keeps_target_and_leaves_no_residue() {
             StdFilesystem.create_dir_all(p)
         }
         fn copy(&self, f: &std::path::Path, t: &std::path::Path) -> std::io::Result<u64> {
-            if !self.denied.swap(true, Ordering::SeqCst) {
-                StdFilesystem.copy(f, t)
-            } else {
-                StdFilesystem.copy(f, t)
-            }
+            // 唯一被拒的是 rename（见上）；copy 恒成功，denied 记账仅为语义完整
+            let _ = self.denied.swap(true, Ordering::SeqCst);
+            StdFilesystem.copy(f, t)
         }
         fn remove_file(&self, p: &std::path::Path) -> std::io::Result<()> {
             StdFilesystem.remove_file(p)

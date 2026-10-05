@@ -316,6 +316,7 @@ fn hand_plan(ws: &TempWorkspace, entries: &[(&str, Option<u64>)]) -> Plan {
                 collision: CollisionKind::None,
                 source_size: *size,
                 source_modified: None,
+                source_digest: None,
                 warnings: Vec::new(),
                 errors: Vec::new(),
             })

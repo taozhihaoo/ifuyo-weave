@@ -535,6 +535,7 @@ pub fn build_recycle_plan(
                 collision: CollisionKind::None,
                 source_size: Some(entry.size),
                 source_modified: entry.modified,
+                source_digest: None,
                 warnings: Vec::new(),
                 errors: Vec::new(),
             });
