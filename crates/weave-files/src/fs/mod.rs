@@ -47,4 +47,10 @@ pub trait Filesystem: Send + Sync {
 
     /// 创建目录树（Organizer 目标目录；执行阶段按已确认 Plan 调用）。
     fn create_dir_all(&self, path: &Path) -> io::Result<()>;
+
+    /// 完整复制单文件，返回写入字节数（跨卷移动的 Copy 步，M2.0 §15）。
+    fn copy(&self, from: &Path, to: &Path) -> io::Result<u64>;
+
+    /// 移除单文件（跨卷移动的 Remove Source 步；仅对已验证副本的源调用）。
+    fn remove_file(&self, path: &Path) -> io::Result<()>;
 }

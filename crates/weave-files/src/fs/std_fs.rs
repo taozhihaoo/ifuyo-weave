@@ -40,6 +40,14 @@ impl Filesystem for StdFilesystem {
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
         std::fs::create_dir_all(path)
     }
+
+    fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+        std::fs::copy(from, to)
+    }
+
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        std::fs::remove_file(path)
+    }
 }
 
 #[cfg(test)]

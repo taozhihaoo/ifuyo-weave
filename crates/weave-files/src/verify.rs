@@ -20,9 +20,10 @@ pub fn capture_fingerprint(
     fs: &dyn Filesystem,
     path: &Path,
     policy: VerificationPolicy,
+    base_code: &str,
 ) -> Result<FileFingerprint, WeaveError> {
     let stat = fs.stat(path).map_err(|e| {
-        WeaveError::from_io(&e, "verify", format!("cannot stat {}", path.display()))
+        WeaveError::from_io(&e, base_code, format!("cannot stat {}", path.display()))
             .with_location("weave-files::verify")
     })?;
     let digest_hex = match policy {
@@ -124,7 +125,8 @@ mod tests {
         let file = ws.file("a.txt", "stable content").expect("write");
         let fs = StdFilesystem;
 
-        let fp = capture_fingerprint(&fs, &file, VerificationPolicy::SizeMtime).expect("capture");
+        let fp = capture_fingerprint(&fs, &file, VerificationPolicy::SizeMtime, "verify")
+            .expect("capture");
         assert_eq!(fp.size, Some("stable content".len() as u64));
         assert_eq!(fp.digest_hex, None);
         verify_fingerprint(&fs, &fp, VerificationPolicy::SizeMtime, "rename").expect("verify");
@@ -140,6 +142,7 @@ mod tests {
             &fs,
             &file,
             VerificationPolicy::FullHash(HashAlgorithm::Sha256),
+            "move",
         )
         .expect("capture");
         assert!(fp.digest_hex.is_some());
@@ -164,7 +167,8 @@ mod tests {
         let file = ws.file("a.txt", "v1").expect("write");
         let fs = StdFilesystem;
 
-        let fp = capture_fingerprint(&fs, &file, VerificationPolicy::SizeMtime).expect("capture");
+        let fp = capture_fingerprint(&fs, &file, VerificationPolicy::SizeMtime, "verify")
+            .expect("capture");
         std::fs::write(&file, "v2 with different size").expect("rewrite");
         let err = verify_fingerprint(&fs, &fp, VerificationPolicy::SizeMtime, "rename")
             .expect_err("changed");
@@ -178,7 +182,7 @@ mod tests {
         let fs = FaultFilesystem::wrapping(Box::new(StdFilesystem));
         fs.arm(FsFault::StatVanished);
 
-        let fp = capture_fingerprint(&StdFilesystem, &file, VerificationPolicy::Exists)
+        let fp = capture_fingerprint(&StdFilesystem, &file, VerificationPolicy::Exists, "verify")
             .expect("capture with std fs");
         let err = verify_fingerprint(&fs, &fp, VerificationPolicy::Exists, "rename")
             .expect_err("vanished");

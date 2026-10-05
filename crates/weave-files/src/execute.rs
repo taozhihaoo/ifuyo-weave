@@ -102,7 +102,7 @@ pub fn execute_plan(
             Some(total),
         ));
         let item = out_plan.items[idx].clone();
-        match revalidate_and_rename(fs, &item, out_plan.kind) {
+        match revalidate_and_rename(fs, &item, out_plan.kind, &op_short, idx) {
             Ok(final_target) => {
                 executed += 1;
                 out_plan.items[idx].target_path = final_target.to_string_lossy().into_owned();
@@ -282,6 +282,8 @@ fn revalidate_and_rename(
     fs: &dyn Filesystem,
     item: &PlanItem,
     kind: weave_core::prelude::OperationKind,
+    op_short: &str,
+    item_idx: usize,
 ) -> Result<PathBuf, WeaveError> {
     revalidate_source(fs, item)?;
     let target = PathBuf::from(&item.target_path);
@@ -293,25 +295,30 @@ fn revalidate_and_rename(
         .with_location("weave-files::execute"));
     }
     if kind == weave_core::prelude::OperationKind::Move {
-        if !volumes_match(Path::new(&item.source_path), &target) {
-            return Err(WeaveError::unsupported(
-                "move.crossVolumeUnsupported",
-                "cross-filesystem move is not supported in M2 (DECISIONS D30)",
-            )
-            .with_location("weave-files::execute"));
-        }
         // Organizer 目标目录按已确认 Plan 创建（M2 §77 destination creation；
         // 仅 Move 计划内，绝不越出 Plan 条目）。
         if let Some(parent) = target.parent()
             && !fs.exists(parent)
         {
             fs.create_dir_all(parent).map_err(|e| {
+                // 语义码：destination 创建失败 ≠ source 丢失，不用 from_io 的
+                // sourceNotFound 后缀（M2.0 §14：错误码必须可区分语义）。
                 WeaveError::io(
                     "move.createDestinationFailed",
-                    format!("cannot create destination dir: {e}"),
+                    format!("cannot create destination dir {}: {e}", parent.display()),
                 )
                 .with_location("weave-files::execute")
             })?;
+        }
+        if !volumes_match(Path::new(&item.source_path), &target) {
+            // 跨卷（M2.0 §15 / D60）：Copy → Verify → Remove Source
+            return move_cross_volume(
+                fs,
+                Path::new(&item.source_path),
+                &target,
+                op_short,
+                item_idx,
+            );
         }
     }
     fs.rename(Path::new(&item.source_path), &target)
@@ -354,19 +361,165 @@ fn temp_name(source: &Path, op_short: &str, idx: usize, fs: &dyn Filesystem) -> 
 }
 
 /// 卷前缀比较：同盘符（`X:`）或同 UNC 服务器+共享。
+/// M2.0：`\\?\` 扩展长度前缀先归一化再比较——它只是表示形式，不代表
+/// 跨卷（原实现把 `\\?\C:\x` 与 `C:\x` 误判为跨卷，触发不必要的复制路径）。
 pub fn volumes_match(a: &Path, b: &Path) -> bool {
     let prefix = |p: &Path| -> String {
         let s = p.to_string_lossy().to_lowercase();
-        if let Some(rest) = s.strip_prefix(r"\\?\unc\") {
-            return format!(r"\\{rest}").chars().take(64).collect();
+        let normalized = if let Some(rest) = s.strip_prefix(r"\\?\unc\") {
+            format!(r"\\{rest}")
+        } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+            rest.to_string()
+        } else {
+            s
+        };
+        if normalized.starts_with(r"\\") {
+            return normalized
+                .splitn(4, '\\')
+                .take(4)
+                .collect::<Vec<_>>()
+                .join("\\");
         }
-        if s.starts_with(r"\\?\") {
-            return s.chars().take(6).collect();
-        }
-        if s.starts_with(r"\\") {
-            return s.splitn(4, '\\').take(4).collect::<Vec<_>>().join("\\");
-        }
-        s.chars().take(2).collect()
+        normalized.chars().take(2).collect()
     };
     !prefix(a).is_empty() && prefix(a) == prefix(b)
+}
+
+/// 目标目录内的唯一临时名（跨卷 Copy 落点；最终 rename 原子落位）。
+fn cross_temp_name(target: &Path, op_short: &str, idx: usize, fs: &dyn Filesystem) -> PathBuf {
+    let parent = target.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "target".to_string());
+    let base = format!(".weave-xmove-{op_short}-{idx:04}-{name}");
+    let mut candidate = parent.join(&base);
+    let mut n = 1u32;
+    while fs.exists(&candidate) {
+        candidate = parent.join(format!("{base}.{n}"));
+        n += 1;
+    }
+    candidate
+}
+
+/// 测试缝隙：跨卷移动机制供 crate 内测试矩阵直接驱动（不进入公共 API）。
+#[cfg(test)]
+pub(crate) fn move_cross_volume_for_test(
+    fs: &dyn Filesystem,
+    source: &Path,
+    target: &Path,
+    op_short: &str,
+    idx: usize,
+) -> Result<PathBuf, WeaveError> {
+    move_cross_volume(fs, source, target, op_short, idx)
+}
+
+/// 跨卷安全移动（M2.0 §15 / DECISIONS D60，取代 M2 D30 的"跨卷拒绝"）：
+///
+/// ```text
+/// Copy（目标目录唯一临时名）→ Verify（size + SHA-256）→ rename 落位
+/// → Remove Source → Final Verify
+/// ```
+///
+/// 诚实语义：Copy/Verify 失败 ⇒ 源完好、临时件清理，条目 NotExecuted；
+/// Remove Source 失败 ⇒ 目标副本已验证存在、**源保持原样**——条目按
+/// NotExecuted 记录（Undo 不碰它），错误消息如实说明双份并存的事实。
+fn move_cross_volume(
+    fs: &dyn Filesystem,
+    source: &Path,
+    target: &Path,
+    op_short: &str,
+    idx: usize,
+) -> Result<PathBuf, WeaveError> {
+    // 1) 源快照：跨卷后内容必须可证一致 ⇒ FullHash（成本由场景承担）
+    let expected = crate::verify::capture_fingerprint(
+        fs,
+        source,
+        weave_core::prelude::VerificationPolicy::FullHash(
+            weave_core::prelude::HashAlgorithm::Sha256,
+        ),
+        "move",
+    )?;
+
+    // 2) Copy 到目标目录唯一临时名；失败清理临时件，源不受影响
+    let temp = cross_temp_name(target, op_short, idx, fs);
+    if let Err(e) = fs.copy(source, &temp) {
+        let _ = fs.remove_file(&temp);
+        return Err(WeaveError::from_io(
+            &e,
+            "move",
+            format!("cross-volume copy failed for {}", source.display()),
+        )
+        .with_location("weave-files::execute"));
+    }
+
+    // 3) Verify 副本：size + digest 与源快照一致；失败清理临时件
+    let actual = crate::verify::capture_fingerprint(
+        fs,
+        &temp,
+        weave_core::prelude::VerificationPolicy::FullHash(
+            weave_core::prelude::HashAlgorithm::Sha256,
+        ),
+        "move",
+    );
+    let copy_ok = match actual {
+        Ok(actual) => actual.size == expected.size && actual.digest_hex == expected.digest_hex,
+        Err(_) => false,
+    };
+    if !copy_ok {
+        let _ = fs.remove_file(&temp);
+        return Err(WeaveError::conflict(
+            "move.verifyFailed",
+            format!(
+                "cross-volume copy verification failed for {}; source is untouched",
+                source.display()
+            ),
+        )
+        .with_location("weave-files::execute"));
+    }
+
+    // 4) 落位：同卷原子 rename；目标重现 ⇒ 冲突，绝不覆盖（§39/§98）
+    if fs.exists(target) {
+        let _ = fs.remove_file(&temp);
+        return Err(WeaveError::conflict(
+            "move.targetAlreadyExists",
+            format!("target appeared after copy: {}", target.display()),
+        )
+        .with_location("weave-files::execute"));
+    }
+    if let Err(e) = fs.rename(&temp, target) {
+        let _ = fs.remove_file(&temp);
+        return Err(WeaveError::from_io(
+            &e,
+            "move",
+            format!("cross-volume finalize failed for {}", target.display()),
+        )
+        .with_location("weave-files::execute"));
+    }
+
+    // 5) Remove Source（此时目标已验证在盘）
+    if let Err(e) = fs.remove_file(source) {
+        return Err(WeaveError::conflict(
+            "move.sourceRemoveFailed",
+            format!(
+                "verified copy exists at {} but source could not be removed ({}); source remains intact",
+                target.display(),
+                e
+            ),
+        )
+        .with_location("weave-files::execute"));
+    }
+
+    // 6) Final verify
+    if !fs.exists(target) {
+        return Err(WeaveError::io(
+            "move.verifyFailed",
+            format!(
+                "move reported success but target missing: {}",
+                target.display()
+            ),
+        )
+        .with_location("weave-files::execute"));
+    }
+    Ok(target.to_path_buf())
 }

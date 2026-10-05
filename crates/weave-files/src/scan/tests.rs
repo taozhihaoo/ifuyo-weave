@@ -261,6 +261,12 @@ fn child_read_failure_aggregates_and_continues() {
         fn create_dir_all(&self, path: &Path) -> io::Result<()> {
             StdFilesystem.create_dir_all(path)
         }
+        fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+            StdFilesystem.copy(from, to)
+        }
+        fn remove_file(&self, path: &Path) -> io::Result<()> {
+            StdFilesystem.remove_file(path)
+        }
     }
 
     let ws = TempWorkspace::new("scan-fault-child").expect("ws");
@@ -327,6 +333,12 @@ fn file_deleted_during_scan_is_recorded_not_silent() {
         }
         fn create_dir_all(&self, path: &Path) -> io::Result<()> {
             StdFilesystem.create_dir_all(path)
+        }
+        fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+            StdFilesystem.copy(from, to)
+        }
+        fn remove_file(&self, path: &Path) -> io::Result<()> {
+            StdFilesystem.remove_file(path)
         }
     }
 

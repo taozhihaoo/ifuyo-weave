@@ -6,7 +6,7 @@ use super::execute::execute_plan;
 use super::organize::build_organizer_plan;
 use super::rename::build_rename_plan;
 use super::undo::undo_transaction;
-use crate::fs::StdFilesystem;
+use crate::fs::{FaultFilesystem, FsFault, StdFilesystem};
 use weave_core::prelude::{CancellationToken, CollisionKind, OperationKind, PlanItemStatus};
 use weave_history::TransactionItemStatus;
 use weave_testkit::TempWorkspace;
@@ -674,9 +674,152 @@ fn organizer_executes_move_with_destination_creation_and_undo() {
 }
 
 #[test]
-fn organizer_cross_volume_move_is_refused_not_faked() {
-    // 构造一个 target 在“另一卷”的 plan（不同盘符前缀）
-    let ws = TempWorkspace::new("ex-cross").expect("ws");
+fn cross_volume_move_copies_verifies_then_removes_source() {
+    // M2.0 §15 / D60：跨卷 Move = Copy → Verify(size+hash) → Remove Source
+    // （直接调用 move_cross_volume：物理同卷不影响语义验证——同一机制对
+    //   真·跨卷同样成立，真·跨卷目录在 CI 环境不可假设存在）
+    let ws = TempWorkspace::new("ex-xmove-ok").expect("ws");
+    let content = "cross volume payload 跨卷内容";
+    let src = ws.file("a.txt", content).expect("write");
+    let dest_dir = ws.path().join("dest");
+    std::fs::create_dir_all(&dest_dir).expect("dest dir");
+    let target = dest_dir.join("a.txt");
+
+    let moved =
+        crate::execute::move_cross_volume_for_test(&StdFilesystem, &src, &target, "testop", 0)
+            .expect("cross-volume move");
+    assert_eq!(moved, target);
+    assert!(!src.exists(), "source must be removed after verified copy");
+    assert_eq!(std::fs::read_to_string(&target).expect("read"), content);
+    // 临时件不残留
+    let leftovers: Vec<_> = std::fs::read_dir(&dest_dir)
+        .expect("dir")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".weave-xmove-"))
+        .collect();
+    assert!(leftovers.is_empty(), "temp leftovers: {leftovers:?}");
+}
+
+#[test]
+fn cross_volume_copy_failure_leaves_source_intact() {
+    let ws = TempWorkspace::new("ex-xmove-copy").expect("ws");
+    let src = ws.file("a.txt", "keep me").expect("write");
+    let dest_dir = ws.path().join("dest");
+    std::fs::create_dir_all(&dest_dir).expect("dest dir");
+    let target = dest_dir.join("a.txt");
+
+    let fs = FaultFilesystem::wrapping(Box::new(StdFilesystem));
+    fs.arm(FsFault::CopyDenied);
+    let err = crate::execute::move_cross_volume_for_test(&fs, &src, &target, "testop", 0)
+        .expect_err("copy denied");
+    // §14 精确分类：PermissionDenied ⇒ move.permissionDenied
+    assert_eq!(err.code, "move.permissionDenied", "{err}");
+    assert!(src.exists(), "source intact on copy failure");
+    assert!(!target.exists(), "no partial target");
+    assert_eq!(fs.trips(FsFault::CopyDenied), 1);
+}
+
+#[test]
+fn cross_volume_verify_failure_cleans_temp_and_keeps_source() {
+    use std::path::Path;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    // 副本不可读替身：.weave-xmove- 临时件的读取注入失败（源读取正常），
+    // 模拟"copy 落盘但 Verify 阶段无法证明一致"。
+    struct DenyReadOnTemp {
+        marker: &'static str,
+        denied: AtomicBool,
+    }
+    impl crate::fs::Filesystem for DenyReadOnTemp {
+        fn exists(&self, p: &Path) -> bool {
+            StdFilesystem.exists(p)
+        }
+        fn stat(&self, p: &Path) -> std::io::Result<crate::metadata::FileStat> {
+            StdFilesystem.stat(p)
+        }
+        fn read_dir(&self, p: &Path) -> std::io::Result<Vec<String>> {
+            StdFilesystem.read_dir(p)
+        }
+        fn open_read(&self, p: &Path) -> std::io::Result<Box<dyn crate::fs::ReadSeek>> {
+            let on_temp = p
+                .file_name()
+                .map(|n| n.to_string_lossy().contains(self.marker))
+                .unwrap_or(false);
+            if on_temp && !self.denied.swap(true, Ordering::SeqCst) {
+                return Err(std::io::Error::other("temp copy unreadable"));
+            }
+            StdFilesystem.open_read(p)
+        }
+        fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+            StdFilesystem.rename(from, to)
+        }
+        fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
+            StdFilesystem.create_dir_all(p)
+        }
+        fn copy(&self, from: &Path, to: &Path) -> std::io::Result<u64> {
+            StdFilesystem.copy(from, to)
+        }
+        fn remove_file(&self, p: &Path) -> std::io::Result<()> {
+            StdFilesystem.remove_file(p)
+        }
+    }
+
+    let ws = TempWorkspace::new("ex-xmove-verify").expect("ws");
+    let content = "verify me";
+    let src = ws.file("a.txt", content).expect("write");
+    let dest_dir = ws.path().join("dest");
+    std::fs::create_dir_all(&dest_dir).expect("dest dir");
+    let target = dest_dir.join("a.txt");
+
+    let fs = DenyReadOnTemp {
+        marker: ".weave-xmove-",
+        denied: AtomicBool::new(false),
+    };
+    let err = crate::execute::move_cross_volume_for_test(&fs, &src, &target, "testop", 0)
+        .expect_err("verify failed");
+    assert_eq!(err.code, "move.verifyFailed", "{err}");
+    assert!(
+        src.exists(),
+        "source untouched when copy cannot be verified"
+    );
+    assert!(!target.exists(), "unverified copy must not land at target");
+    let leftovers: Vec<_> = std::fs::read_dir(&dest_dir)
+        .expect("dir")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".weave-xmove-"))
+        .collect();
+    assert!(leftovers.is_empty(), "temp cleaned: {leftovers:?}");
+}
+
+#[test]
+fn cross_volume_remove_failure_reports_partial_honestly() {
+    let ws = TempWorkspace::new("ex-xmove-rm").expect("ws");
+    let content = "duplicate honestly";
+    let src = ws.file("a.txt", content).expect("write");
+    let dest_dir = ws.path().join("dest");
+    std::fs::create_dir_all(&dest_dir).expect("dest dir");
+    let target = dest_dir.join("a.txt");
+
+    let fs = FaultFilesystem::wrapping(Box::new(StdFilesystem));
+    fs.arm(FsFault::RemoveDenied);
+    let err = crate::execute::move_cross_volume_for_test(&fs, &src, &target, "testop", 0)
+        .expect_err("remove denied");
+    assert_eq!(err.code, "move.sourceRemoveFailed", "{err}");
+    // 双份并存的事实如实呈现：目标已验证 + 源保持原样
+    assert!(src.exists(), "source remains (honest partial)");
+    assert!(target.exists(), "verified copy stays at target");
+    assert_eq!(
+        std::fs::read_to_string(&target).expect("read"),
+        content,
+        "target copy is verified content"
+    );
+}
+
+#[test]
+fn cross_volume_destination_missing_fails_without_touching_source() {
+    // 目标卷不可用（Q: 几乎必然不存在）：目录创建失败 ⇒ 结构化失败，源不动
+    let ws = TempWorkspace::new("ex-xmove-q").expect("ws");
     ws.file("a.txt", "x").expect("write");
     let plan = weave_core::prelude::Plan {
         operation_id: weave_core::prelude::OperationId::generate(),
@@ -684,7 +827,6 @@ fn organizer_cross_volume_move_is_refused_not_faked() {
         created_at: std::time::SystemTime::now(),
         items: vec![weave_core::prelude::PlanItem {
             item_id: "item_0000".to_string(),
-            // 本机存在 C: 盘；目标用 Q:（几乎必然不存在/非同卷）
             source_path: ws.path().join("a.txt").to_string_lossy().into_owned(),
             target_path: "Q:\\somewhere\\a.txt".to_string(),
             status: PlanItemStatus::Ready,
@@ -704,9 +846,17 @@ fn organizer_cross_volume_move_is_refused_not_faked() {
     assert_eq!(report.failed, 1);
     assert_eq!(
         report.plan.items[0].errors[0].code,
-        "move.crossVolumeUnsupported"
+        "move.createDestinationFailed"
     );
     assert!(ws.path().join("a.txt").exists(), "source untouched");
+}
+
+#[test]
+fn extended_length_prefix_is_same_volume_not_cross() {
+    // M2.0 volumes_match 归一化：\\?\C:\x 与 C:\x 同卷，不再误判跨卷
+    let plain = std::env::temp_dir().join("weave-vol-check");
+    let extended = std::path::PathBuf::from(format!(r"\\?\{}", plain.display()));
+    assert!(crate::execute::volumes_match(&plain, &extended));
 }
 
 #[test]
@@ -759,6 +909,12 @@ fn rename_permission_failure_is_structured_and_batch_continues() {
         }
         fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
             self.inner.create_dir_all(p)
+        }
+        fn copy(&self, from: &Path, to: &Path) -> std::io::Result<u64> {
+            self.inner.copy(from, to)
+        }
+        fn remove_file(&self, p: &Path) -> std::io::Result<()> {
+            self.inner.remove_file(p)
         }
     }
     // 排序后 locked.txt 在 movable.txt 之前（case-insensitive ASC）→ 第一次 rename 被拒

@@ -276,6 +276,12 @@ mod tests {
             fn create_dir_all(&self, path: &Path) -> io::Result<()> {
                 StdFilesystem.create_dir_all(path)
             }
+            fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+                StdFilesystem.copy(from, to)
+            }
+            fn remove_file(&self, path: &Path) -> io::Result<()> {
+                StdFilesystem.remove_file(path)
+            }
         }
 
         let ws = TempWorkspace::new("hash-unstable").expect("ws");

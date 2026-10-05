@@ -28,6 +28,10 @@ pub enum FsFault {
     ReadFailure,
     /// rename 返回 PermissionDenied。
     RenameDenied,
+    /// copy 返回 PermissionDenied（跨卷移动的 Copy 步，M2.0 §15）。
+    CopyDenied,
+    /// remove_file 返回 PermissionDenied（跨卷移动的 Remove 步）。
+    RemoveDenied,
 }
 
 /// 包装任意 [`Filesystem`]，在布防的故障点注入失败。
@@ -144,6 +148,24 @@ impl Filesystem for FaultFilesystem {
 
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
         self.inner.create_dir_all(path)
+    }
+
+    fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+        if let Some(err) = self.trip(FsFault::CopyDenied, || {
+            io::Error::from(io::ErrorKind::PermissionDenied)
+        }) {
+            return Err(err);
+        }
+        self.inner.copy(from, to)
+    }
+
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        if let Some(err) = self.trip(FsFault::RemoveDenied, || {
+            io::Error::from(io::ErrorKind::PermissionDenied)
+        }) {
+            return Err(err);
+        }
+        self.inner.remove_file(path)
     }
 }
 
