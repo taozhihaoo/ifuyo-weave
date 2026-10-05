@@ -11,6 +11,7 @@ import { ImagePanel } from "../features/image/ImagePanel";
 import { DocumentsPanel } from "../features/documents/DocumentsPanel";
 import { UtilitiesPanel } from "../features/utilities/UtilitiesPanel";
 import { ComparePanel } from "../features/compare/ComparePanel";
+import { SpacePanel } from "../features/space/SpacePanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -71,6 +72,7 @@ function App() {
     | "organizer"
     | "duplicates"
     | "compare"
+    | "space"
     | "text"
     | "data"
     | "image"
@@ -97,6 +99,7 @@ function App() {
       ["organizer", "nav.organizer", "organize files 整理"],
       ["duplicates", "nav.duplicates", "duplicate finder 重复文件"],
       ["compare", "nav.compare", "compare diff folder file 对比"],
+      ["space", "nav.space", "space disk usage 空间分析 磁盘"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -550,6 +553,10 @@ function App() {
           seedFile={textSeedFile}
           onSeedConsumed={() => setTextSeedFile(null)}
         />
+      ) : null}
+
+      {view === "space" ? (
+        <SpacePanel locale={locale} onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "compare" ? (
