@@ -77,29 +77,27 @@ pub fn scan_line(line: &str, line_number: usize) -> Vec<PatternHit> {
             hits.push(hit(PatternKind::SuspectedJwt, token, line_number));
         }
     }
-    if looks_like_bearer(&lower) {
-        if let Some(v) = keyword_value(line, &["bearer "]) {
-            hits.push(hit(PatternKind::SuspectedBearer, &v, line_number));
-        }
+    if looks_like_bearer(&lower)
+        && let Some(v) = keyword_value(line, &["bearer "])
+    {
+        hits.push(hit(PatternKind::SuspectedBearer, &v, line_number));
     }
-    if looks_like_secret_assignment(&lower) {
-        if let Some(v) = keyword_value(
+    if looks_like_secret_assignment(&lower)
+        && let Some(v) = keyword_value(
             line,
             &["password", "passwd", "secret", "api_key", "apikey", "token"],
-        ) {
-            // 值形状：≥8 且含字母 + 数字/符号混合（§12 Context+Shape）
-            if value_has_shape(&v) {
-                hits.push(hit(PatternKind::SuspectedSecretAssignment, &v, line_number));
-            }
-        }
+        )
+        && value_has_shape(&v)
+    {
+        // 值形状：≥8 且含字母 + 数字/符号混合（§12 Context+Shape）
+        hits.push(hit(PatternKind::SuspectedSecretAssignment, &v, line_number));
     }
-    if has_long_hex_run(line) {
-        if let Some(seg) = line
+    if has_long_hex_run(line)
+        && let Some(seg) = line
             .split(|c: char| !c.is_ascii_hexdigit())
             .find(|seg| seg.len() >= 40)
-        {
-            hits.push(hit(PatternKind::SuspectedLongHexKey, seg, line_number));
-        }
+    {
+        hits.push(hit(PatternKind::SuspectedLongHexKey, seg, line_number));
     }
 
     // ── 联系方式 / 路径 / URL ──
@@ -135,10 +133,10 @@ fn tokenize(line: &str) -> Vec<String> {
 }
 
 /// key 后的第一个值片段（key=value / key: value / key:  value）。
-fn keyword_value<'a>(line: &'a str, keys: &[&str]) -> Option<String> {
+fn keyword_value(line: &str, keys: &[&str]) -> Option<String> {
     let lower = line.to_lowercase();
     for key in keys {
-        for sep in [": ", "="] {
+        for sep in [": ", " = ", "=", ":"] {
             let needle = format!("{key}{sep}");
             if let Some(pos) = lower.find(&needle) {
                 let rest = line[pos + needle.len()..].trim();

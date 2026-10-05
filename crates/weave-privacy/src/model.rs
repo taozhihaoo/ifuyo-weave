@@ -96,6 +96,20 @@ pub enum CleanupRisk {
     High,
 }
 
+/// Finding 构造事实（new 的参数包——避免 10 参函数）。
+pub struct FindingFacts {
+    pub relative_path: String,
+    pub category: FindingCategory,
+    pub sub_category: String,
+    pub severity: Severity,
+    pub evidence: EvidenceLevel,
+    pub location: String,
+    pub description: String,
+    pub evidence_summary: String,
+    pub cleanup: CleanupAction,
+    pub evidence_identity: String,
+}
+
 /// 单条发现（§4 统一模型）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,18 +137,19 @@ pub struct PrivacyFinding {
 impl PrivacyFinding {
     /// 构造 + 计算稳定指纹（§28）。`evidence_identity` = 归一化证据标识
     /// （如 GPS tag 名、masked 值的 hash——明文不进指纹原文）。
-    pub fn new(
-        relative_path: &str,
-        category: FindingCategory,
-        sub_category: &str,
-        severity: Severity,
-        evidence: EvidenceLevel,
-        location: &str,
-        description: String,
-        evidence_summary: String,
-        cleanup: CleanupAction,
-        evidence_identity: &str,
-    ) -> Self {
+    pub fn new(facts: FindingFacts) -> Self {
+        let FindingFacts {
+            relative_path,
+            category,
+            sub_category,
+            severity,
+            evidence,
+            location,
+            description,
+            evidence_summary,
+            cleanup,
+            evidence_identity,
+        } = facts;
         let identity =
             format!("{relative_path}|{category:?}|{sub_category}|{location}|{evidence_identity}");
         let fingerprint = hash_bytes(HashAlgorithm::Sha256, identity.as_bytes())
@@ -142,12 +157,12 @@ impl PrivacyFinding {
             .unwrap_or_else(|_| format!("pf_fallback_{}", identity.len()));
         Self {
             fingerprint,
-            relative_path: relative_path.to_string(),
+            relative_path,
             category,
-            sub_category: sub_category.to_string(),
+            sub_category,
             severity,
             evidence,
-            location: location.to_string(),
+            location,
             description,
             evidence_summary,
             cleanup,
@@ -309,18 +324,18 @@ mod tests {
     #[test]
     fn fingerprint_is_stable_across_calls_and_evidence_hashed() {
         let mk = || {
-            PrivacyFinding::new(
-                "doc.docx",
-                FindingCategory::DocumentMetadata,
-                "author",
-                Severity::Medium,
-                EvidenceLevel::Confirmed,
-                "docProps/core.xml",
-                "文档包含作者信息".to_string(),
-                "Author: J***".to_string(),
-                CleanupAction::ClearDocumentCoreMetadata,
-                "author-j",
-            )
+            PrivacyFinding::new(FindingFacts {
+                relative_path: "doc.docx".to_string(),
+                category: FindingCategory::DocumentMetadata,
+                sub_category: "author".to_string(),
+                severity: Severity::Medium,
+                evidence: EvidenceLevel::Confirmed,
+                location: "docProps/core.xml".to_string(),
+                description: "文档包含作者信息".to_string(),
+                evidence_summary: "Author: J***".to_string(),
+                cleanup: CleanupAction::ClearDocumentCoreMetadata,
+                evidence_identity: "author-j".to_string(),
+            })
         };
         let a = mk();
         let b = mk();
@@ -330,18 +345,18 @@ mod tests {
         );
         assert!(a.fingerprint.starts_with("pf_"));
         // 证据标识不同 ⇒ 指纹不同
-        let c = PrivacyFinding::new(
-            "doc.docx",
-            FindingCategory::DocumentMetadata,
-            "author",
-            Severity::Medium,
-            EvidenceLevel::Confirmed,
-            "docProps/core.xml",
-            "文档包含作者信息".to_string(),
-            "Author: K***".to_string(),
-            CleanupAction::ClearDocumentCoreMetadata,
-            "author-k",
-        );
+        let c = PrivacyFinding::new(FindingFacts {
+            relative_path: "doc.docx".to_string(),
+            category: FindingCategory::DocumentMetadata,
+            sub_category: "author".to_string(),
+            severity: Severity::Medium,
+            evidence: EvidenceLevel::Confirmed,
+            location: "docProps/core.xml".to_string(),
+            description: "文档包含作者信息".to_string(),
+            evidence_summary: "Author: K***".to_string(),
+            cleanup: CleanupAction::ClearDocumentCoreMetadata,
+            evidence_identity: "author-k".to_string(),
+        });
         assert_ne!(a.fingerprint, c.fingerprint);
     }
 
