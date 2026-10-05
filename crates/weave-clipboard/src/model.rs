@@ -74,6 +74,9 @@ pub struct ClipboardEntry {
     pub search_text: String,
     /// payload 文件相对名（payloads/<file>）；纯路径类条目（File）可为 None。
     pub payload_file: Option<String>,
+    /// 缩略图文件（Image；列表只加载缩略图 §8/§9）。
+    #[serde(default)]
+    pub thumbnail_file: Option<String>,
     /// 原始字节大小。
     pub size: u64,
     /// 来源应用（§16：Confirmed/Unknown/Unavailable 三态，不做正确性前提）。
@@ -306,6 +309,7 @@ mod tests {
             preview: format!("preview {hash}"),
             search_text: format!("preview {hash}"),
             payload_file: Some(format!("{hash}.bin")),
+            thumbnail_file: None,
             size: 10,
             source: SourceInfo {
                 state: SourceState::Unknown,

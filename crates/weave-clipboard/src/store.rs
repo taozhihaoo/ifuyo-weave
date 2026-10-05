@@ -207,7 +207,8 @@ impl ClipboardStore {
         let before = entries.len() as u64;
         let referenced: std::collections::HashSet<String> = entries
             .iter()
-            .filter_map(|e| e.payload_file.clone())
+            .flat_map(|e| [e.payload_file.clone(), e.thumbnail_file.clone()])
+            .flatten()
             .collect();
         let r = crate::model::apply_retention(entries, &|e| e.size, policy, SystemTime::now());
         report.expired_removed = r.expired_removed;
@@ -216,7 +217,8 @@ impl ClipboardStore {
         // 2) 被淘汰条目的 payload 删除
         let now_referenced: std::collections::HashSet<String> = entries
             .iter()
-            .filter_map(|e| e.payload_file.clone())
+            .flat_map(|e| [e.payload_file.clone(), e.thumbnail_file.clone()])
+            .flatten()
             .collect();
         for file in referenced.difference(&now_referenced) {
             self.delete_payload(file)?;
@@ -295,6 +297,7 @@ mod tests {
             preview: format!("preview {hash}"),
             search_text: format!("preview {hash}"),
             payload_file: payload.map(|_p| format!("{hash}.bin")),
+            thumbnail_file: None,
             size: payload.map(|p| p.len() as u64).unwrap_or(0),
             source: SourceInfo {
                 state: SourceState::Unknown,

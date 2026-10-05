@@ -30,6 +30,8 @@ pub struct CaptureInput {
     pub file_paths: Vec<String>,
     /// 平台层生成的展示摘要（Image = "图像 WxH"；File = "3 个文件"）。
     pub preview_override: Option<String>,
+    /// Image 条目的缩略图 PNG（§8/§9：列表只加载缩略图）。
+    pub thumbnail_png: Option<Vec<u8>>,
     pub source: SourceInfo,
 }
 
@@ -113,6 +115,15 @@ impl CapturePipeline {
             store.write_payload(&file, &input.payload)?;
             Some(file)
         };
+        // 缩略图落盘（§9：异步由调用方保证；失败可降级 = None）
+        let thumbnail_file = match &input.thumbnail_png {
+            Some(bytes) if input.kind == ContentKind::Image => {
+                let file = format!("{content_hash}.thumb.png");
+                store.write_payload(&file, bytes)?;
+                Some(file)
+            }
+            _ => None,
+        };
 
         let entry = ClipboardEntry {
             id: id.clone(),
@@ -123,6 +134,7 @@ impl CapturePipeline {
             preview,
             search_text,
             payload_file,
+            thumbnail_file,
             size: input.payload.len() as u64,
             source: input.source,
             file_paths: input.file_paths,
@@ -182,6 +194,7 @@ mod tests {
             payload: s.as_bytes().to_vec(),
             file_paths: vec![],
             preview_override: None,
+            thumbnail_png: None,
             source: SourceInfo {
                 state: SourceState::Unknown,
                 process: None,
@@ -259,6 +272,7 @@ mod tests {
                 payload: b"same".to_vec(),
                 file_paths: vec![],
                 preview_override: Some("same".to_string()),
+                thumbnail_png: None,
                 source: SourceInfo {
                     state: SourceState::Unknown,
                     process: None,
@@ -300,6 +314,7 @@ mod tests {
                 payload: vec![],
                 file_paths: vec!["D:\\a.txt".to_string(), "D:\\b.txt".to_string()],
                 preview_override: Some("2 个文件".to_string()),
+                thumbnail_png: None,
                 source: SourceInfo {
                     state: SourceState::Unknown,
                     process: None,
