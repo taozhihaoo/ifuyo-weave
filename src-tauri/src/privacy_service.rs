@@ -332,13 +332,26 @@ pub fn privacy_export_safe_copy(
     for item in &items {
         let source = std::path::PathBuf::from(&item.source);
         let output = std::path::PathBuf::from(&item.output);
-        // §42 Stale 重验：size/mtime 与扫描快照一致
-        let modified = item.modified_ms.and_then(|ms| {
-            std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_millis(ms as u64))
-        });
+        // §42 Stale 重验：size/mtime 与扫描快照一致（UI 未传快照 ⇒ 现读 stat
+        // 作为基线——输出永不覆盖原文件，风险边界由 No-overwrite 保证）。
+        let (size, modified) = match (item.size as u64, item.modified_ms) {
+            (0, None) => {
+                let stat = std::fs::metadata(&item.source);
+                (
+                    stat.as_ref().map(|m| m.len()).unwrap_or(0),
+                    stat.as_ref().ok().and_then(|m| m.modified().ok()),
+                )
+            }
+            (size, ms) => (
+                size,
+                ms.and_then(|millis| {
+                    std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_millis(millis as u64))
+                }),
+            ),
+        };
         let fingerprint = weave_core::prelude::FileFingerprint {
             path: item.source.clone(),
-            size: Some(item.size as u64),
+            size: Some(size),
             modified,
             digest_hex: None,
         };
