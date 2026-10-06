@@ -14,6 +14,7 @@ import { ComparePanel } from "../features/compare/ComparePanel";
 import { SpacePanel } from "../features/space/SpacePanel";
 import { ClipboardPanel } from "../features/clipboard/ClipboardPanel";
 import { PrivacyPanel } from "../features/privacy/PrivacyPanel";
+import { ArchivePanel } from "../features/archive/ArchivePanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -77,6 +78,7 @@ function App() {
     | "space"
     | "clipboard"
     | "privacy"
+    | "archive"
     | "text"
     | "data"
     | "image"
@@ -106,6 +108,7 @@ function App() {
       ["space", "nav.space", "space disk usage 空间分析 磁盘"],
       ["clipboard", "nav.clipboard", "clipboard history 剪贴板 paste"],
       ["privacy", "nav.privacy", "privacy share preflight 隐私预检 脱敏"],
+      ["archive", "nav.archive", "archive zip integrity hash 归档 完整性"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -559,6 +562,10 @@ function App() {
           seedFile={textSeedFile}
           onSeedConsumed={() => setTextSeedFile(null)}
         />
+      ) : null}
+
+      {view === "archive" ? (
+        <ArchivePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "privacy" ? (
