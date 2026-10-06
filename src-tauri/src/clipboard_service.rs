@@ -11,7 +11,6 @@
 
 #![expect(clippy::result_large_err)] // D10
 
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
