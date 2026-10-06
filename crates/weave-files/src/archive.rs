@@ -894,3 +894,45 @@ mod tests {
         assert_eq!(result.extracted, 1);
     }
 }
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use weave_testkit::TempWorkspace;
+
+    /// M2.5 §69：1k/10k 文件归档吞吐（STORED 快速路径 + Normal 压缩）。
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_zip_create_and_extract_at_scale() {
+        for n in [1_000u32, 10_000] {
+            let ws = TempWorkspace::new(&format!("arch-perf-{n}")).expect("ws");
+            let src = ws.dir("data").expect("dir");
+            for i in 0..n {
+                std::fs::write(src.join(format!("f{i}.txt")), format!("payload-{i}")).expect("w");
+            }
+            let output = ws.path().join("out.zip");
+            let plan = ArchivePlan {
+                sources: vec![ArchiveSource { path: src }],
+                output: output.clone(),
+                level: CompressionLevel::Normal,
+            };
+            let started = std::time::Instant::now();
+            let result =
+                create_zip(&plan, &CancellationToken::new(), &mut |_, _, _| {}).expect("create");
+            let create = started.elapsed();
+            let dest = ws.path().join("dest");
+            let plan = build_extraction_plan(&output, &dest, OverwritePolicy::Skip, u64::MAX)
+                .expect("plan");
+            let started = std::time::Instant::now();
+            let extraction =
+                apply_extraction(&output, &plan, &CancellationToken::new(), &mut |_, _| ())
+                    .expect("extract");
+            let extract = started.elapsed();
+            eprintln!(
+                "PERF zip@{n}: create={create:?} extract={extract:?} files={} archive_bytes={} extracted={}",
+                result.file_count, result.archive_bytes, extraction.extracted
+            );
+            assert_eq!(extraction.extracted, n as u64);
+        }
+    }
+}
