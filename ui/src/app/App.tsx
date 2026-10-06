@@ -21,6 +21,7 @@ import { GlintPanel } from "../features/glint/GlintPanel";
 import { WispPanel } from "../features/wisp/WispPanel";
 import { WebPanel } from "../features/web/WebPanel";
 import { MonitorPanel } from "../features/monitor/MonitorPanel";
+import { SmartPanel } from "../features/smart/SmartPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -91,6 +92,7 @@ function App() {
     | "wisp"
     | "web"
     | "monitor"
+    | "smart"
     | "text"
     | "data"
     | "image"
@@ -127,6 +129,7 @@ function App() {
       ["wisp", "nav.wisp", "wisp paste guard sensitive 敏感 粘贴防护 剪贴板"],
       ["web", "nav.web", "web url fetch extract markdown 清理 抓取 网页"],
       ["monitor", "nav.monitor", "website monitor change detection 网站监控 变化检测"],
+      ["smart", "nav.smart", "smart rename organize classify cleanup 智能处理 建议"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -225,6 +228,13 @@ function App() {
       category: "tools",
       keywords: ["monitor", "website", "change", "网站监控", "变化"],
       run: () => setView("monitor"),
+    });
+    upsertCommand({
+      id: "smart.open",
+      labelKey: "nav.smart",
+      category: "tools",
+      keywords: ["smart", "rename", "organize", "classify", "智能", "整理", "建议"],
+      run: () => setView("smart"),
     });
     upsertCommand({
       id: "web.clean-url",
@@ -653,6 +663,10 @@ function App() {
 
       {view === "monitor" ? (
         <MonitorPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "smart" ? (
+        <SmartPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "agent" ? (
