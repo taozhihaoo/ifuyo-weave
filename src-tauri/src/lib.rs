@@ -35,6 +35,8 @@ pub mod privacy_service;
 pub mod recipe;
 pub mod recipe_service;
 pub mod rename_service;
+pub mod smart;
+pub mod smart_service;
 pub mod space_service;
 pub mod state;
 pub mod text_dto;
@@ -166,6 +168,11 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         monitor_service::monitor_export,
         monitor_service::monitor_apply_config,
         monitor_service::monitor_get_config,
+        smart_service::smart_analyze,
+        smart_service::smart_get_result,
+        smart_service::smart_build_plan,
+        smart_service::smart_provider_status,
+        smart_service::smart_history,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -286,6 +293,8 @@ pub fn run() {
                 history_dir.join("website-monitor"),
                 config.monitor.clone(),
             );
+            // M2.12：Smart 运行时（会话历史在 history_dir §34）
+            let smart_runtime = smart_service::SmartRuntime::new(&history_dir);
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
@@ -294,6 +303,7 @@ pub fn run() {
                 wisp_runtime,
                 web_runtime,
                 monitor_runtime,
+                smart_runtime,
             ));
             // M2.11：恢复监控调度（§23 Agent + Scheduler 真实消费者）
             monitor_service::register_all_schedules(app.handle());

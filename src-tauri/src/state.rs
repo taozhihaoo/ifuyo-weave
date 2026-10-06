@@ -56,9 +56,12 @@ pub struct AppState {
     pub web: std::sync::Arc<crate::web_service::WebRuntime>,
     /// M2.11：Website Monitor 运行时（存储/配置/执行锁）。
     pub monitor: std::sync::Arc<crate::monitor_service::MonitorRuntime>,
+    /// M2.12：Smart Processing 运行时（单槽结果 + 会话历史）。
+    pub smart: std::sync::Arc<crate::smart_service::SmartRuntime>,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)] // 运行时集合参数随里程碑线性增长（M2.12：8）
     pub fn new(
         log_guard: LogGuard,
         tools: ToolRegistry,
@@ -67,6 +70,7 @@ impl AppState {
         wisp: crate::wisp_service::WispRuntime,
         web: crate::web_service::WebRuntime,
         monitor: crate::monitor_service::MonitorRuntime,
+        smart: crate::smart_service::SmartRuntime,
     ) -> Self {
         Self {
             _log_guard: log_guard,
@@ -89,6 +93,7 @@ impl AppState {
             wisp: std::sync::Arc::new(wisp),
             web: std::sync::Arc::new(web),
             monitor: std::sync::Arc::new(monitor),
+            smart: std::sync::Arc::new(smart),
         }
     }
 }

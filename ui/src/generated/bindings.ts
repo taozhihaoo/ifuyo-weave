@@ -249,6 +249,16 @@ export const commands = {
 	monitorExport: (targetId: string | null, destDir: string) => typedError<WebExportResult, IpcError>(__TAURI_INVOKE("monitor_export", { targetId, destDir })),
 	monitorApplyConfig: (config: MonitorConfig) => __TAURI_INVOKE<void>("monitor_apply_config", { config }),
 	monitorGetConfig: () => __TAURI_INVOKE<MonitorConfig>("monitor_get_config"),
+	smartAnalyze: (inputs: string[], modes: AnalyzeMode[]) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("smart_analyze", { inputs, modes })),
+	smartGetResult: (jobId: string) => typedError<SmartAnalysisResult, IpcError>(__TAURI_INVOKE("smart_get_result", { jobId })),
+	/**
+	 *  已接受建议 → M2.0 Plan（§22：Suggestion → Action → Plan，执行走既有
+	 *  execute_plan / execute_recycle_plan IPC；STALE 由 PlanItem source 快照
+	 *  的 Revalidate 既有机制防护 §23）。
+	 */
+	smartBuildPlan: (acceptedIds: string[]) => typedError<SmartPlanBundleDto, IpcError>(__TAURI_INVOKE("smart_build_plan", { acceptedIds })),
+	smartProviderStatus: () => __TAURI_INVOKE<SmartProviderStatus>("smart_provider_status"),
+	smartHistory: () => __TAURI_INVOKE<SmartSessionSummary[]>("smart_history"),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -424,6 +434,9 @@ export type AgentStatusDto = {
 	lastError: string | null,
 	notifications: AgentNotificationDto[],
 };
+
+/**  分析模式（§20 四选）。 */
+export type AnalyzeMode = "rename" | "organize" | "classify" | "cleanup";
 
 export type Annotation = {
 	id: string,
@@ -2030,6 +2043,98 @@ export type SlideFact = {
 	hasNotes: boolean | null,
 };
 
+/**  一次分析的结果（单槽缓存——§46 内存纪律）。 */
+export type SmartAnalysisResult = {
+	sessionId: string,
+	stats: SmartStats,
+	suggestions: SmartSuggestion[],
+	/**  无法分析的条目（失败隔离 §41：PartialFailure 不丢整批）。 */
+	errors: SmartError[],
+	providerStatus: SmartProviderStatus,
+};
+
+/**  置信等级（§10：不做百分比宣称）。 */
+export type SmartConfidence = "low" | "medium" | "high" | 
+/**  证据不足——与 Low 区分（§27 Unknown 一等公民）。 */
+"unknown";
+
+export type SmartError = {
+	path: string,
+	code: string,
+};
+
+/**  单条证据（§9：可解释；detail 不含敏感原文——脱敏由调用方保证 §16）。 */
+export type SmartEvidenceItem = {
+	kind: SmartEvidenceKind,
+	detail: string,
+	level: SmartEvidenceLevel,
+};
+
+/**  证据种类（§51 精选本项目真实存在的来源）。 */
+export type SmartEvidenceKind = "fileName" | "extension" | "metadata" | "path" | "content" | "duplicate" | "rule" | "provider";
+
+/**  证据等级（§51：Confirmed/Derived/Heuristic/ProviderGenerated——不制造假依据 §9）。 */
+export type SmartEvidenceLevel = "confirmed" | "derived" | "heuristic" | "providerGenerated";
+
+export type SmartPlanBundleDto = {
+	/**  Rename 建议计划（经既有 execute_plan 执行——Revalidate/Undo 免费）。 */
+	renamePlan: PlanDto | null,
+	/**  Organize 建议计划（Move kind——目标目录自动创建，既有执行器语义）。 */
+	movePlan: PlanDto | null,
+	/**
+	 *  Cleanup 候选计划（DuplicateRecycle kind——经既有
+	 *  execute_recycle_plan 执行，回收站可恢复 §29）。
+	 */
+	deletePlan: PlanDto | null,
+};
+
+/**  Provider 状态（§13；默认 Disabled——本地智能不依赖 AI §47）。 */
+export type SmartProviderStatus = "available" | "disabled" | "unavailable" | "failed";
+
+/**  风险等级（§54：Rename=Low、Move=Medium、Delete=High——按操作种类契约）。 */
+export type SmartRiskLevel = "low" | "medium" | "high";
+
+/**  会话摘要（§34/§35：仅元数据与计数——绝不存正文/敏感值 §34）。 */
+export type SmartSessionSummary = {
+	sessionId: string,
+	createdAtMs: number | null,
+	modes: AnalyzeMode[],
+	roots: string[],
+	stats: SmartStats,
+	provider: string,
+};
+
+/**  分析统计（§20 结果摘要）。 */
+export type SmartStats = {
+	filesAnalyzed: number | null,
+	highConfidence: number | null,
+	mediumConfidence: number | null,
+	lowConfidence: number | null,
+	unknownConfidence: number | null,
+	suggestions: number | null,
+	errors: number | null,
+};
+
+/**  智能建议（§8 SmartSuggestion——Advisor 输出，非执行指令）。 */
+export type SmartSuggestion = {
+	id: string,
+	suggestionType: SuggestionType,
+	/**  目标文件绝对路径。 */
+	targetPath: string,
+	/**  Rename: 原文件名；Classify: 原类别；DeleteCandidate: 原路径语义占位。 */
+	originalValue: string,
+	/**  Rename: 建议文件名；Organize: 建议子目录；Classify: 建议类别。 */
+	suggestedValue: string,
+	reason: string,
+	evidence: SmartEvidenceItem[],
+	confidence: SmartConfidence,
+	risk: SmartRiskLevel,
+	/**  冲突事实（目标已存在/批内环——Plan 侧会再次硬校验 §24）。 */
+	conflict: string | null,
+	/**  备选方案（§11：不强制唯一答案）。 */
+	alternatives: string[],
+};
+
 export type SortSpecDto = {
 	columnId: string,
 	descending: boolean,
@@ -2066,6 +2171,9 @@ export type SpaceScanRequestDto = {
 	oldFileDays: number | null,
 	candidates: boolean | null,
 };
+
+/**  建议类型（§8 优先四种，其余诚实"未实现"）。 */
+export type SuggestionType = "rename" | "organize" | "classify" | "deleteCandidate";
 
 /**  目标识别置信（§8：Confirmed/Likely/Unknown——不冒充确定）。 */
 export type TargetConfidence = 

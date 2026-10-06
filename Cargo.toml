@@ -39,6 +39,8 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 ab_glyph = "0.2"
 # M2.10 Web：WhatWG URL 解析 / 阻塞 HTTP 客户端（rustls）/ html5ever DOM。
 url = "2"
+# M2.12 Smart：EXIF 只读解析（与 weave-media 同一 kamadak 依赖 §2 复用）。
+kamadak-exif = "0.6"
 ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
 scraper = "0.20"
 ego-tree = "0.6"

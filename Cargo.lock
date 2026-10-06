@@ -6332,6 +6332,7 @@ dependencies = [
  "ego-tree",
  "encoding_rs",
  "image 0.25.10",
+ "kamadak-exif",
  "regex",
  "scraper",
  "screenshots",
