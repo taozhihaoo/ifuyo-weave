@@ -21,7 +21,7 @@ fn err(code: &'static str, message: impl Into<String>) -> WeaveError {
 
 pub const MAX_EVENTS: usize = 1000;
 /// 每 target 快照保留数（§28 历史容量控制；最近成功快照永不清理）。
-pub const MAX_SNAPSHOTS_PER_TARGET: u64 = 50;
+pub const MAX_SNAPSHOTS_PER_TARGET: u64 = 50; // 内部容量语义；对外 DTO 用 f64
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let bytes = std::fs::read(path).ok()?;
@@ -97,7 +97,7 @@ impl MonitorStore {
     }
 
     /// 快照文件名（安全：target_id 由服务层生成的受限字符集）。
-    fn snapshot_path(&self, target_id: &str, seq: u64) -> PathBuf {
+    fn snapshot_path(&self, target_id: &str, seq: f64) -> PathBuf {
         self.snapshot_dir(target_id).join(format!("{seq}.json"))
     }
 
@@ -128,7 +128,7 @@ impl MonitorStore {
     pub fn load_snapshot(
         &self,
         target_id: &str,
-        seq: u64,
+        seq: f64,
     ) -> Option<(MonitorSnapshot, Option<String>)> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -167,7 +167,11 @@ impl MonitorStore {
                 out.push(file.meta);
             }
         }
-        out.sort_by_key(|s| s.seq);
+        out.sort_by(|a, b| {
+            a.seq
+                .partial_cmp(&b.seq)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         out
     }
 
@@ -258,11 +262,11 @@ mod tests {
         }
     }
 
-    fn snapshot(tid: &str, seq: u64, result: CheckResult, with_payload: bool) -> MonitorSnapshot {
+    fn snapshot(tid: &str, seq: f64, result: CheckResult, with_payload: bool) -> MonitorSnapshot {
         MonitorSnapshot {
             target_id: tid.into(),
             seq,
-            fetched_at_ms: 1000.0 + seq as f64,
+            fetched_at_ms: 1000.0 + seq,
             status_code: 200,
             final_url: "https://example.com".into(),
             content_type: "text/html".into(),
@@ -299,22 +303,22 @@ mod tests {
         let store = MonitorStore::open(ws.path().to_path_buf());
         store
             .save_snapshot(
-                &snapshot("t1", 1, CheckResult::ContentChanged, true),
+                &snapshot("t1", 1.0, CheckResult::ContentChanged, true),
                 Some("hello body"),
             )
             .expect("save");
         store
-            .save_snapshot(&snapshot("t1", 2, CheckResult::NoChange, false), None)
+            .save_snapshot(&snapshot("t1", 2.0, CheckResult::NoChange, false), None)
             .expect("save");
-        let (meta, payload) = store.load_snapshot("t1", 1).expect("load");
-        assert_eq!(meta.seq, 1);
+        let (meta, payload) = store.load_snapshot("t1", 1.0).expect("load");
+        assert_eq!(meta.seq, 1.0);
         assert_eq!(payload.as_deref(), Some("hello body"));
-        let (meta2, payload2) = store.load_snapshot("t1", 2).expect("load");
+        let (meta2, payload2) = store.load_snapshot("t1", 2.0).expect("load");
         assert_eq!(meta2.result, CheckResult::NoChange);
         assert!(payload2.is_none(), "NoChange 不占正文空间 §46");
         let list = store.list_snapshots("t1");
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0].seq, 1, "按 seq 升序");
+        assert_eq!(list[0].seq, 1.0, "按 seq 升序");
     }
 
     #[test]
@@ -322,8 +326,8 @@ mod tests {
         let ws = weave_testkit::TempWorkspace::new("mon-retain").expect("ws");
         let store = MonitorStore::open(ws.path().to_path_buf());
         // 4 条：1(有 payload 旧)、2、3(有 payload)、4 最新(无 payload)
-        for seq in 1..=4u64 {
-            let with_payload = seq == 1 || seq == 3;
+        for seq in [1.0, 2.0, 3.0, 4.0] {
+            let with_payload = seq == 1.0 || seq == 3.0;
             let result = if with_payload {
                 CheckResult::ContentChanged
             } else {
@@ -339,12 +343,12 @@ mod tests {
         let removed = store.retain_snapshots("t1", 2, f64::MAX, 99999.0);
         assert!(removed >= 1);
         let left = store.list_snapshots("t1");
-        assert!(left.iter().any(|s| s.seq == 4), "最新必须保留 §28");
+        assert!(left.iter().any(|s| s.seq == 4.0), "最新必须保留 §28");
         assert!(
-            left.iter().any(|s| s.seq == 3),
+            left.iter().any(|s| s.seq == 3.0),
             "最近有正文快照必须保留（diff 基线）"
         );
-        assert!(!left.iter().any(|s| s.seq == 1), "旧 payload 被清理");
+        assert!(!left.iter().any(|s| s.seq == 1.0), "旧 payload 被清理");
     }
 
     #[test]
@@ -360,8 +364,8 @@ mod tests {
                 magnitude: crate::monitor::model::ChangeMagnitude::Small,
                 added_lines: 1,
                 removed_lines: 0,
-                previous_seq: Some(1),
-                current_seq: 2,
+                previous_seq: Some(1.0),
+                current_seq: 2.0,
                 summary: "s".into(),
             };
             store.append_event(&e).expect("append");

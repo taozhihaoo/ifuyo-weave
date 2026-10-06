@@ -25,7 +25,7 @@ use crate::monitor::model::{
     CheckResult, MIN_INTERVAL_SECS, MonitorChangeEvent, MonitorMode, MonitorSnapshot,
     MonitorTarget, TargetStatus,
 };
-use crate::monitor::store::{MAX_SNAPSHOTS_PER_TARGET, MonitorStore, valid_target_id};
+use crate::monitor::store::{MonitorStore, valid_target_id};
 use crate::monitor::{backoff_delay_secs, build_event, check_target};
 use crate::web::fetch::FetchLimits;
 
@@ -347,8 +347,8 @@ pub fn monitor_changes(
 pub fn monitor_diff(
     app: tauri::AppHandle,
     target_id: String,
-    seq_a: u64,
-    seq_b: u64,
+    seq_a: f64,
+    seq_b: f64,
 ) -> Result<crate::text_dto::DiffReportDto, IpcError> {
     let state = app.state::<crate::state::AppState>();
     let (_meta_a, payload_a) = state
@@ -500,7 +500,7 @@ fn run_check_locked(app: &tauri::AppHandle, target_id: &str, trigger: &str) -> S
     let previous_payload = previous
         .and_then(|seq| rt.store().load_snapshot(target_id, seq))
         .and_then(|(_, p)| p);
-    let next_seq = snapshots.last().map(|s| s.seq + 1).unwrap_or(1);
+    let next_seq = snapshots.last().map(|s| s.seq + 1.0).unwrap_or(1.0);
     let had_failure = target.consecutive_failures > 0;
 
     let outcome = check_target(

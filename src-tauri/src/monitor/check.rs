@@ -57,10 +57,6 @@ pub fn extract_by_mode(
     }
 }
 
-fn use_html(mode: MonitorMode) -> bool {
-    matches!(mode, MonitorMode::MainContent | MonitorMode::Element)
-}
-
 /// 对最近一次有正文的快照做行级 diff 统计（§9/§13 确定性摘要）。
 fn count_line_changes(previous: Option<&str>, current: &str) -> (u32, u32) {
     let Some(prev) = previous else { return (0, 0) };
@@ -78,8 +74,8 @@ pub fn check_target(
     target: &MonitorTarget,
     limits: &FetchLimits,
     cancel: &weave_core::prelude::CancellationToken,
-    store: &MonitorStore,
-    next_seq: u64,
+    _store: &MonitorStore,
+    next_seq: f64,
     previous_payload: Option<String>,
     previous_had_failure: bool,
 ) -> CheckOutcome {
@@ -141,7 +137,7 @@ pub fn check_target(
             Some(CheckResult::FetchFailed),
             Some(format!("web.httpStatus:{status}")),
         ),
-        s => (
+        _s => (
             Some(CheckResult::FetchFailed),
             Some(format!("web.httpStatus:{status}")),
         ),
@@ -241,8 +237,8 @@ pub fn check_target(
 pub fn build_event(
     target: &MonitorTarget,
     outcome: &CheckOutcome,
-    current_seq: u64,
-    previous_seq: Option<u64>,
+    current_seq: f64,
+    previous_seq: Option<f64>,
 ) -> MonitorChangeEvent {
     MonitorChangeEvent {
         id: format!("evt-{}-{current_seq}", target.id),

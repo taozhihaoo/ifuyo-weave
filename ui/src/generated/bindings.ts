@@ -221,6 +221,34 @@ export const commands = {
 	/**  设置立即生效（§84；持久化走既有 set_app_config 全量 round-trip）。 */
 	webApplyConfig: (config: WebConfig) => __TAURI_INVOKE<void>("web_apply_config", { config }),
 	webGetConfig: () => __TAURI_INVOKE<WebConfig>("web_get_config"),
+	monitorList: () => __TAURI_INVOKE<MonitorTarget[]>("monitor_list"),
+	monitorCreate: (name: string, url: string, mode: MonitorMode, selector: string | null, intervalSecs: number) => typedError<MonitorTarget, IpcError>(__TAURI_INVOKE("monitor_create", { name, url, mode, selector, intervalSecs })),
+	monitorUpdate: (target: MonitorTarget) => typedError<MonitorTarget, IpcError>(__TAURI_INVOKE("monitor_update", { target })),
+	/**
+	 *  删除（§63：默认仅删 Target 保留历史；delete_history=true 连快照一起删，
+	 *  UI 明示）。
+	 */
+	monitorDelete: (targetId: string, deleteHistory: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("monitor_delete", { targetId, deleteHistory })),
+	monitorSetPaused: (targetId: string, paused: boolean) => typedError<MonitorTarget, IpcError>(__TAURI_INVOKE("monitor_set_paused", { targetId, paused })),
+	monitorSetEnabled: (targetId: string, enabled: boolean) => typedError<MonitorTarget, IpcError>(__TAURI_INVOKE("monitor_set_enabled", { targetId, enabled })),
+	/**  手动 Check Now（§24：与调度同一 run_check；经 JobTracker 可观察）。 */
+	monitorCheckNow: (targetId: string) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("monitor_check_now", { targetId })),
+	monitorHistory: (targetId: string) => __TAURI_INVOKE<MonitorSnapshot[]>("monitor_history", { targetId }),
+	monitorChanges: (targetId: string | null) => __TAURI_INVOKE<MonitorChangeEvent[]>("monitor_changes", { targetId }),
+	/**  Before/After 详细 diff（§11/§56：复用 M2.1/Text Compare，无第二 Diff）。 */
+	monitorDiff: (targetId: string, seqA: number | null, seqB: number | null) => typedError<DiffReportDto, IpcError>(__TAURI_INVOKE("monitor_diff", { targetId, seqA, seqB })),
+	/**
+	 *  Selector 测试（§34 最低要求：输入框+测试+匹配数+提取结果——作用于
+	 *  最近一次 M2.10 抓取缓存，不重复抓取）。
+	 */
+	monitorTestSelector: (selector: string) => typedError<MonitorSelectorTestDto, IpcError>(__TAURI_INVOKE("monitor_test_selector", { selector })),
+	/**
+	 *  监控报告导出（§40/§66：Markdown；output-first + atomic_write +
+	 *  creation-undo——与 M2.10 导出同一写入体系 §99）。
+	 */
+	monitorExport: (targetId: string | null, destDir: string) => typedError<WebExportResult, IpcError>(__TAURI_INVOKE("monitor_export", { targetId, destDir })),
+	monitorApplyConfig: (config: MonitorConfig) => __TAURI_INVOKE<void>("monitor_apply_config", { config }),
+	monitorGetConfig: () => __TAURI_INVOKE<MonitorConfig>("monitor_get_config"),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -431,6 +459,8 @@ export type AppConfig = {
 	wisp?: WispConfig,
 	/**  M2.10：Web 设置（§84）。 */
 	web?: WebConfig,
+	/**  M2.11：Website Monitor 设置（§68）。 */
+	monitor?: MonitorConfig,
 };
 
 /**  应用信息（品牌 + 版本 + 运行环境）。 */
@@ -609,10 +639,28 @@ export type CaptureRecord = {
 	height: number,
 };
 
+/**  变化强度（§57：变化量指标，非语义重要性——不说"重大新闻"）。 */
+export type ChangeMagnitude = "none" | "small" | "medium" | "large";
+
 /**  编码判定来源（§21：不静默宣称 UTF-8）。 */
 export type CharsetSource = "httpHeader" | "bom" | "metaTag" | 
 /**  合理默认（如实标注 default）。 */
 "utf8Default";
+
+/**  检查结果 / 变化类型（§9/§14/§15/§73）。 */
+export type CheckResult = 
+/**  首次检查建立基线（不是 Changed §14）。 */
+"initial" | "noChange" | 
+/**  内容指纹变化（Added/Removed/Modified 由 diff 统计表达）。 */
+"contentChanged" | 
+/**  失败后恢复成功（§73；是否通知由设置决定）。 */
+"recovered" | 
+/**  抓取失败（网络/超时/5xx）——不污染成功快照 §15。 */
+"fetchFailed" | 
+/**  访问被拒（403 等 §19）。 */
+"blocked" | 
+/**  不支持的内容/动态渲染（§36/§54）。 */
+"unsupported" | "cancelled";
 
 export type ClassificationDto = {
 	category: string,
@@ -1344,6 +1392,35 @@ export type MetaField = {
 	source: string,
 };
 
+/**  变化事件（§9/§13：确定性摘要，无 AI §60）。 */
+export type MonitorChangeEvent = {
+	id: string,
+	targetId: string,
+	detectedAtMs: number | null,
+	result: CheckResult,
+	magnitude: ChangeMagnitude,
+	/**  diff 统计（Added/Removed/Modified 的行级表达 §9）。 */
+	addedLines: number,
+	removedLines: number,
+	previousSeq: number | null,
+	currentSeq: number | null,
+	/**  确定性摘要（规则生成 §13，不含正文 §62）。 */
+	summary: string,
+};
+
+/**  M2.11 Website Monitor 设置（§68：默认保守；target 专属设置优先）。 */
+export type MonitorConfig = {
+	defaultIntervalSecs?: number,
+	timeoutSecs?: number,
+	maxResponseMb?: number,
+	maxConcurrentChecks?: number,
+	maxSnapshotsPerTarget?: number,
+	retentionDays?: number,
+	notifyOnChange?: boolean,
+	notifyOnError?: boolean,
+	notifyOnRecovery?: boolean,
+};
+
 /**
  *  显示器信息（来自 screenshots crate；物理像素）。index 以 u32 经 IPC
  *  （specta 禁 usize）；id 仅展示用。
@@ -1358,6 +1435,68 @@ export type MonitorInfo = {
 	height: number,
 	scaleFactor: number | null,
 	isPrimary: boolean,
+};
+
+/**
+ *  监控范围（§5：WholePage/MainContent/Element——三种全真实可用，
+ *  无空壳枚举；Element = CSS Selector，scraper 现成能力）。
+ */
+export type MonitorMode = "wholePage" | "mainContent" | "element";
+
+export type MonitorSelectorTestDto = {
+	matched: number,
+	preview: string,
+};
+
+/**  快照元数据（§7；正文 payload 按需存文件——NoChange 不存正文 §46）。 */
+export type MonitorSnapshot = {
+	targetId: string,
+	seq: number | null,
+	fetchedAtMs: number | null,
+	statusCode: number,
+	finalUrl: string,
+	contentType: string,
+	/**  规范化文本指纹（§10/§55：基于真正比较对象——规范化后的提取文本）。 */
+	fingerprint: string,
+	textSize: number,
+	durationMs: number | null,
+	/**  该次检查结果（历史列表"是否变化"列 §8）。 */
+	result: CheckResult,
+	/**  正文 payload 相对文件名；None = metadata-only（NoChange/失败 §46）。 */
+	payloadFile: string | null,
+	truncated: boolean,
+};
+
+/**  监控目标（§4 精简为真实使用的字段）。 */
+export type MonitorTarget = {
+	id: string,
+	name: string,
+	url: string,
+	/**  enabled=false ⇒ Disabled（§65）；paused 独立（§64）。 */
+	enabled: boolean,
+	paused: boolean,
+	mode: MonitorMode,
+	/**  Element 模式的 CSS selector（§34 最低要求：可输入可测试）。 */
+	selector: string | null,
+	/**  检查间隔秒（下限 60——§18 低频克制）。 */
+	intervalSecs: number,
+	/**  变化时通知（§22）。 */
+	notifyOnChange: boolean,
+	/**  失败时通知。 */
+	notifyOnError: boolean,
+	/**  失败后恢复成功时通知（§73）。 */
+	notifyOnRecovery: boolean,
+	/**  连续失败计数（backoff 依据 §18：interval × 2^min(n,4)）。 */
+	consecutiveFailures: number,
+	lastCheckedAtMs: number | null,
+	lastSuccessAtMs: number | null,
+	/**  最近一次成功快照指纹（快速比较 §10）。 */
+	lastFingerprint: string | null,
+	lastSnapshotSeq: number | null,
+	status: TargetStatus,
+	lastErrorCode: string | null,
+	createdAtMs: number | null,
+	updatedAtMs: number | null,
 };
 
 /**
@@ -1944,6 +2083,27 @@ export type TargetContext = {
 	appClass: AppClass,
 	identityConfidence: TargetConfidence,
 };
+
+/**  目标运行状态（§47 状态机；业务层唯一事实源）。 */
+export type TargetStatus = 
+/**  已创建但从未检查。 */
+"waiting" | 
+/**  检查进行中。 */
+"checking" | 
+/**  已启用，等待下次计划检查。 */
+"idle" | 
+/**  最近一次检查发现内容变化（§47 状态机含 Changed）。 */
+"changed" | 
+/**  暂停（不自动检查；历史保留 §64）。 */
+"paused" | 
+/**  已禁用（§65 与 Paused/Deleted 区分）。 */
+"disabled" | 
+/**  最近一次检查失败（Recoverable——不覆盖成功快照 §15）。 */
+"failed" | 
+/**  被拒绝访问（403 等 §19）。 */
+"blocked" | 
+/**  内容类型/动态渲染不支持（§36/§54）。 */
+"unsupported";
 
 export type TextDetailDto = {
 	leftEncoding: string | null,

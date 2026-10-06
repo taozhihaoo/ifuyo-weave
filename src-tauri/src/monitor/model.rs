@@ -97,7 +97,7 @@ pub struct MonitorTarget {
     pub last_success_at_ms: Option<f64>,
     /// 最近一次成功快照指纹（快速比较 §10）。
     pub last_fingerprint: Option<String>,
-    pub last_snapshot_seq: Option<u64>,
+    pub last_snapshot_seq: Option<f64>,
     pub status: TargetStatus,
     pub last_error_code: Option<String>,
     pub created_at_ms: f64,
@@ -109,7 +109,7 @@ pub struct MonitorTarget {
 #[serde(rename_all = "camelCase")]
 pub struct MonitorSnapshot {
     pub target_id: String,
-    pub seq: u64,
+    pub seq: f64,
     pub fetched_at_ms: f64,
     pub status_code: u32,
     pub final_url: String,
@@ -137,8 +137,8 @@ pub struct MonitorChangeEvent {
     /// diff 统计（Added/Removed/Modified 的行级表达 §9）。
     pub added_lines: u32,
     pub removed_lines: u32,
-    pub previous_seq: Option<u64>,
-    pub current_seq: u64,
+    pub previous_seq: Option<f64>,
+    pub current_seq: f64,
     /// 确定性摘要（规则生成 §13，不含正文 §62）。
     pub summary: String,
 }
