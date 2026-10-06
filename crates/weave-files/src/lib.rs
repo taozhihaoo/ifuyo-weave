@@ -22,6 +22,7 @@ pub mod execute;
 pub mod fs;
 pub mod hash;
 pub mod inspect;
+pub mod integrity;
 pub mod metadata;
 pub mod organize;
 pub mod recycle;
