@@ -273,33 +273,7 @@ fn now_ms() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::monitor::model::TargetStatus;
     use weave_testkit::TempWorkspace;
-
-    fn target(mode: MonitorMode, selector: Option<&str>) -> MonitorTarget {
-        MonitorTarget {
-            id: "t1".into(),
-            name: "Test".into(),
-            url: "https://example.com".into(),
-            enabled: true,
-            paused: false,
-            mode,
-            selector: selector.map(|s| s.to_string()),
-            interval_secs: 300,
-            notify_on_change: false,
-            notify_on_error: false,
-            notify_on_recovery: false,
-            consecutive_failures: 0,
-            last_checked_at_ms: None,
-            last_success_at_ms: None,
-            last_fingerprint: None,
-            last_snapshot_seq: None,
-            status: TargetStatus::Waiting,
-            last_error_code: None,
-            created_at_ms: 0.0,
-            updated_at_ms: 0.0,
-        }
-    }
 
     /// 本地 HTML 直驱提取逻辑（不发网络请求——extract_by_mode 单测）。
     #[test]

@@ -20,6 +20,7 @@ import { RecipePanel } from "../features/recipe/RecipePanel";
 import { GlintPanel } from "../features/glint/GlintPanel";
 import { WispPanel } from "../features/wisp/WispPanel";
 import { WebPanel } from "../features/web/WebPanel";
+import { MonitorPanel } from "../features/monitor/MonitorPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -89,6 +90,7 @@ function App() {
     | "glint"
     | "wisp"
     | "web"
+    | "monitor"
     | "text"
     | "data"
     | "image"
@@ -124,6 +126,7 @@ function App() {
       ["glint", "nav.glint", "glint screenshot capture 截图 屏幕捕获"],
       ["wisp", "nav.wisp", "wisp paste guard sensitive 敏感 粘贴防护 剪贴板"],
       ["web", "nav.web", "web url fetch extract markdown 清理 抓取 网页"],
+      ["monitor", "nav.monitor", "website monitor change detection 网站监控 变化检测"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -215,6 +218,13 @@ function App() {
       category: "tools",
       keywords: ["fetch", "url", "抓取"],
       run: () => setView("web"),
+    });
+    upsertCommand({
+      id: "monitor.open",
+      labelKey: "nav.monitor",
+      category: "tools",
+      keywords: ["monitor", "website", "change", "网站监控", "变化"],
+      run: () => setView("monitor"),
     });
     upsertCommand({
       id: "web.clean-url",
@@ -639,6 +649,10 @@ function App() {
 
       {view === "web" ? (
         <WebPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "monitor" ? (
+        <MonitorPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "agent" ? (

@@ -148,7 +148,7 @@ pub const MIN_INTERVAL_SECS: u32 = 60;
 
 /// 失败退避（§18）：interval × 2^min(failures, 4)。
 pub fn backoff_delay_secs(base_interval_secs: u32, consecutive_failures: u32) -> u64 {
-    let shift = consecutive_failures.min(4) as u32;
+    let shift = consecutive_failures.min(4);
     (base_interval_secs.max(MIN_INTERVAL_SECS) as u64) << shift
 }
 

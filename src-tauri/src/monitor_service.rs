@@ -832,15 +832,15 @@ pub fn monitor_export(
             format!("{}: {}", output.display(), e.message),
         )
     })?;
-    if let Ok(hdir) = crate::rename_service::resolve_history_dir(&app) {
-        if let Err(e) = crate::batch_service::record_creation_transaction(
+    if let Ok(hdir) = crate::rename_service::resolve_history_dir(&app)
+        && let Err(e) = crate::batch_service::record_creation_transaction(
             &hdir,
             &[],
             std::slice::from_ref(&output),
             &format!("Website Monitor report · {} target(s)", selected.len()),
-        ) {
-            tracing::warn!(error = %e, "monitor report history failed");
-        }
+        )
+    {
+        tracing::warn!(error = %e, "monitor report history failed");
     }
     Ok(crate::web_service::WebExportResult {
         output: output.to_string_lossy().into_owned(),
