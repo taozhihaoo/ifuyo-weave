@@ -1238,3 +1238,40 @@ Known Limitations（P1/P2）:
 - 调度 handler 注册表空（M2.7 Recipe 接入）；Folder Watcher 未建（无既有
   Watcher，未引 notify 依赖——M2.7 需要时再建）
 - Scheduler tick 为 1s 轮询（与 clipboard 同模式；事件驱动需 unsafe）
+
+## M2.7 Recipe / Automation（2.0）
+
+Scope: 声明式配方（参数化步骤组合）——Manual Trigger 完整闭环（创建→配置→
+预览→运行→历史），rename/archive/manifest 走既有核心。**Recipe 是编排者，
+不是第二个执行引擎**（§6）；§79 Out of Scope 全部未越。
+
+提交链: R1/R2 393a6f2 (model+store+runner+history+IPC) / R2b-R2c (specta
+SystemTime/u64 修复→DTO 化) / R3 42a8440+fixes (RecipePanel) / R6 (perf+
+总结+PROGRESS)。
+
+关键实现:
+
+- **模型**（schemaVersion 1）：4 种真实 Action（Filter/RenamePrefix/
+  ArchiveCreate/HashManifest）；风险由 mutating Action 推导（§41）
+- **Runner**（§14/§15/§62）：Dry Run 与 Apply 同一函数；顺序执行；
+  rename 走 M2.0 rename plan+execute（NoOp 幂等 §62）；archive 已存在 ⇒
+  Skip；SafetyLimits.max_files=1000 超出 ⇒ Blocked（§13）；单步失败隔离
+- **存储**（§33）：单 Recipe 单文件原子写 + 损坏隔离；导入校验版本/未知
+  Action（§34）
+- **运行历史**（§20/§21/§64）：RecipeRunRecord 含 Recipe 快照（版本冻结）；
+  500 条有界；删除 Recipe 保留历史（§66）
+- **UI**（§37/§38）：列表（行内运行/删除）+ 列表式 Builder + Dry Run/Run
+  结果（计数/blocked 原因）+ 运行历史；导航+palette；i18n 同笔
+
+Quality:
+
+- 全工作区 42 套件 0 failed；recipe 6 单元测试
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 5.37MiB
+- 交付文档：Spec/ifuyo Weave 2.0 M2.7 Recipe Automation 实施总结.md
+  （§82 廿二节）
+
+Known Limitations（P1/P2）:
+
+- Schedule handler→Recipe Runtime 接线未做（job_name 约定已留——约 30 行）
+- Folder Watch/Clipboard 触发未接线（§23 如实 Partial）
+- 参数占位符解析（§11）未做；条件树（§12）以 filter 步骤代
