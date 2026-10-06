@@ -125,6 +125,17 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         glint_service::glint_copy_capture_to_clipboard,
         glint_service::glint_ocr_capture,
         glint_service::glint_ocr_region,
+        wisp_service::wisp_status,
+        wisp_service::wisp_set_paused,
+        wisp_service::wisp_apply_config,
+        wisp_service::wisp_analyze_text,
+        wisp_service::wisp_evaluate_current,
+        wisp_service::wisp_mask_current,
+        wisp_service::wisp_restore_session,
+        wisp_service::wisp_cancel_session,
+        wisp_service::wisp_events,
+        wisp_service::wisp_clear_events,
+        wisp_service::wisp_recopy_guarded,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -235,11 +246,15 @@ pub fn run() {
                 clipboard_runtime.paused_flag_clone(),
                 clipboard_runtime.enabled_flag_clone(),
             );
+            // M2.9：Wisp 运行时（复用 M2.3 通路；无自建监听/线程 §27/§29）
+            let wisp_runtime =
+                wisp_service::WispRuntime::open(history_dir.join("wisp"), config.wisp.clone());
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
                 clipboard_runtime,
                 agent_runtime,
+                wisp_runtime,
             ));
             if enabled {
                 clipboard_service::start_monitor(app.handle().clone());

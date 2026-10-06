@@ -37,6 +37,9 @@ pub struct AppConfig {
     /// M2.3：剪贴板历史设置（§42：设置持久化，变更立即生效）。
     #[serde(default)]
     pub clipboard: ClipboardConfig,
+    /// M2.9：Wisp / Paste Guard 设置（§32）。
+    #[serde(default)]
+    pub wisp: WispConfig,
 }
 
 /// 剪贴板捕获设置（§17/§20/§42：隐私 P0——可停、可清、增长有界）。
@@ -64,6 +67,56 @@ impl Default for ClipboardConfig {
     }
 }
 
+/// 每应用粘贴策略（§21：可执行身份 + 模式 + 启用；不存窗口标题 §22）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WispAppRule {
+    pub process: String,
+    /// default | allow | warn | mask | block
+    pub mode: String,
+    pub enabled: bool,
+}
+
+impl Default for WispAppRule {
+    fn default() -> Self {
+        Self { process: String::new(), mode: "default".to_string(), enabled: true }
+    }
+}
+
+/// Wisp / Paste Guard 设置（§32；走既有 Settings 系统持久化）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WispConfig {
+    pub enabled: bool,
+    pub detect_credentials: bool,
+    pub detect_local_paths: bool,
+    pub detect_personal_info: bool,
+    pub detect_secret_config: bool,
+    /// Critical + 显式开启才 Block（§10：默认 Warn 不 Block）。
+    pub block_critical: bool,
+    /// 保护会话 TTL（§19）。
+    pub session_ttl_secs: u32,
+    /// 敏感原文是否落盘（§25：默认关——不伪装保险库；关时崩溃后不可恢复）。
+    pub retain_sensitive_payload: bool,
+    pub app_rules: Vec<WispAppRule>,
+}
+
+impl Default for WispConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            detect_credentials: true,
+            detect_local_paths: true,
+            detect_personal_info: true,
+            detect_secret_config: true,
+            block_critical: false,
+            session_ttl_secs: 300,
+            retain_sensitive_payload: false,
+            app_rules: Vec::new(),
+        }
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -72,6 +125,7 @@ impl Default for AppConfig {
             theme: "system".to_string(),
             favorites: Vec::new(),
             clipboard: ClipboardConfig::default(),
+            wisp: WispConfig::default(),
         }
     }
 }

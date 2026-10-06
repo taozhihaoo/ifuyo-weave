@@ -179,6 +179,8 @@ fn monitor_loop(app: tauri::AppHandle) {
                     let sensitivity =
                         weave_clipboard::sensitivity_heuristic(ContentKind::Text, &text);
                     let _ = sensitivity;
+                    // M2.9 Wisp 钩子（同一监听通路 §27：无第二监听器）
+                    crate::wisp_service::note_clipboard_text(&app, &text);
                     let input = CaptureInput {
                         kind: ContentKind::Text,
                         payload: text.into_bytes(),

@@ -158,6 +158,47 @@ export const commands = {
 	glintCopyCaptureToClipboard: (fileName: string) => typedError<null, IpcError>(__TAURI_INVOKE("glint_copy_capture_to_clipboard", { fileName })),
 	glintOcrCapture: (fileName: string, language: string | null) => typedError<OcrResultDto, IpcError>(__TAURI_INVOKE("glint_ocr_capture", { fileName, language })),
 	glintOcrRegion: (fileName: string, x: number, y: number, w: number, h: number, language: string | null) => typedError<OcrResultDto, IpcError>(__TAURI_INVOKE("glint_ocr_region", { fileName, x, y, w, h, language })),
+	wispStatus: () => __TAURI_INVOKE<WispStatusDto>("wisp_status"),
+	wispSetPaused: (paused: boolean) => __TAURI_INVOKE<void>("wisp_set_paused", { paused }),
+	/**  设置立即生效（§32；持久化走既有 set_app_config）。 */
+	wispApplyConfig: (config: WispConfig) => __TAURI_INVOKE<void>("wisp_apply_config", { config }),
+	/**  分析任意文本（面板"检测此文本"）。 */
+	wispAnalyzeText: (text: string) => __TAURI_INVOKE<SensitivityResult>("wisp_analyze_text", { text }),
+	/**
+	 *  评估当前剪贴板（assume_process 显式声明 ⇒ Confirmed 置信；否则前台
+	 *  窗口推断 ⇒ Likely）。
+	 */
+	wispEvaluateCurrent: (assumeProcess: string | null) => typedError<WispEvaluateDto, IpcError>(__TAURI_INVOKE("wisp_evaluate_current", { assumeProcess })),
+	/**
+	 *  保护会话：读当前剪贴板 → 分析 → mask 写回（M2.3 抑制指纹写前登记）
+	 *  → 建会话（§11/§12：原文保留、可恢复）。
+	 */
+	wispMaskCurrent: (ttlSecs: number | null) => typedError<ProtectionSession, IpcError>(__TAURI_INVOKE("wisp_mask_current", { ttlSecs })),
+	/**
+	 *  恢复原文（§19 指纹守卫：剪贴板 ≠ masked ⇒ **跳过不恢复**，用户已
+	 *  复制新内容；§20 绝不用旧内容覆盖新剪贴板）。
+	 */
+	wispRestoreSession: () => typedError<ProtectionSession, IpcError>(__TAURI_INVOKE("wisp_restore_session")),
+	/**  放弃会话（不动剪贴板——masked 内容可能已被粘贴；如实保留现状）。 */
+	wispCancelSession: () => typedError<null, IpcError>(__TAURI_INVOKE("wisp_cancel_session")),
+	wispEvents: (limit: number | null) => __TAURI_INVOKE<WispEventDto[]>("wisp_events", { limit }),
+	wispClearEvents: () => __TAURI_INVOKE<void>("wisp_clear_events"),
+	/**
+	 *  经 Weave 的粘贴意图防线（§14 Limited 能力下的可靠设防点）：
+	 *  recopy 前评估策略——Block ⇒ 拒绝；Warn ⇒ 返回决策等确认；
+	 *  Allow/确认后委托 M2.3 `clipboard_recopy`（复用，不重建 §27）。
+	 *  返回 Ok(Some(decision)) = 警告待确认；Ok(None) = 已放行完成。
+	 */
+	wispRecopyGuarded: (id: string, confirmed: boolean) => typedError<{
+	action: PasteAction,
+	risk: PasteRisk,
+	/**  可解释理由（规则/目标/策略；不含内容 §26）。 */
+	reasons: string[],
+	requiresConfirmation: boolean,
+	target: TargetContext,
+	/**  参与决策的规则 ID（审计用 §26）。 */
+	ruleIds: string[],
+} | null, IpcError>(__TAURI_INVOKE("wisp_recopy_guarded", { id, confirmed })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -352,6 +393,9 @@ export type AnnotationStyle = {
 	filled: boolean,
 };
 
+/**  粘贴目标应用类别（§51；exe 识别，标题仅辅助）。 */
+export type AppClass = "browser" | "codeEditor" | "terminal" | "chat" | "office" | "unknown";
+
 /**  应用级最小配置。工具参数永远跟随工具本身，不进入全局配置（charter #37）。 */
 export type AppConfig = {
 	version?: number,
@@ -361,6 +405,8 @@ export type AppConfig = {
 	favorites?: FavoriteEntry[],
 	/**  M2.3：剪贴板历史设置（§42：设置持久化，变更立即生效）。 */
 	clipboard?: ClipboardConfig,
+	/**  M2.9：Wisp / Paste Guard 设置（§32）。 */
+	wisp?: WispConfig,
 };
 
 /**  应用信息（品牌 + 版本 + 运行环境）。 */
@@ -714,6 +760,9 @@ export type CompareSummaryDto = {
 	unsupported: number | null,
 	error: number | null,
 };
+
+/**  检测置信度（§39：可解释规则优先，不造复杂数学模型）。 */
+export type Confidence = "low" | "medium" | "high";
 
 export type DataColumnDto = {
 	id: string,
@@ -1300,6 +1349,24 @@ export type OrganizerRuleDto = {
 	targetFolder: string,
 };
 
+/**  决策动作（§16）。 */
+export type PasteAction = "allow" | "warn" | "block" | "maskAndPaste" | "cancel" | "unknown";
+
+/**  统一决策对象（§16）。 */
+export type PasteDecision = {
+	action: PasteAction,
+	risk: PasteRisk,
+	/**  可解释理由（规则/目标/策略；不含内容 §26）。 */
+	reasons: string[],
+	requiresConfirmation: boolean,
+	target: TargetContext,
+	/**  参与决策的规则 ID（审计用 §26）。 */
+	ruleIds: string[],
+};
+
+/**  粘贴风险（§7：Low/Medium/High/Critical/Unknown）。 */
+export type PasteRisk = "low" | "medium" | "high" | "critical" | "unknown";
+
 /**  Merge 计划（§18/§19：有序、确定性、预览可显示每输入页数）。 */
 export type PdfMergePlan = {
 	/**  有序输入（确定性顺序 = 数组顺序）。 */
@@ -1446,6 +1513,22 @@ export type PrivacyReportDto = {
 
 export type PrivacyScanRequestDto = {
 	root: string,
+};
+
+/**  保护会话（§12 ClipboardProtectionSession）。 */
+export type ProtectionSession = {
+	sessionId: string,
+	originalFingerprint: string,
+	maskedFingerprint: string,
+	createdAtMs: number | null,
+	/**  TTL（§19；设置驱动）。 */
+	expiresAtMs: number | null,
+	state: SessionState,
+	/**  目标上下文快照（决策时记录；Unknown 如实）。 */
+	target: TargetContext,
+	originalLevel: SensitivityLevel,
+	/**  恢复被跳过的事实（§19：clipboard changed 时如实呈现）。 */
+	lastRestoreSkipReason: string | null,
 };
 
 /**  Recipe 步骤（§4 RecipeAction）。 */
@@ -1673,6 +1756,58 @@ export type ScheduleUpsertDto = {
 	jobName: string,
 };
 
+/**  敏感类别（§5 A-E）。 */
+export type SensitivityCategory = 
+/**  认证与身份（password/token/private key/auth header）。 */
+"credential" | 
+/**  云/服务凭证（AWS/GitHub/Slack/DB 连接串等具名前缀）。 */
+"cloudCredential" | 
+/**  本地路径/用户名（≠ 一定敏感 ⇒ 仅 Potentially §5C）。 */
+"localPath" | 
+/**  个人信息（email/IP——保守，默认不过度阻断 §5D）。 */
+"personalInfo" | 
+/**  配置/代码中的 secret 形态（password= ... 等）。 */
+"secretConfig";
+
+/**  单条可解释发现（§6）。 */
+export type SensitivityFinding = {
+	/**  规则追踪 ID（如 "wisp.github-token"）。 */
+	ruleId: string,
+	category: SensitivityCategory,
+	confidence: Confidence,
+	severity: Severity,
+	/**  证据描述（模式类别/上下文；不含原文 §26）。 */
+	evidence: string,
+	/**  UI 展示用（如 `ghp_••••3456`）；告知风险，不重新复制风险（§18）。 */
+	maskedPreview: string,
+	/**  匹配范围（UTF-8 字节偏移；specta 禁 usize ⇒ u32）。 */
+	startOffset: number,
+	endOffset: number,
+};
+
+/**  内容敏感性等级（§4）。 */
+export type SensitivityLevel = "normal" | "potentiallySensitive" | "highlySensitive" | 
+/**  输入不可分析（非文本/超限截断外的情况）——Unknown ≠ Safe（§47）。 */
+"unknown";
+
+/**  分析结果（§6）。 */
+export type SensitivityResult = {
+	level: SensitivityLevel,
+	findings: SensitivityFinding[],
+	/**  规则集/分析器版本（§36 缓存键的一部分；规则变更缓存失效）。 */
+	rulesetVersion: number,
+	analyzerVersion: number,
+	/**  实际分析长度（超长截断如实标注 §35）。 */
+	analyzedChars: number,
+	truncated: boolean,
+};
+
+/**  会话状态（§12）。 */
+export type SessionState = "prepared" | "masked" | "pasted" | "restoring" | "restored" | "expired" | "cancelled" | "failed";
+
+/**  潜在风险严重度（检测侧；≠ 粘贴风险 §7）。 */
+export type Severity = "low" | "medium" | "high" | "critical";
+
 /**  XLSX Sheet 事实（§40-§44）。 */
 export type SheetFact = {
 	name: string,
@@ -1734,6 +1869,23 @@ export type SpaceScanRequestDto = {
 	largeFileBytes: number | null,
 	oldFileDays: number | null,
 	candidates: boolean | null,
+};
+
+/**  目标识别置信（§8：Confirmed/Likely/Unknown——不冒充确定）。 */
+export type TargetConfidence = 
+/**  用户显式声明（UI 选择/用户规则）。 */
+"confirmed" | 
+/**  系统前台窗口推断（≠ 必然粘贴目标 §8）。 */
+"likely" | "unknown";
+
+/**  粘贴目标上下文（§8）。 */
+export type TargetContext = {
+	/**  可执行文件名（小写，如 "chrome.exe"）；未知 ⇒ None。 */
+	process: string | null,
+	/**  窗口标题（辅助证据；不作为身份 §22）。 */
+	windowTitle: string | null,
+	appClass: AppClass,
+	identityConfidence: TargetConfidence,
 };
 
 export type TextDetailDto = {
@@ -1883,6 +2035,70 @@ export type WindowInfo = {
 	height: number,
 	/**  x ≤ -32000 是 Windows 最小化窗口的经典位置（启发式，如实标注）。 */
 	minimized: boolean,
+};
+
+/**  后台分析快照（同内容不重分析 §34）。 */
+export type WispAnalysisDto = {
+	atMs: number | null,
+	result: SensitivityResult,
+};
+
+/**  每应用粘贴策略（§21：可执行身份 + 模式 + 启用；不存窗口标题 §22）。 */
+export type WispAppRule = {
+	process?: string,
+	/**  default | allow | warn | mask | block */
+	mode?: string,
+	enabled?: boolean,
+};
+
+/**  Wisp / Paste Guard 设置（§32；走既有 Settings 系统持久化）。 */
+export type WispConfig = {
+	enabled?: boolean,
+	detectCredentials?: boolean,
+	detectLocalPaths?: boolean,
+	detectPersonalInfo?: boolean,
+	detectSecretConfig?: boolean,
+	/**  Critical + 显式开启才 Block（§10：默认 Warn 不 Block）。 */
+	blockCritical?: boolean,
+	/**  保护会话 TTL（§19）。 */
+	sessionTtlSecs?: number,
+	/**  敏感原文是否落盘（§25：默认关——不伪装保险库；关时崩溃后不可恢复）。 */
+	retainSensitivePayload?: boolean,
+	appRules?: WispAppRule[],
+};
+
+/**  评估结果（决策 + 证据）。 */
+export type WispEvaluateDto = {
+	decision: PasteDecision,
+	result: SensitivityResult,
+};
+
+/**  安全事件记录（§26/§45：仅元数据，绝无内容；有界 200 §34）。 */
+export type WispEventDto = {
+	atMs: number | null,
+	/**  analyzed | evaluated | masked | restored | restoreSkipped | cancelled | expired | warned | blocked | allowed */
+	kind: string,
+	level: SensitivityLevel,
+	risk: PasteRisk | null,
+	action: PasteAction | null,
+	/**  目标可执行名（未知 ⇒ None；无标题 §22）。 */
+	target: string | null,
+	ruleIds: string[],
+};
+
+/**
+ *  状态（§31：命令状态反映 Enabled/Paused/Unsupported/Failed——
+ *  detectionCapability="limited" 如实声明无键盘钩子降级）。
+ */
+export type WispStatusDto = {
+	enabled: boolean,
+	paused: boolean,
+	detectionCapability: string,
+	rulesetVersion: number,
+	analyzerVersion: number,
+	session: ProtectionSession | null,
+	latest: WispAnalysisDto | null,
+	eventCount: number | null,
 };
 
 /**  §77 Workflow Library 条目。 */

@@ -188,6 +188,8 @@ pub fn list_windows() -> Vec<WindowInfo> {
 pub struct ForegroundWindow {
     pub hwnd: isize,
     pub title: String,
+    /// 进程可执行名（M2.9 Wisp 目标识别 §22 以 exe 为准；未知为空）。
+    pub process_name: String,
     pub screen_x: i32,
     pub screen_y: i32,
     pub width: u32,
@@ -226,7 +228,8 @@ pub fn foreground_window_rect() -> Result<ForegroundWindow, WeaveError> {
     };
     Ok(ForegroundWindow {
         hwnd: active.id as isize,
-        title: active.title,
+        title: active.title.clone(),
+        process_name: active.info.name.clone(),
         screen_x: x,
         screen_y: y,
         width: width as u32,
