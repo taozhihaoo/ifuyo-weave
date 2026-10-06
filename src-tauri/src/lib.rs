@@ -6,9 +6,11 @@
 //! common-controls manifest 才能在 Windows 上启动（见 build.rs）。
 
 pub mod agent;
+pub mod agent_service;
 pub mod app_info;
 pub mod archive_service;
 pub mod batch_service;
+pub mod clipboard_component;
 pub mod clipboard_service;
 pub mod commands;
 pub mod compare_service;
@@ -89,6 +91,11 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         archive_service::integrity_verify_file,
         archive_service::integrity_create_manifest,
         archive_service::integrity_verify_manifest,
+        agent_service::agent_status,
+        agent_service::agent_set_paused,
+        agent_service::agent_upsert_schedule,
+        agent_service::agent_remove_schedule,
+        agent_service::agent_list_schedules,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -191,14 +198,19 @@ pub fn run() {
                 &config.clipboard,
             )?;
             let enabled = config.clipboard.enabled;
+            // M2.6：Agent Runtime（后台生命周期的唯一主人 §5）
+            let agent_runtime = agent::AgentRuntime::new(4, 256);
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
                 clipboard_runtime,
+                agent_runtime,
             ));
             if enabled {
                 clipboard_service::start_monitor(app.handle().clone());
             }
+            // Agent 启动（§9：配置已加载、存储已就绪之后）
+            agent_service::start_agent(app.handle().clone());
             tracing::info!("Weave started (M1 File Core)");
             Ok(())
         })
@@ -206,7 +218,13 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
-                tracing::info!("Weave exited");
+                // M2.6 §10：App Exit ⇒ Agent Stop（幂等；组件状态收敛）
+                if let Some(state) = _app.try_state::<state::AppState>() {
+                    use crate::agent::AgentComponent;
+                    let _ = state.agent.stop();
+                    state.agent.clipboard.inner.lock().expect("clip").stop();
+                }
+                tracing::info!("Weave exited (agent stopped)");
             }
         })
 }

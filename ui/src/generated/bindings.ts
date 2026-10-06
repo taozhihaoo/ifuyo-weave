@@ -111,6 +111,15 @@ export const commands = {
 	integrityCreateManifest: (root: string) => typedError<ManifestResultDto, IpcError>(__TAURI_INVOKE("integrity_create_manifest", { root })),
 	/**  Manifest 校验（差异语义复用 M2.1 命名 §38）。 */
 	integrityVerifyManifest: (request: ManifestVerifyRequestDto) => typedError<ManifestVerifyResultDto, IpcError>(__TAURI_INVOKE("integrity_verify_manifest", { request })),
+	agentStatus: () => typedError<AgentStatusDto, IpcError>(__TAURI_INVOKE("agent_status")),
+	/**  暂停/恢复 Agent（幂等 §8）。暂停 ⇒ Clipboard 捕获同步暂停（§27）。 */
+	agentSetPaused: (paused: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("agent_set_paused", { paused })),
+	/**  新增/更新调度定义（持久化 agent-schedules.json §35/§36）。 */
+	agentUpsertSchedule: (request: ScheduleUpsertDto) => typedError<string, IpcError>(__TAURI_INVOKE("agent_upsert_schedule", { request })),
+	/**  删除调度定义（持久化）。 */
+	agentRemoveSchedule: (id: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("agent_remove_schedule", { id })),
+	/**  调度清单。 */
+	agentListSchedules: () => typedError<ScheduleDto[], IpcError>(__TAURI_INVOKE("agent_list_schedules")),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -251,6 +260,31 @@ export const commands = {
 };
 
 /* Types */
+export type AgentNotificationDto = {
+	code: string,
+	/**  info | warning | error */
+	level: string,
+	message: string,
+	count: number | null,
+	atMs: number | null,
+};
+
+export type AgentStatusDto = {
+	/**  stopped | running | paused | faulted … */
+	state: string,
+	paused: boolean,
+	components: ([string, string])[],
+	queueLen: number | null,
+	queueCapacity: number | null,
+	queueDropped: number | null,
+	gateRunning: number | null,
+	gateMax: number | null,
+	schedulerSchedules: number | null,
+	schedulerRunning: number | null,
+	lastError: string | null,
+	notifications: AgentNotificationDto[],
+};
+
 /**  应用级最小配置。工具参数永远跟随工具本身，不进入全局配置（charter #37）。 */
 export type AppConfig = {
 	version?: number,
@@ -1382,6 +1416,31 @@ export type ScanReportDto = {
 	errorsTruncated: boolean,
 	limited: boolean,
 	limitedReason: string | null,
+};
+
+export type ScheduleDto = {
+	id: string,
+	name: string,
+	enabled: boolean,
+	kind: string,
+	jobName: string,
+	lastResult: string | null,
+};
+
+export type ScheduleUpsertDto = {
+	id: string | null,
+	name: string,
+	enabled: boolean,
+	/**  interval | daily */
+	kind: string,
+	intervalSeconds: number | null,
+	hour: number | null,
+	minute: number | null,
+	/**  skip | runOnce */
+	missedRunPolicy: string,
+	/**  allow | skipIfRunning */
+	concurrency: string,
+	jobName: string,
 };
 
 /**  XLSX Sheet 事实（§40-§44）。 */

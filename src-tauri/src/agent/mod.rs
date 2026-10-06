@@ -214,11 +214,15 @@ impl AgentComponent for ClipboardComponent {
 }
 
 /// Agent 运行时（AppState 持有；全部经 Mutex——Start/Stop 幂等 §8）。
+pub struct ClipboardComponentState {
+    pub inner: Mutex<crate::clipboard_component::ClipboardComponent>,
+}
+
 pub struct AgentRuntime {
     state: Mutex<AgentState>,
     pub paused: AtomicBool,
     pub scheduler: Mutex<SchedulerComponent>,
-    pub clipboard_state: Mutex<Option<ComponentState>>,
+    pub clipboard: ClipboardComponentState,
     pub queue: BoundedJobQueue,
     pub gate: ConcurrencyGate,
     pub started_at: Mutex<Option<SystemTime>>,
@@ -232,7 +236,9 @@ impl AgentRuntime {
             state: Mutex::new(AgentState::Stopped),
             paused: AtomicBool::new(false),
             scheduler: Mutex::new(SchedulerComponent::default()),
-            clipboard_state: Mutex::new(None),
+            clipboard: ClipboardComponentState {
+                inner: Mutex::new(crate::clipboard_component::ClipboardComponent::new()),
+            },
             queue: BoundedJobQueue::new(queue_capacity),
             gate: ConcurrencyGate::new(max_concurrent),
             started_at: Mutex::new(None),
@@ -337,12 +343,13 @@ impl AgentRuntime {
                 ComponentHealth {
                     name: "clipboard".to_string(),
                     state: self
-                        .clipboard_state
+                        .clipboard
+                        .inner
                         .lock()
                         .expect("clip")
-                        .map(|s| s.as_str())
-                        .unwrap_or("stopped")
-                        .to_string(),
+                        .health()
+                        .state
+                        .clone(),
                     last_error: None,
                     last_success: None,
                 },

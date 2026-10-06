@@ -46,6 +46,10 @@ pub struct AppState {
     pub privacy_results: std::sync::Arc<crate::privacy_service::PrivacyResultCache>,
     /// M2.5：归档结果缓存（job_id 为键）。
     pub archive_results: std::sync::Arc<crate::archive_service::ArchiveResultCache>,
+    /// M2.6：Agent Runtime（后台生命周期唯一主人）。
+    pub agent: std::sync::Arc<crate::agent::AgentRuntime>,
+    /// M2.6：统一通知中心（去重聚合）。
+    pub notifications: std::sync::Arc<crate::agent_service::NotificationCenter>,
 }
 
 impl AppState {
@@ -53,6 +57,7 @@ impl AppState {
         log_guard: LogGuard,
         tools: ToolRegistry,
         clipboard: crate::clipboard_service::ClipboardRuntime,
+        agent: crate::agent::AgentRuntime,
     ) -> Self {
         Self {
             _log_guard: log_guard,
@@ -70,6 +75,17 @@ impl AppState {
             clipboard: std::sync::Arc::new(clipboard),
             privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
             archive_results: std::sync::Arc::new(crate::archive_service::ArchiveResultCache::new()),
+            agent: {
+                let mut a = agent;
+                if let Ok(mut clip) = a.clipboard.inner.try_lock() {
+                    clip.bind_flags(
+                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                    );
+                }
+                std::sync::Arc::new(a)
+            },
+            notifications: std::sync::Arc::new(crate::agent_service::NotificationCenter::new()),
         }
     }
 }
