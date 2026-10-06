@@ -345,7 +345,8 @@ pub fn privacy_export_safe_copy(
             (size, ms) => (
                 size,
                 ms.and_then(|millis| {
-                    std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_millis(millis as u64))
+                    std::time::UNIX_EPOCH
+                        .checked_add(std::time::Duration::from_millis(millis as u64))
                 }),
             ),
         };
@@ -436,39 +437,40 @@ pub fn privacy_export_safe_copy(
     // 事务/历史落盘（Audit §48：只有路径/计数，无内容/敏感值）
     let history_dir = crate::rename_service::resolve_history_dir(&app)?;
     if !tx_items.is_empty()
-        && let Ok(store) = weave_history::HistoryStore::open(&history_dir) {
-            let tx = weave_history::OperationTransaction {
-                operation_id: operation_id.clone(),
-                kind: weave_core::prelude::OperationKind::TextTransform,
-                status: weave_history::OperationStatus::Completed,
-                timestamp: now,
-                reversible: if exported == 0 {
-                    weave_history::Reversibility::None
-                } else if stale + failed == 0 {
-                    weave_history::Reversibility::Full
-                } else {
-                    weave_history::Reversibility::Partial
-                },
-                items: tx_items,
-            };
-            let entry = weave_history::HistoryEntry {
-                operation_id: tx.operation_id.clone(),
-                kind: tx.kind,
-                timestamp: tx.timestamp,
-                summary: format!("Privacy export: {exported} safe copies"),
-                item_count: tx.items.len() as u64,
-                success_count: exported,
-                failed_count: failed,
-                skipped_count: stale,
-                undoable: exported > 0,
-                status: weave_history::OperationStatus::Completed,
-                input_root: None,
-                rule_summary: Some("share preflight safe copy".to_string()),
-            };
-            let _ = store
-                .save_transaction(&tx)
-                .and_then(|()| store.upsert_entry(entry));
-        }
+        && let Ok(store) = weave_history::HistoryStore::open(&history_dir)
+    {
+        let tx = weave_history::OperationTransaction {
+            operation_id: operation_id.clone(),
+            kind: weave_core::prelude::OperationKind::TextTransform,
+            status: weave_history::OperationStatus::Completed,
+            timestamp: now,
+            reversible: if exported == 0 {
+                weave_history::Reversibility::None
+            } else if stale + failed == 0 {
+                weave_history::Reversibility::Full
+            } else {
+                weave_history::Reversibility::Partial
+            },
+            items: tx_items,
+        };
+        let entry = weave_history::HistoryEntry {
+            operation_id: tx.operation_id.clone(),
+            kind: tx.kind,
+            timestamp: tx.timestamp,
+            summary: format!("Privacy export: {exported} safe copies"),
+            item_count: tx.items.len() as u64,
+            success_count: exported,
+            failed_count: failed,
+            skipped_count: stale,
+            undoable: exported > 0,
+            status: weave_history::OperationStatus::Completed,
+            input_root: None,
+            rule_summary: Some("share preflight safe copy".to_string()),
+        };
+        let _ = store
+            .save_transaction(&tx)
+            .and_then(|()| store.upsert_entry(entry));
+    }
 
     Ok(PrivacyExportResultDto {
         exported: exported as f64,
