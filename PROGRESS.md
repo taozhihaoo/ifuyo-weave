@@ -1272,6 +1272,7 @@ Quality:
 
 Known Limitations（P1/P2）:
 
-- Schedule handler→Recipe Runtime 接线未做（job_name 约定已留——约 30 行）
+- Schedule handler→Recipe Runtime **已接线**（R3b）：dispatch_due_schedules
+  分派 recipe:<id> → run_recipe → Run History（集成测试：到期触发→run 被记录）
 - Folder Watch/Clipboard 触发未接线（§23 如实 Partial）
 - 参数占位符解析（§11）未做；条件树（§12）以 filter 步骤代

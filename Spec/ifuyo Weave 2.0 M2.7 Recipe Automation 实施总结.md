@@ -28,14 +28,15 @@ DTO 化）→ R3 42a8440 (+fixes) → A5/R6（perf + 本文档）。
   Builder（添加 filter/rename/archive/manifest 步骤）、Dry Run + Run 结果
   （状态/计数/blocked 原因）、运行历史；导航+palette；i18n zh/en 同笔。
 
-## 2. Partial
+## 2. Partial（原 Partial 项已闭环——见 R3b 补充提交）
 
-- **Schedule Trigger**：RecipeTrigger 支持 Interval/Daily 且模型可持久化；
-  但 **Agent Scheduler tick 的 handler 注册表尚未连接 Recipe Runtime**（当前
-  tick 仅登记事实）。接线点已留（ScheduleDef.job_name = `recipe:<id>` 约定），
-  M2.7 交付以 Manual Trigger 为主（§24 先跑通 Manual 再接后台——已按序）。
+- **Schedule Trigger：已接线**（R3b bdf06c7 前后）：Agent tick 经
+  `dispatch_due_schedules` 分派 `job_name = "recipe:<id>"` 的到期调度——
+  加载 Recipe → run_recipe（Apply）→ Run History 记录（§48 仅计数/状态）；
+  SkipIfRunning 已由 collect_due 处理；缺失 Recipe ⇒ failed 记录（§48）。
+  集成测试：到期触发→run 被记录 + 未知 handler 释放不产生 run。
 - **Folder Watch / Clipboard Trigger**：模型已声明但未接线（无 Watcher 基础
-  设施；Clipboard 监听为轮询模式——触发分发列 M2.7 P2 / 随 M2.8-9 演进）。
+  设施；Clipboard 监听为轮询模式——触发分发列 P2 / 随 M2.8-9 演进）。
 
 ## 3. Not Done（§79 Out of Scope 全部未越）
 
@@ -73,9 +74,9 @@ weave-app lib 17（recipe 6：validate/风险/存储往返/损坏隔离/导入�
 
 ## 6. Known Limitations（P1/P2）
 
-- P1：Schedule handler→Recipe Runtime 接线（约 30 行：agent tick 查
-  recipe store 并调用 run_recipe）；Folder Watch/Clipboard 触发分发；
-  Runner 内条件树（当前 filter 即条件）；More Actions。
+- P1：Folder Watch/Clipboard 触发分发；Runner 内条件树（当前 filter 即
+  条件）；More Actions；Recipe Run 取消命令（令牌已登记 run_tokens，取消
+  命令列 M2.6/M2.7 P1）。
 - P2：RecipeRunRecord 快照测试；Recipe 参数引用 {date} 等占位符解析
   （§11 第一版 Typed Placeholder 未做——当前参数直传）。
 
