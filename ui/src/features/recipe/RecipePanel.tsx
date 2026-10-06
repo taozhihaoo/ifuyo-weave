@@ -335,5 +335,3 @@ export function RecipePanel({ onOperationDone }: RecipePanelProps) {
         </section>
     );
 }
-
-}
