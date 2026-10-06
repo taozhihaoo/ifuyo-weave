@@ -259,6 +259,14 @@ export const commands = {
 	smartBuildPlan: (acceptedIds: string[]) => typedError<SmartPlanBundleDto, IpcError>(__TAURI_INVOKE("smart_build_plan", { acceptedIds })),
 	smartProviderStatus: () => __TAURI_INVOKE<SmartProviderStatus>("smart_provider_status"),
 	smartHistory: () => __TAURI_INVOKE<SmartSessionSummary[]>("smart_history"),
+	/**  通知中心关闭单条（§23 Dismiss）。 */
+	agentDismissNotification: (code: string) => __TAURI_INVOKE<boolean>("agent_dismiss_notification", { code }),
+	/**  通知中心清空（§23 Clear）。 */
+	agentClearNotifications: () => __TAURI_INVOKE<void>("agent_clear_notifications"),
+	/**  Job Center 任务摘要列表（§11：Running 优先 + 终态，容量有界 200）。 */
+	jobsList: () => __TAURI_INVOKE<JobSummaryDto[]>("jobs_list"),
+	/**  取消任务（Job Center 行内操作；复用既有 cancel_job 语义）。 */
+	jobsCancel: (jobId: string) => __TAURI_INVOKE<boolean>("jobs_cancel", { jobId }),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -1365,6 +1373,15 @@ export type JobStatusDto = {
 	/**  M7：Batch Job 结果（JobOutcome::BatchExecuted）。 */
 	batch: BatchJobResultDto | null,
 	error: IpcError | null,
+};
+
+/**  任务摘要（Job Center 列表行；仅元数据 §11）。 */
+export type JobSummaryDto = {
+	jobId: string,
+	/**  running | completed | failed */
+	state: string,
+	progressCurrent: number | null,
+	errorCode: string | null,
 };
 
 export type LargestFileDto = {
