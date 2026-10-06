@@ -1488,3 +1488,42 @@ Known Limitations（如实）:
 - Rename alternatives、两阶段 rename 自动解环（当前环=Conflict 拒绝，
   安全优先）、Recipe Smart Actions：P1 未做
 - 1k/10k/50k 性能基准表 P2（单遍扫描+5000 上限结构有界）
+
+## M2.13 Unified Experience 统一体验中心（2.0）
+
+状态：P0 PASS（§86 九项逐项）。提交：R1 (jobs list/retention + 通知
+dismiss/clear IPC + 3 测试) / R2 (分组导航 + Job Center 视图 + 通知抽屉
++ 统一 Settings 页) / docs + UX Guidelines。
+
+关键实现:
+
+- **导航统一**（§4）：分组导航 Files/Analyze/Content/Protect/Web/
+  Capture/Automate/Smart/System——**2.0 的 12 个模块此前只能从 palette
+  进入**（"多个 Weave"问题真实形态），现 24 视图全部可达
+- **Job Center**（§11 P0）：jobs_list IPC（Running 优先+错误码）+
+  **容量有界 200（淘汰最旧终态、Running 永不淘汰——修 map 无界增长
+  §61 CONFIRMED→RESOLVED）** + 行内 Cancel；进度如实 known/unknown §12
+- **通知中心 UI**（§23/§35）：header 铃铛+抽屉（聚合计数/dismiss/
+  clear）+ **code 前缀→视图精准跳转**（monitor./wisp./clipboard/smart./
+  web.——Test C 链路成立）
+- **统一 Settings 页**（§24/§25）：General/Clipboard/Wisp/Web/Monitor
+  分区；每次保存 = persistAppConfig round-trip + 模块 apply IPC（真正
+  生效）；模块高级项留模块面板（§24 Modules 原则）
+- **UX Guidelines**（§81）：Spec/ifuyo Weave 2.0 Unified UX Guidelines.md
+  （Navigation/Input/Selection/Job/Progress/Error/Preview/Plan/Apply/
+  Audit/Recovery/History/Notification/Command/Settings/Terminology/
+  Risk/UI Tokens 18 节——M2.14+ 必须遵守）
+- 术语 §54/§55 核查（Delete/Remove/Clear 区分 ✓）；Token 纪律（新 UI
+  裸色值被 tokens.test 抓出即修 ✓）；无遥测 §58
+
+Quality:
+
+- 42 套件 0 failed；jobs 3 新测试；fmt/clippy 0；tsc/eslint 0；
+  vitest 38；tauri build 6.66MiB
+- 交付文档：Spec/…M2.13 实施总结.md（§86/§88 逐项）+ UX Guidelines
+
+Known Limitations（如实）:
+
+- ContextActionProvider 抽象、Search scope 扩展、Ctrl+P、两阶段
+  pause 语义统一：P1/P2 未做
+- 性能基准表未做（jobs_list 有界、导航纯前端——无 O(n²) 引入）
