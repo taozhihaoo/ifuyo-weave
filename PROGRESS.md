@@ -1527,3 +1527,35 @@ Known Limitations（如实）:
 - ContextActionProvider 抽象、Search scope 扩展、Ctrl+P、两阶段
   pause 语义统一：P1/P2 未做
 - 性能基准表未做（jobs_list 有界、导航纯前端——无 O(n²) 引入）
+
+## M2.14 Polish 产品打磨（2.0）
+
+状态：P0 PASS / **RELEASE CANDIDATE**。提交：R1 (开发期 UI 移除+键盘
+polish) / R2 (空态可操作化) / R3 (Glint 删除改回收站) / docs。
+
+关键打磨（审计驱动 §1/§71 CONFIRMED → RESOLVED）:
+
+- **功能墙移除**（§42/§71）：Home listCommands 全量按钮墙删除——命令
+  统一 Ctrl+K palette（registry 仍是事实源），Home 显示 Ctrl+K/Ctrl+P
+  提示；M0 时代按钮墙测试改写为 palette 语义
+- **键盘**（§26）：Mod+P Quick Open 新增；Esc 关闭通知抽屉
+- **milestone 标签**：M11 Polish → M2.14 Release Candidate（挂了六个
+  里程碑的过期标签）
+- **Glint 删除改回收站**（§55/§77）：capture delete 经
+  weave_files::recycle::recycle_paths 可恢复；平台不支持 ⇒
+  glint.deleteUnsupported 如实失败（不静默降级永久删除）；按钮文案
+  标注"（进回收站）"
+- **空态可操作化**（§29）：Smart 无建议区分"已井然有序/证据不足"；
+  Glint 空列表指引
+
+Quality:
+
+- 42 套件 0 failed；fmt/clippy 0；tsc/eslint 0；vitest 38；tauri
+  build 6.66MiB
+- 交付文档：Spec/…M2.14 Polish 实施总结.md（§64 RC 十问 + RESOLVED/
+  DEFERRED/KNOWN LIMITATION 分类）
+
+Known Limitations（如实 DEFERRED）:
+
+- 性能基准表、rename alternatives、两阶段解环、robots awareness、
+  ContextActionProvider：DEFERRED to M2.15/2.1
