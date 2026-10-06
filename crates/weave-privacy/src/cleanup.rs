@@ -13,7 +13,7 @@ use std::io::Read;
 
 use weave_core::prelude::WeaveError;
 
-use crate::model::{CleanupAction, FindingCategory, PrivacyFinding};
+use crate::model::{CleanupAction, PrivacyFinding};
 use crate::patterns::PatternKind;
 
 fn err(code: &'static str, message: impl Into<String>) -> WeaveError {
