@@ -813,6 +813,7 @@ mod tests {
             e.message.contains("Duplicate filename: same.txt"),
             "错误必须携带重复条目名: {e}"
         );
+        let dest = ws.path().join("dest");
         let e2 = build_extraction_plan(&evil_zip, &dest, OverwritePolicy::Skip, u64::MAX)
             .expect_err("extraction also blocked");
         assert_eq!(e2.code, "archive.malformed");
