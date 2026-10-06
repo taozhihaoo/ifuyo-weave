@@ -28,6 +28,8 @@ pub mod m3_commands;
 pub mod m4_commands;
 pub mod ops_dto;
 pub mod privacy_service;
+pub mod recipe;
+pub mod recipe_service;
 pub mod rename_service;
 pub mod space_service;
 pub mod state;
@@ -96,6 +98,16 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         agent_service::agent_upsert_schedule,
         agent_service::agent_remove_schedule,
         agent_service::agent_list_schedules,
+        recipe_service::recipe_list,
+        recipe_service::recipe_get,
+        recipe_service::recipe_save,
+        recipe_service::recipe_delete,
+        recipe_service::recipe_import,
+        recipe_service::recipe_export,
+        recipe_service::recipe_set_enabled,
+        recipe_service::recipe_run,
+        recipe_service::recipe_run_with_history,
+        recipe_service::recipe_run_history,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
