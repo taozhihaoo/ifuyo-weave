@@ -19,6 +19,7 @@ import { AgentPanel } from "../features/agent/AgentPanel";
 import { RecipePanel } from "../features/recipe/RecipePanel";
 import { GlintPanel } from "../features/glint/GlintPanel";
 import { WispPanel } from "../features/wisp/WispPanel";
+import { WebPanel } from "../features/web/WebPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -87,6 +88,7 @@ function App() {
     | "recipes"
     | "glint"
     | "wisp"
+    | "web"
     | "text"
     | "data"
     | "image"
@@ -121,6 +123,7 @@ function App() {
       ["recipes", "nav.recipes", "recipe automation 配方 自动化"],
       ["glint", "nav.glint", "glint screenshot capture 截图 屏幕捕获"],
       ["wisp", "nav.wisp", "wisp paste guard sensitive 敏感 粘贴防护 剪贴板"],
+      ["web", "nav.web", "web url fetch extract markdown 清理 抓取 网页"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -197,6 +200,28 @@ function App() {
       category: "tools",
       keywords: ["wisp", "security", "events", "安全", "事件"],
       run: () => setView("wisp"),
+    });
+    // M2.10 §61：Web 命令（导航；输入预填由面板状态承担）
+    upsertCommand({
+      id: "web.open",
+      labelKey: "nav.web",
+      category: "tools",
+      keywords: ["web", "url", "fetch", "抓取", "网页", "清理"],
+      run: () => setView("web"),
+    });
+    upsertCommand({
+      id: "web.fetch-url",
+      labelKey: "web.action.fetch",
+      category: "tools",
+      keywords: ["fetch", "url", "抓取"],
+      run: () => setView("web"),
+    });
+    upsertCommand({
+      id: "web.clean-url",
+      labelKey: "web.action.clean",
+      category: "tools",
+      keywords: ["clean", "url", "tracking", "清理", "追踪"],
+      run: () => setView("web"),
     });
   }, []);
   const startHash = (path: string): void => {
@@ -610,6 +635,10 @@ function App() {
 
       {view === "wisp" ? (
         <WispPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "web" ? (
+        <WebPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "agent" ? (
