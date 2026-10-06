@@ -80,6 +80,7 @@ pub fn list_recent(dir: &Path, max_recent: usize) -> Vec<CaptureRecord> {
 }
 
 /// 删除捕获（§24：仅限 Glint 目录内文件——路径穿越防护复用统一检查 §37）。
+/// M2.14：删除改走回收站（可恢复，与 UX Guidelines"删除一律回收站"一致）。
 pub fn delete_capture(dir: &Path, file_name: &str) -> Result<bool, WeaveError> {
     if file_name.contains(['/', '\\']) || file_name.contains("..") {
         return Err(err("glint.pathTraversal", "illegal file name"));
@@ -88,9 +89,18 @@ pub fn delete_capture(dir: &Path, file_name: &str) -> Result<bool, WeaveError> {
     if !path.starts_with(dir) || !path.is_file() {
         return Ok(false);
     }
-    std::fs::remove_file(path)
-        .map(|()| true)
-        .map_err(|e| err("glint.deleteFailed", format!("{e}")))
+    let results = weave_files::recycle::recycle_paths(std::slice::from_ref(&path));
+    match results.first() {
+        Some((_, weave_files::RecycleOutcome::Success(_))) => Ok(true),
+        // 平台不支持回收站 ⇒ 如实失败（不静默降级为永久删除）
+        Some((_, weave_files::RecycleOutcome::Unsupported(reason))) => {
+            Err(err("glint.deleteUnsupported", reason.clone()))
+        }
+        Some((_, weave_files::RecycleOutcome::Failed(reason))) => {
+            Err(err("glint.deleteFailed", reason.clone()))
+        }
+        None => Err(err("glint.deleteFailed", "no recycle result")),
+    }
 }
 
 fn png_dimensions(path: &Path) -> Option<(u32, u32)> {

@@ -819,7 +819,7 @@
   "glint.tool.pixelate": "像素化",
   "glint.action.copy": "复制图像",
   "glint.action.ocr": "OCR",
-  "glint.action.delete": "删除",
+  "glint.action.delete": "删除（进回收站）",
   "glint.action.open": "打开",
   "glint.ocr.title": "OCR 结果",
   "glint.ocr.copy": "复制文本",

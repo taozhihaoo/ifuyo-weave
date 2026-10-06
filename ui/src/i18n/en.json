@@ -819,7 +819,7 @@
   "glint.tool.pixelate": "Pixelate",
   "glint.action.copy": "Copy Image",
   "glint.action.ocr": "OCR",
-  "glint.action.delete": "Delete",
+  "glint.action.delete": "Delete (to recycle bin)",
   "glint.action.open": "Open",
   "glint.ocr.title": "OCR Result",
   "glint.ocr.copy": "Copy Text",
