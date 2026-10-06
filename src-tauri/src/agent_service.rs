@@ -430,7 +430,7 @@ pub fn dispatch_due_schedules(
         };
         let token = weave_core::prelude::CancellationToken::new();
         run_tokens.insert(task.id.clone(), token.clone());
-        let outcome = dispatch_recipe_run(recipe_store_dir, history, &recipe_id, &token, &task.id);
+        let outcome = dispatch_recipe_run(recipe_store_dir, history, recipe_id, &token, &task.id);
         run_tokens.remove(&task.id);
         scheduler.set_running(&task.id, false);
         scheduler.last_result_for(&task.id, &outcome);
@@ -530,7 +530,6 @@ mod tests {
     use crate::recipe::model::{
         ActionType, RECIPE_SCHEMA_VERSION, Recipe, RecipeAction, RecipeStore, RecipeTrigger,
     };
-    use std::time::Duration;
     use weave_core::prelude::CancellationToken;
 
     fn sample_recipe(id: &str, input_folder: &std::path::Path) -> Recipe {
