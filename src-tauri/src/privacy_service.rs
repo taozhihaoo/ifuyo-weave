@@ -422,8 +422,8 @@ pub fn privacy_export_safe_copy(
 
     // 事务/历史落盘（Audit §48：只有路径/计数，无内容/敏感值）
     let history_dir = crate::rename_service::resolve_history_dir(&app)?;
-    if !tx_items.is_empty() {
-        if let Ok(store) = weave_history::HistoryStore::open(&history_dir) {
+    if !tx_items.is_empty()
+        && let Ok(store) = weave_history::HistoryStore::open(&history_dir) {
             let tx = weave_history::OperationTransaction {
                 operation_id: operation_id.clone(),
                 kind: weave_core::prelude::OperationKind::TextTransform,
@@ -456,7 +456,6 @@ pub fn privacy_export_safe_copy(
                 .save_transaction(&tx)
                 .and_then(|()| store.upsert_entry(entry));
         }
-    }
 
     Ok(PrivacyExportResultDto {
         exported: exported as f64,
