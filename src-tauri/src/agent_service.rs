@@ -105,6 +105,15 @@ impl NotificationCenter {
     pub fn clear(&self) {
         self.inner.lock().expect("notifications").clear();
     }
+
+    /// 关闭单条通知（M2.13 §23 Dismiss）。
+    pub fn dismiss(&self, code: &str) -> bool {
+        self.inner
+            .lock()
+            .expect("notifications")
+            .remove(code)
+            .is_some()
+    }
 }
 
 // ── Scheduler 定义持久化（history_dir/agent-schedules.json；§35/§36）──
@@ -812,4 +821,36 @@ mod tests {
         // 存储未被触碰（无 AppState ⇒ 无检查执行）
         assert!(store.list_snapshots("m-fail").is_empty());
     }
+}
+
+/// 通知中心关闭单条（§23 Dismiss）。
+#[tauri::command]
+#[specta::specta]
+pub fn agent_dismiss_notification(app: tauri::AppHandle, code: String) -> bool {
+    let state = app.state::<crate::state::AppState>();
+    state.notifications.dismiss(&code)
+}
+
+/// 通知中心清空（§23 Clear）。
+#[tauri::command]
+#[specta::specta]
+pub fn agent_clear_notifications(app: tauri::AppHandle) {
+    let state = app.state::<crate::state::AppState>();
+    state.notifications.clear();
+}
+
+/// Job Center 任务摘要列表（§11：Running 优先 + 终态，容量有界 200）。
+#[tauri::command]
+#[specta::specta]
+pub fn jobs_list(app: tauri::AppHandle) -> Vec<crate::jobs::JobSummaryDto> {
+    let state = app.state::<crate::state::AppState>();
+    state.jobs.list_jobs()
+}
+
+/// 取消任务（Job Center 行内操作；复用既有 cancel_job 语义）。
+#[tauri::command]
+#[specta::specta]
+pub fn jobs_cancel(app: tauri::AppHandle, job_id: String) -> bool {
+    let state = app.state::<crate::state::AppState>();
+    state.jobs.cancel(&job_id)
 }
