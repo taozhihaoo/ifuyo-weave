@@ -19,6 +19,8 @@ pub mod data_service;
 pub mod document_service;
 pub mod duplicates_service;
 pub mod files_dto;
+pub mod glint;
+pub mod glint_service;
 pub mod image_batch_service;
 pub mod image_service;
 pub mod jobs;
@@ -108,6 +110,19 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         recipe_service::recipe_run,
         recipe_service::recipe_run_with_history,
         recipe_service::recipe_run_history,
+        glint_service::glint_list_monitors,
+        glint_service::glint_list_windows,
+        glint_service::glint_list_recent,
+        glint_service::glint_capture_screen,
+        glint_service::glint_capture_foreground_window,
+        glint_service::glint_crop_capture,
+        glint_service::glint_save_annotated,
+        glint_service::glint_preview,
+        glint_service::glint_thumbnail,
+        glint_service::glint_delete_capture,
+        glint_service::glint_copy_capture_to_clipboard,
+        glint_service::glint_ocr_capture,
+        glint_service::glint_ocr_region,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
