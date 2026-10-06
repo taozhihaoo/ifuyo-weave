@@ -5919,6 +5919,7 @@ dependencies = [
  "csv",
  "encoding_rs",
  "image 0.25.10",
+ "regex",
  "screenshots",
  "serde",
  "serde_json",

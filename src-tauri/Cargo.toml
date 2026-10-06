@@ -42,6 +42,8 @@ arboard = { workspace = true }
 clipboard-win = { workspace = true }
 image = { workspace = true }
 ab_glyph = { workspace = true }
+# M2.9 Wisp 规则引擎（确定性模式匹配 §37）
+regex = "1"
 screenshots = "0.8"
 x-win = "2"
 weave-documents = { path = "../crates/weave-documents", features = ["specta"] }
