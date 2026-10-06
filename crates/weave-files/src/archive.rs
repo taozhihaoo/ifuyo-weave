@@ -12,8 +12,6 @@
 
 use std::io::Write;
 
-/// 真实重复条目 ZIP fixture（Python zipfile 生成；§61 检测用）。
-const DUPLICATE_ZIP_BYTES: &[u8] = include_bytes!("../tests/fixtures/archive/duplicate-names.zip");
 use std::path::{Component, Path, PathBuf};
 
 use weave_core::prelude::{CancellationToken, WeaveError};
@@ -814,6 +812,8 @@ mod tests {
         // （Python zipfile 生成；本地 fixture，随 crate 分发）
         let ws = TempWorkspace::new("arch-dup").expect("ws");
         let zip_path = ws.path().join("dup.zip");
+        const DUPLICATE_ZIP_BYTES: &[u8] =
+            include_bytes!("../tests/fixtures/archive/duplicate-names.zip");
         std::fs::write(&zip_path, DUPLICATE_ZIP_BYTES).expect("write zip");
 
         let inspection = inspect_zip(&zip_path).expect("inspect");
