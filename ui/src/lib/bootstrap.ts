@@ -65,46 +65,40 @@ export async function bootstrapApp(): Promise<void> {
   }
 }
 
-/** M11 §223 theme 持久化 + 应用（§224 fallback = system）。 */
-export async function persistTheme(theme: Theme): Promise<void> {
-  const current = useAppStore.getState();
-  const result = await commands.setAppConfig({
-    version: 1,
-    language: current.locale,
-    theme,
-    favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
-  });
-  if (result.status === "error") {
-    useAppStore.getState().setError(result.error);
+/** M2.9 §32 设置持久化纪律：set_app_config 是整体替换——任何保存都必须
+ * 先取全量再改字段（否则缺失的扩展段（clipboard/wisp）会被 serde default
+ * 静默重置——M2.3/M2.9 设置曾随主题切换丢失）。 */
+export async function persistAppConfig(
+  mutate: (config: import("../generated/bindings").AppConfig) => import("../generated/bindings").AppConfig,
+): Promise<void> {
+  const current = await commands.getAppConfig();
+  if (current.status !== "ok") {
+    useAppStore.getState().setError(current.error);
     return;
   }
+  const merged = mutate(current.data);
+  const result = await commands.setAppConfig(merged);
+  if (result.status === "error") {
+    useAppStore.getState().setError(result.error);
+  }
+}
+
+/** M11 §223 theme 持久化 + 应用（§224 fallback = system）。 */
+export async function persistTheme(theme: Theme): Promise<void> {
+  await persistAppConfig((config) => ({ ...config, theme }));
   applyTheme(theme);
 }
 
 /** M11 §40 收藏持久化（AppConfig.favorites；失败经 store 错误呈现）。 */
 export async function persistFavorites(): Promise<void> {
   const current = useAppStore.getState();
-  const result = await commands.setAppConfig({
-    version: 1,
-    language: current.locale,
-    theme: current.theme,
+  await persistAppConfig((config) => ({
+    ...config,
     favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
-  });
-  if (result.status === "error") {
-    useAppStore.getState().setError(result.error);
-  }
+  }));
 }
 
 /** 语言切换持久化：保存失败时把结构化错误交给 UI，不静默。 */
 export async function persistLocale(locale: Locale): Promise<void> {
-  const current = useAppStore.getState();
-  const result = await commands.setAppConfig({
-    version: 1,
-    language: locale,
-    theme: current.theme,
-    favorites: current.favorites.map((f) => ({ kind: f.kind, id: f.id })),
-  });
-  if (result.status === "error") {
-    useAppStore.getState().setError(result.error);
-  }
+  await persistAppConfig((config) => ({ ...config, language: locale }));
 }

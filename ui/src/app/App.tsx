@@ -148,18 +148,8 @@ function App() {
         const s = useAppStore.getState();
         const next = s.locale === "zh-CN" ? "en" : "zh-CN";
         s.setLocale(next);
-        void commands
-          .setAppConfig({
-            version: 1,
-            language: next,
-            theme: s.theme,
-            favorites: s.favorites.map((f) => ({ kind: f.kind, id: f.id })),
-          })
-          .then((r) => {
-            if (r.status === "error") {
-              s.setError(r.error);
-            }
-          });
+        // M2.9 §32：整体替换语义 ⇒ 全量 round-trip（否则 clipboard/wisp 被重置）
+        void import("../lib/bootstrap").then((m) => m.persistLocale(next));
       },
     });
     // M2.8 §46：捕获命令（导航到 Glint + 触发捕获请求）
@@ -442,20 +432,8 @@ function App() {
   const toggleLocale = (): void => {
     const next: Locale = locale === "zh-CN" ? "en" : "zh-CN";
     useAppStore.getState().setLocale(next);
-    const result = commands.setAppConfig({
-      version: 1,
-      language: next,
-      theme: useAppStore.getState().theme,
-      favorites: useAppStore.getState().favorites.map((f) => ({
-        kind: f.kind,
-        id: f.id,
-      })),
-    });
-    void result.then((saved) => {
-      if (saved.status === "error") {
-        useAppStore.getState().setError(saved.error);
-      }
-    });
+    // M2.9 §32：整体替换语义 ⇒ 全量 round-trip
+    void import("../lib/bootstrap").then((m) => m.persistLocale(next));
   };
 
   const scanTerminal = scanStatus !== null && isTerminalState(scanStatus);
