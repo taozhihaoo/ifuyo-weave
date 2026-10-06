@@ -86,7 +86,7 @@ pub enum RecipeTrigger {
     Manual,
     /// 复用 M2.6 Scheduler：每 interval_seconds 秒。
     Interval {
-        seconds: u64,
+        seconds: u32,
     },
     /// 每天 hour:minute（本地时区）。
     Daily {

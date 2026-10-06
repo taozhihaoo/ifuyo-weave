@@ -12,6 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::time::SystemTime;
 use tauri::Manager;
 use weave_core::prelude::{CancellationToken, WeaveError};
 
@@ -86,31 +87,102 @@ pub fn recipe_list(app: tauri::AppHandle) -> Result<Vec<RecipeDto>, IpcError> {
     Ok(outcome.recipes.iter().map(recipe_dto).collect())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn recipe_get(app: tauri::AppHandle, id: String) -> Result<Recipe, IpcError> {
-    let store = store(&app)?;
-    let outcome = store.load_all();
-    outcome
-        .recipes
-        .into_iter()
-        .find(|r| r.id == id)
-        .ok_or_else(|| err("recipe.unknown", format!("no recipe '{id}'")))
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeDetailDto {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub schema_version: f64,
+    pub enabled: bool,
+    pub created_at_ms: Option<f64>,
+    pub updated_at_ms: Option<f64>,
+    pub input_folder: String,
+    pub trigger: RecipeTrigger,
+    pub parameters: Vec<RecipeParameter>,
+    pub actions: Vec<RecipeAction>,
+}
+
+fn to_ms(t: SystemTime) -> Option<f64> {
+    t.duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_millis() as f64)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn recipe_save(app: tauri::AppHandle, recipe: Recipe) -> Result<(), IpcError> {
+pub fn recipe_get(app: tauri::AppHandle, id: String) -> Result<RecipeDetailDto, IpcError> {
+    let store = store(&app)?;
+    let outcome = store.load_all();
+    let r = outcome
+        .recipes
+        .into_iter()
+        .find(|r| r.id == id)
+        .ok_or_else(|| err("recipe.unknown", format!("no recipe '{id}'")))?;
+    Ok(RecipeDetailDto {
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        schema_version: r.schema_version as f64,
+        enabled: r.enabled,
+        created_at_ms: to_ms(r.created_at),
+        updated_at_ms: to_ms(r.updated_at),
+        input_folder: r.input_folder,
+        trigger: r.trigger,
+        parameters: r.parameters,
+        actions: r.actions,
+    })
+}
+
+#[derive(Debug, Clone, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeUpsertDto {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub enabled: bool,
+    pub input_folder: String,
+    pub trigger: RecipeTrigger,
+    pub parameters: Vec<RecipeParameter>,
+    pub actions: Vec<RecipeAction>,
+}
+
+fn upsert_to_domain(dto: RecipeUpsertDto, existing: Option<Recipe>) -> Recipe {
+    let now = SystemTime::now();
+    Recipe {
+        id: dto.id,
+        name: dto.name,
+        description: dto.description,
+        schema_version: crate::recipe::model::RECIPE_SCHEMA_VERSION,
+        enabled: dto.enabled,
+        created_at: existing.as_ref().map(|r| r.created_at).unwrap_or(now),
+        updated_at: now,
+        input_folder: dto.input_folder,
+        trigger: dto.trigger,
+        parameters: dto.parameters,
+        actions: dto.actions,
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn recipe_save(app: tauri::AppHandle, recipe: RecipeUpsertDto) -> Result<(), IpcError> {
+    let store = store(&app)?;
+    let existing = store
+        .load_all()
+        .recipes
+        .into_iter()
+        .find(|r| r.id == recipe.id);
     // 保存前校验（§40）
-    let result = validate(&recipe);
+    let domain = upsert_to_domain(recipe, existing);
+    let result = validate(&domain);
     if !result.is_ok() {
         return Err(err(
             "recipe.validationFailed",
             format!("{}", result.errors.join("; ")),
         ));
     }
-    let store = store(&app)?;
-    store.save(&recipe).map_err(IpcError::from)
+    store.save(&domain).map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -317,10 +389,49 @@ pub fn recipe_run_with_history(
     )
 }
 
-/// Run History（§21；删除 Recipe 后仍保留 §66）。
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeRunRecordDto {
+    pub run_id: String,
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub trigger: String,
+    pub dry_run: bool,
+    pub status: String,
+    pub matched_files: f64,
+    pub total_processed: f64,
+    pub total_skipped: f64,
+    pub total_failed: f64,
+    pub duration_ms: f64,
+    pub finished_at_ms: Option<f64>,
+}
+
+/// Run History（§21；删除 Recipe 后仍保留 §66；快照不入 DTO——§64 历史指向
+/// 运行时版本由存储内部保证）。
 #[tauri::command]
 #[specta::specta]
-pub fn recipe_run_history(app: tauri::AppHandle) -> Result<Vec<RecipeRunRecord>, IpcError> {
+pub fn recipe_run_history(app: tauri::AppHandle) -> Result<Vec<RecipeRunRecordDto>, IpcError> {
     let history = history(&app)?;
-    Ok(history.load())
+    Ok(history
+        .load()
+        .iter()
+        .map(|r| RecipeRunRecordDto {
+            run_id: r.run_id.clone(),
+            recipe_id: r.recipe_id.clone(),
+            recipe_name: r.recipe_name.clone(),
+            trigger: r.trigger.clone(),
+            dry_run: r.dry_run,
+            status: r.status.clone(),
+            matched_files: r.matched_files,
+            total_processed: r.total_processed,
+            total_skipped: r.total_skipped,
+            total_failed: r.total_failed,
+            duration_ms: r.duration_ms,
+            finished_at_ms: r
+                .finished_at
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_millis() as f64),
+        })
+        .collect())
 }

@@ -120,6 +120,27 @@ export const commands = {
 	agentRemoveSchedule: (id: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("agent_remove_schedule", { id })),
 	/**  调度清单。 */
 	agentListSchedules: () => typedError<ScheduleDto[], IpcError>(__TAURI_INVOKE("agent_list_schedules")),
+	recipeList: () => typedError<RecipeDto[], IpcError>(__TAURI_INVOKE("recipe_list")),
+	recipeGet: (id: string) => typedError<RecipeDetailDto, IpcError>(__TAURI_INVOKE("recipe_get", { id })),
+	recipeSave: (recipe: RecipeUpsertDto) => typedError<null, IpcError>(__TAURI_INVOKE("recipe_save", { recipe })),
+	recipeDelete: (id: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("recipe_delete", { id })),
+	/**  导入（§34：版本/未知 Action/校验失败 ⇒ 明确错误）。 */
+	recipeImport: (request: RecipeImportDto) => typedError<string, IpcError>(__TAURI_INVOKE("recipe_import", { request })),
+	/**  导出（§34/§35：自包含 JSON；含绝对路径时由 UI 提示用户）。 */
+	recipeExport: (request: RecipeExportDto) => typedError<null, IpcError>(__TAURI_INVOKE("recipe_export", { request })),
+	recipeSetEnabled: (id: string, enabled: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("recipe_set_enabled", { id, enabled })),
+	/**
+	 *  Dry Run / Apply（同一 Plan §15；同步——rename/archive 典型规模亚秒-秒级，
+	 *  巨量输入被 SafetyLimits.max_files=1000 有界）。
+	 */
+	recipeRun: (request: RecipeRunRequestDto) => typedError<RecipeRunResultDto, IpcError>(__TAURI_INVOKE("recipe_run", { request })),
+	/**  Apply 带历史落盘（IPC 入口）。 */
+	recipeRunWithHistory: (request: RecipeRunWithAppDto) => typedError<RecipeRunResultDto, IpcError>(__TAURI_INVOKE("recipe_run_with_history", { request })),
+	/**
+	 *  Run History（§21；删除 Recipe 后仍保留 §66；快照不入 DTO——§64 历史指向
+	 *  运行时版本由存储内部保证）。
+	 */
+	recipeRunHistory: () => typedError<RecipeRunRecordDto[], IpcError>(__TAURI_INVOKE("recipe_run_history")),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -260,6 +281,17 @@ export const commands = {
 };
 
 /* Types */
+/**  Action 类型（§3/§39：只列真实已实现的能力，不虚构）。 */
+export type ActionType = 
+/**  按扩展名过滤文件列表（内存过滤，无文件修改）。 */
+"filterByExtension" | 
+/**  前缀重命名（走 weave-files rename plan → execute_plan，M2.0 核心）。 */
+"renamePrefix" | 
+/**  创建 ZIP（走 weave-files::archive，M2.5）。 */
+"archiveCreate" | 
+/**  生成目录 SHA-256 Manifest（走 integrity，只读）。 */
+"hashManifest";
+
 export type AgentNotificationDto = {
 	code: string,
 	/**  info | warning | error */
@@ -1332,6 +1364,122 @@ export type PrivacyReportDto = {
 
 export type PrivacyScanRequestDto = {
 	root: string,
+};
+
+/**  Recipe 步骤（§4 RecipeAction）。 */
+export type RecipeAction = {
+	id: string,
+	actionType: ActionType,
+	enabled: boolean,
+	/**  Filter：逗号分隔扩展名（png,jpg）；Rename：前缀文本。 */
+	parameter: string | null,
+};
+
+export type RecipeDetailDto = {
+	id: string,
+	name: string,
+	description: string,
+	schemaVersion: number | null,
+	enabled: boolean,
+	createdAtMs: number | null,
+	updatedAtMs: number | null,
+	inputFolder: string,
+	trigger: RecipeTrigger,
+	parameters: RecipeParameter[],
+	actions: RecipeAction[],
+};
+
+export type RecipeDto = {
+	id: string,
+	name: string,
+	description: string,
+	enabled: boolean,
+	trigger: string,
+	risk: string,
+	actionCount: number | null,
+	updatedAtMs: number | null,
+};
+
+export type RecipeExportDto = {
+	id: string,
+	target: string,
+};
+
+export type RecipeImportDto = {
+	path: string,
+};
+
+/**  Recipe 参数（§10：类型化 + 默认值 + 必填）。 */
+export type RecipeParameter = {
+	name: string,
+	/**  string | number | boolean | path | folder */
+	kind: string,
+	required: boolean,
+	defaultValue: string | null,
+	/**  运行时值（保存时可为 None = 未设置）。 */
+	value: string | null,
+};
+
+export type RecipeRunRecordDto = {
+	runId: string,
+	recipeId: string,
+	recipeName: string,
+	trigger: string,
+	dryRun: boolean,
+	status: string,
+	matchedFiles: number | null,
+	totalProcessed: number | null,
+	totalSkipped: number | null,
+	totalFailed: number | null,
+	durationMs: number | null,
+	finishedAtMs: number | null,
+};
+
+export type RecipeRunRequestDto = {
+	id: string,
+	inputFolder: string,
+	dryRun: boolean,
+};
+
+export type RecipeRunResultDto = {
+	runId: string,
+	recipeId: string,
+	dryRun: boolean,
+	status: string,
+	matchedFiles: number | null,
+	totalProcessed: number | null,
+	totalSkipped: number | null,
+	totalFailed: number | null,
+	blockedReason: string | null,
+	durationMs: number | null,
+	actions: ([string, string, string, number | null, number | null, number | null])[],
+};
+
+export type RecipeRunWithAppDto = {
+	id: string,
+	inputFolder: string,
+	dryRun: boolean,
+};
+
+/**
+ *  Recipe 触发（§23/§25：Manual + Schedule 复用 M2.6 Scheduler；Watch/Clipboard
+ *  待 M2.6 Watcher/触发分发成熟后接入——如实 Partial）。
+ */
+export type RecipeTrigger = { type: "manual" } | 
+/**  复用 M2.6 Scheduler：每 interval_seconds 秒。 */
+{ type: "interval"; seconds: number } | 
+/**  每天 hour:minute（本地时区）。 */
+{ type: "daily"; hour: number; minute: number };
+
+export type RecipeUpsertDto = {
+	id: string,
+	name: string,
+	description: string,
+	enabled: boolean,
+	inputFolder: string,
+	trigger: RecipeTrigger,
+	parameters: RecipeParameter[],
+	actions: RecipeAction[],
 };
 
 /**  组内回收选择（M3 §52–§56）。 */
