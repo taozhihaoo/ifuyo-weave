@@ -42,6 +42,8 @@ pub enum JobOutcome {
     SpaceCompleted,
     /// M2.4：隐私扫描完成（结果经 PrivacyResultCache 领取，终态仅登记）。
     PrivacyCompleted,
+    /// M2.5：归档/解压完成（结果经 ArchiveResultCache 领取，终态仅登记）。
+    ArchiveCompleted,
 }
 
 #[derive(Debug)]
@@ -187,6 +189,9 @@ impl JobTracker {
                         ("completed", None, None, None, None, None, None, None, None)
                     }
                     JobOutcome::PrivacyCompleted => {
+                        ("completed", None, None, None, None, None, None, None, None)
+                    }
+                    JobOutcome::ArchiveCompleted => {
                         ("completed", None, None, None, None, None, None, None, None)
                     }
                     JobOutcome::TextExecuted(report) => (

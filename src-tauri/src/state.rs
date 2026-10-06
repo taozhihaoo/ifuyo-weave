@@ -44,6 +44,8 @@ pub struct AppState {
     pub clipboard: std::sync::Arc<crate::clipboard_service::ClipboardRuntime>,
     /// M2.4：隐私扫描结果缓存（job_id 为键）。
     pub privacy_results: std::sync::Arc<crate::privacy_service::PrivacyResultCache>,
+    /// M2.5：归档结果缓存（job_id 为键）。
+    pub archive_results: std::sync::Arc<crate::archive_service::ArchiveResultCache>,
 }
 
 impl AppState {
@@ -67,6 +69,7 @@ impl AppState {
             space_results: std::sync::Arc::new(crate::space_service::SpaceResultCache::new()),
             clipboard: std::sync::Arc::new(clipboard),
             privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
+            archive_results: std::sync::Arc::new(crate::archive_service::ArchiveResultCache::new()),
         }
     }
 }

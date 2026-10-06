@@ -99,6 +99,18 @@ export const commands = {
 	privacyExportSafeCopy: (items: PrivacyExportItemDto[]) => typedError<PrivacyExportResultDto, IpcError>(__TAURI_INVOKE("privacy_export_safe_copy", { items })),
 	/**  Before vs After（按稳定指纹；§27）。 */
 	privacyCompare: (request: PrivacyCompareRequestDto) => typedError<PrivacyComparisonDto, IpcError>(__TAURI_INVOKE("privacy_compare", { request })),
+	archiveCreate: (request: ArchiveCreateRequestDto) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("archive_create", { request })),
+	/**  领取创建/解压结果。 */
+	archiveGetResult: (jobId: string) => typedError<ArchiveCreateResultDto, IpcError>(__TAURI_INVOKE("archive_get_result", { jobId })),
+	/**  归档检查（§25：只读，不默认解压）。 */
+	archiveInspect: (path: string) => typedError<ArchiveInspectionDto, IpcError>(__TAURI_INVOKE("archive_inspect", { path })),
+	archiveExtract: (request: ArchiveExtractRequestDto) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("archive_extract", { request })),
+	/**  单文件 Hash 校验。 */
+	integrityVerifyFile: (path: string, expectedSha256: string) => typedError<HashVerifyResultDto, IpcError>(__TAURI_INVOKE("integrity_verify_file", { path, expectedSha256 })),
+	/**  目录 Manifest 生成（行式文本 §65）。 */
+	integrityCreateManifest: (root: string) => typedError<ManifestResultDto, IpcError>(__TAURI_INVOKE("integrity_create_manifest", { root })),
+	/**  Manifest 校验（差异语义复用 M2.1 命名 §38）。 */
+	integrityVerifyManifest: (request: ManifestVerifyRequestDto) => typedError<ManifestVerifyResultDto, IpcError>(__TAURI_INVOKE("integrity_verify_manifest", { request })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -257,6 +269,52 @@ export type AppInfo = {
 	site: string,
 	version: string,
 	environment: string,
+};
+
+export type ArchiveCreateRequestDto = {
+	sources: string[],
+	output: string,
+	/**  store | fast | normal | maximum */
+	level: string,
+};
+
+export type ArchiveCreateResultDto = {
+	output: string,
+	fileCount: number | null,
+	inputBytes: number | null,
+	archiveBytes: number | null,
+	compressionRatio: number | null,
+	failedFiles: ([string, string])[],
+	cancelled: boolean,
+};
+
+export type ArchiveEntryDto = {
+	name: string,
+	isDir: boolean,
+	compressedSize: number | null,
+	uncompressedSize: number | null,
+	crc32: number | null,
+};
+
+export type ArchiveExtractRequestDto = {
+	archive: string,
+	destination: string,
+	/**  skip | overwrite | rename */
+	overwrite: string,
+	/**  解压总量上限（Zip Bomb §34；0 = 默认 10 GiB）。 */
+	maxTotalUncompressed: number | null,
+};
+
+export type ArchiveInspectionDto = {
+	entryCount: number | null,
+	fileCount: number | null,
+	dirCount: number | null,
+	totalUncompressed: number | null,
+	totalCompressed: number | null,
+	duplicateEntries: string[],
+	unsafeEntries: string[],
+	bombSuspect: boolean,
+	entries: ArchiveEntryDto[],
 };
 
 export type Base64DecodeResultDto = {
@@ -900,6 +958,12 @@ export type HashResultDto = {
 	status: string,
 };
 
+export type HashVerifyResultDto = {
+	/**  match | mismatch | unreadable | cancelled */
+	status: string,
+	actualHash: string | null,
+};
+
 export type HashWarningDto = {
 	code: string,
 	message: string,
@@ -1049,6 +1113,25 @@ export type LargestFileDto = {
 	extension: string | null,
 	category: string,
 	modifiedMs: number | null,
+};
+
+export type ManifestResultDto = {
+	text: string,
+	entryCount: number | null,
+};
+
+export type ManifestVerifyRequestDto = {
+	root: string,
+	manifestText: string,
+};
+
+export type ManifestVerifyResultDto = {
+	same: number | null,
+	modified: number | null,
+	added: number | null,
+	removed: number | null,
+	unreadable: number | null,
+	items: ([string, string])[],
 };
 
 /**

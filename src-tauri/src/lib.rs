@@ -6,6 +6,7 @@
 //! common-controls manifest 才能在 Windows 上启动（见 build.rs）。
 
 pub mod app_info;
+pub mod archive_service;
 pub mod batch_service;
 pub mod clipboard_service;
 pub mod commands;
@@ -80,6 +81,13 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         privacy_service::privacy_get_result,
         privacy_service::privacy_export_safe_copy,
         privacy_service::privacy_compare,
+        archive_service::archive_create,
+        archive_service::archive_get_result,
+        archive_service::archive_inspect,
+        archive_service::archive_extract,
+        archive_service::integrity_verify_file,
+        archive_service::integrity_create_manifest,
+        archive_service::integrity_verify_manifest,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
