@@ -17,6 +17,7 @@ import { PrivacyPanel } from "../features/privacy/PrivacyPanel";
 import { ArchivePanel } from "../features/archive/ArchivePanel";
 import { AgentPanel } from "../features/agent/AgentPanel";
 import { RecipePanel } from "../features/recipe/RecipePanel";
+import { GlintPanel } from "../features/glint/GlintPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -83,6 +84,7 @@ function App() {
     | "archive"
     | "agent"
     | "recipes"
+    | "glint"
     | "text"
     | "data"
     | "image"
@@ -115,6 +117,7 @@ function App() {
       ["archive", "nav.archive", "archive zip integrity hash 归档 完整性"],
       ["agent", "nav.agent", "agent background scheduler 后台 调度"],
       ["recipes", "nav.recipes", "recipe automation 配方 自动化"],
+      ["glint", "nav.glint", "glint screenshot capture 截图 屏幕捕获"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -155,6 +158,25 @@ function App() {
             }
           });
       },
+    });
+    // M2.8 §46：捕获命令（导航到 Glint + 触发捕获请求）
+    const glintCapture = (kind: "screen" | "window") => {
+      setView("glint");
+      useAppStore.getState().setGlintCaptureRequest({ kind, tick: Date.now() });
+    };
+    upsertCommand({
+      id: "glint.capture-full-screen",
+      labelKey: "glint.capture.full",
+      category: "tools",
+      keywords: ["capture", "screen", "fullscreen", "screenshot", "全屏截图", "截图"],
+      run: () => glintCapture("screen"),
+    });
+    upsertCommand({
+      id: "glint.capture-window",
+      labelKey: "glint.capture.window",
+      category: "tools",
+      keywords: ["capture", "window", "screenshot", "窗口截图", "截图"],
+      run: () => glintCapture("window"),
     });
   }, []);
   const startHash = (path: string): void => {
@@ -572,6 +594,10 @@ function App() {
 
       {view === "recipes" ? (
         <RecipePanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "glint" ? (
+        <GlintPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "agent" ? (

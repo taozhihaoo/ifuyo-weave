@@ -59,6 +59,9 @@ interface AppState {
   recentOps: RecentOperation[];
   // M11 §15 Command Palette 开关。
   paletteOpen: boolean;
+  // M2.8：Glint 捕获请求（palette 命令 → GlintPanel 消费；tick 防重复触发）。
+  glintCaptureRequest: { kind: "screen" | "window"; tick: number } | null;
+  setGlintCaptureRequest: (req: { kind: "screen" | "window"; tick: number } | null) => void;
 
   setLocale: (locale: Locale) => void;
   setRecentRoots: (roots: string[]) => void;
@@ -102,6 +105,7 @@ export const useAppStore = create<AppState>((set) => ({
   favorites: [],
   recentOps: [],
   paletteOpen: false,
+  glintCaptureRequest: null,
   setLocale: (locale) => set({ locale }),
   setRecentRoots: (recentRoots) => set({ recentRoots }),
   setFavorites: (favorites) => set({ favorites }),
@@ -124,6 +128,7 @@ export const useAppStore = create<AppState>((set) => ({
       ),
     })),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setGlintCaptureRequest: (glintCaptureRequest) => set({ glintCaptureRequest }),
   setTheme: (theme) => set({ theme }),
   setAppInfo: (appInfo) => set({ appInfo }),
   setIpcStatus: (ipcStatus) => set({ ipcStatus }),
