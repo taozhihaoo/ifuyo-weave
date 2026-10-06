@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { listCommands, runCommand } from "../commands/registry";
 import type { AgentNotificationDto, IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
 import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
@@ -369,7 +368,22 @@ function App() {
         s.setPaletteOpen(!s.paletteOpen);
       },
     });
+    // M2.14 §26：Ctrl/Cmd+P = Quick Open（同一 palette 入口）
+    registerShortcut({
+      id: "app.quick-open",
+      keys: "Mod+P",
+      scope: "global",
+      descriptionKey: "palette.title",
+      action: () => {
+        const s = useAppStore.getState();
+        s.setPaletteOpen(true);
+      },
+    });
     const handler = (e: KeyboardEvent): void => {
+      // Esc：先关通知抽屉（M2.14 通知抽屉），再走全局分发（palette 自身处理 Esc）
+      if (e.key === "Escape") {
+        setNotifOpen(false);
+      }
       dispatchShortcut(e);
     };
     window.addEventListener("keydown", handler);
@@ -793,23 +807,18 @@ function App() {
         </section>
       ) : null}
 
-      <section style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+      {/* M2.14 §42/§71：开发期命令按钮墙已移除——命令统一走 Command
+          Palette（Ctrl+K / Ctrl+P），模块入口走分组导航 */}
+      <section style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
         <button type="button" onClick={() => void openViaDialog(false)} style={buttonStyle}>
           {t("open.file")}
         </button>
         <button type="button" onClick={() => void openViaDialog(true)} style={buttonStyle}>
           {t("open.folder")}
         </button>
-        {listCommands().map((command) => (
-          <button
-            key={command.id}
-            type="button"
-            onClick={() => runCommand(command.id)}
-            style={buttonStyle}
-          >
-            {t(command.labelKey)}
-          </button>
-        ))}
+        <span style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)" }}>
+          {t("app.paletteHint")}
+        </span>
       </section>
 
       {view === "rename" ? (

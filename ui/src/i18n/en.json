@@ -1,5 +1,5 @@
 {
-  "app.milestone": "M11 Polish",
+  "app.milestone": "M2.14 Release Candidate",
   "open.file": "Open file…",
   "open.folder": "Open folder…",
   "app.language": "Language",
@@ -1103,5 +1103,6 @@
   "notif.empty": "No notifications",
   "notif.clear": "Clear all",
   "notif.dismiss": "Dismiss",
-  "notif.open": "Open"
+  "notif.open": "Open",
+  "app.paletteHint": "Press Ctrl+K or Ctrl+P for commands"
 }

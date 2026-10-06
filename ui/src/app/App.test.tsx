@@ -15,6 +15,23 @@ const mocks = vi.hoisted(() => ({
   cancelJob: vi.fn(),
   listTools: vi.fn(),
   getHistory: vi.fn(),
+  // M2.13 shell：通知中心 / Job Center / 设置轮询（默认空值即可）
+  agentStatus: vi.fn(),
+  agentClearNotifications: vi.fn(),
+  agentDismissNotification: vi.fn(),
+  jobsList: vi.fn(),
+  jobsCancel: vi.fn(),
+  webGetConfig: vi.fn(),
+  webApplyConfig: vi.fn(),
+  monitorGetConfig: vi.fn(),
+  monitorApplyConfig: vi.fn(),
+  clipboardApplyConfig: vi.fn(),
+  wispApplyConfig: vi.fn(),
+  smartAnalyze: vi.fn(),
+  smartGetResult: vi.fn(),
+  smartBuildPlan: vi.fn(),
+  smartProviderStatus: vi.fn(),
+  smartHistory: vi.fn(),
 }));
 
 vi.mock("../generated/bindings", () => ({ commands: mocks }));
@@ -26,7 +43,7 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 
 const { registerBuiltinCommands } = await import("../commands/builtin");
-const { clearCommands } = await import("../commands/registry");
+const { clearCommands, listCommands } = await import("../commands/registry");
 const { default: App } = await import("./App");
 
 afterEach(() => {
@@ -38,6 +55,11 @@ beforeEach(() => {
   clearCommands();
   registerBuiltinCommands();
   mocks.getHistory.mockResolvedValue({ status: "ok", data: [] });
+  mocks.agentStatus.mockResolvedValue({
+    status: "ok",
+    data: { state: "running", paused: false, notifications: [], schedules: [] },
+  });
+  mocks.jobsList.mockResolvedValue([]);
   mocks.getAppConfig.mockResolvedValue({
     status: "ok",
     data: { version: 1, language: "zh-CN", theme: "system", favorites: [] },
@@ -79,10 +101,14 @@ describe("App shell (M0 §8.2)", () => {
     expect(screen.getByRole("status").textContent).toContain("IPC 已连接");
   });
 
-  it("exposes the two registry commands", () => {
+  it("exposes registry commands via palette, not a home button wall", () => {
+    // M2.14 §42/§71：开发期命令按钮墙已移除——命令经 Command Palette
+    // （Ctrl+K）可达；Home 显示快捷键提示。Registry 仍是命令事实源。
     render(<App />);
-    expect(screen.getByRole("button", { name: "运行 IPC Ping" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "显示应用信息" })).toBeTruthy();
+    const ids = listCommands().map((c) => c.id);
+    expect(ids).toContain("app.ping");
+    expect(ids).toContain("app.showInfo");
+    expect(screen.getByText(translate("zh-CN", "app.paletteHint"))).toBeTruthy();
   });
 
   it("toggles language via resources, not hardcoded copy", async () => {

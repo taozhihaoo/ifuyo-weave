@@ -1,5 +1,5 @@
 {
-  "app.milestone": "M11 Polish",
+  "app.milestone": "M2.14 候选发布",
   "open.file": "打开文件…",
   "open.folder": "打开文件夹…",
   "app.language": "语言",
@@ -1103,5 +1103,6 @@
   "notif.empty": "暂无通知",
   "notif.clear": "清空全部",
   "notif.dismiss": "关闭",
-  "notif.open": "打开"
+  "notif.open": "打开",
+  "app.paletteHint": "按 Ctrl+K 或 Ctrl+P 打开命令面板"
 }
