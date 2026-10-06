@@ -79,7 +79,11 @@ pub struct WispAppRule {
 
 impl Default for WispAppRule {
     fn default() -> Self {
-        Self { process: String::new(), mode: "default".to_string(), enabled: true }
+        Self {
+            process: String::new(),
+            mode: "default".to_string(),
+            enabled: true,
+        }
     }
 }
 
