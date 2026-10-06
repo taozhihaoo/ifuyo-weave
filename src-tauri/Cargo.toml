@@ -27,9 +27,23 @@ weave-compare = { path = "../crates/weave-compare" }
 weave-clipboard = { path = "../crates/weave-clipboard" }
 weave-privacy = { path = "../crates/weave-privacy" }
 sysinfo = { workspace = true }
+# M2.8 OCR：Windows.Media.Ocr（WinRT 安全封装；workspace unsafe=forbid 不受影响）
+windows = { version = "0.58", default-features = false, features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage",
+    "Storage_Streams",
+] }
 arboard = { workspace = true }
 clipboard-win = { workspace = true }
 image = { workspace = true }
+ab_glyph = { workspace = true }
+screenshots = "0.8"
+x-win = "2"
 weave-documents = { path = "../crates/weave-documents", features = ["specta"] }
 weave-utilities = { path = "../crates/weave-utilities" }
 weave-workflow = { path = "../crates/weave-workflow", features = ["specta"] }

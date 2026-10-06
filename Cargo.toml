@@ -26,12 +26,17 @@ license = "MIT OR Apache-2.0"
 authors = ["ifuyo"]
 
 [workspace.dependencies]
+windows = { version = "0.58", default-features = false }
 # M2.3 Clipboard：安全封装（workspace 禁 unsafe，不手写 Win32）。
 arboard = "3"
 clipboard-win = "5"
 
 sysinfo = { version = "0.33", default-features = false, features = ["disk"] }
+screenshots = "0.8"
+x-win = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp"] }
+# M2.8 Glint 标注 Text：字体解析/光栅化（纯 Rust 安全封装）。
+ab_glyph = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
