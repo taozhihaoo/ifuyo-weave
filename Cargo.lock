@@ -4878,6 +4878,7 @@ dependencies = [
  "weave-core",
  "weave-history",
  "weave-testkit",
+ "zip",
 ]
 
 [[package]]

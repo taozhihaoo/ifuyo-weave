@@ -12,6 +12,8 @@
 //! 一切文件系统访问经过 [`fs::Filesystem`] 抽象（可测试、可故障注入），
 //! 一切路径先过 `weave_core::path` 校验。本 crate 只报告事实，不推测意图。
 
+pub mod archive;
+pub mod archive_test_support;
 pub mod atomic_write;
 pub mod classify;
 pub mod duplicates;
