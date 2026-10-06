@@ -37,6 +37,11 @@ x-win = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp"] }
 # M2.8 Glint 标注 Text：字体解析/光栅化（纯 Rust 安全封装）。
 ab_glyph = "0.2"
+# M2.10 Web：WhatWG URL 解析 / 阻塞 HTTP 客户端（rustls）/ html5ever DOM。
+url = "2"
+ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
+scraper = "0.20"
+ego-tree = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"

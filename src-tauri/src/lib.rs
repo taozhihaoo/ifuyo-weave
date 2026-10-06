@@ -39,6 +39,7 @@ pub mod text_dto;
 pub mod text_service;
 pub mod tools;
 pub mod utilities_service;
+pub mod web;
 pub mod wisp;
 pub mod wisp_service;
 pub mod workflow_service;
