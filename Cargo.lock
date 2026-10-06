@@ -6323,7 +6323,7 @@ dependencies = [
 
 [[package]]
 name = "weave-app"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "ab_glyph",
  "arboard",
@@ -6370,7 +6370,7 @@ dependencies = [
 
 [[package]]
 name = "weave-batch"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "image 0.25.10",
  "lopdf",
@@ -6387,7 +6387,7 @@ dependencies = [
 
 [[package]]
 name = "weave-clipboard"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6398,7 +6398,7 @@ dependencies = [
 
 [[package]]
 name = "weave-compare"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6410,7 +6410,7 @@ dependencies = [
 
 [[package]]
 name = "weave-core"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6418,7 +6418,7 @@ dependencies = [
 
 [[package]]
 name = "weave-data"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "csv",
  "regex",
@@ -6431,7 +6431,7 @@ dependencies = [
 
 [[package]]
 name = "weave-documents"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "lopdf",
  "quick-xml 0.38.4",
@@ -6444,7 +6444,7 @@ dependencies = [
 
 [[package]]
 name = "weave-files"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "chrono",
  "regex",
@@ -6460,7 +6460,7 @@ dependencies = [
 
 [[package]]
 name = "weave-history"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6470,7 +6470,7 @@ dependencies = [
 
 [[package]]
 name = "weave-media"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "image 0.25.10",
  "kamadak-exif",
@@ -6480,7 +6480,7 @@ dependencies = [
 
 [[package]]
 name = "weave-privacy"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "image 0.25.10",
  "lopdf",
@@ -6496,15 +6496,15 @@ dependencies = [
 
 [[package]]
 name = "weave-search"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 
 [[package]]
 name = "weave-testkit"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 
 [[package]]
 name = "weave-text"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "encoding_rs",
  "quick-xml 0.38.4",
@@ -6516,7 +6516,7 @@ dependencies = [
 
 [[package]]
 name = "weave-utilities"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "blake3",
  "crc",
@@ -6537,7 +6537,7 @@ dependencies = [
 
 [[package]]
 name = "weave-workflow"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "lopdf",
  "serde",

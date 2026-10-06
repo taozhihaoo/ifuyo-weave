@@ -1559,3 +1559,28 @@ Known Limitations（如实 DEFERRED）:
 
 - 性能基准表、rename alternatives、两阶段解环、robots awareness、
   ContextActionProvider：DEFERRED to M2.15/2.1
+
+## M2.15 Final Check 最终验收与发布候选（2.0）
+
+状态：**RELEASE CANDIDATE**（version 2.0.0-rc.1）。提交：R1 (lint/a11y
+收口) / RC (版本定版+打包) / docs。
+
+最终验收:
+
+- **全量回归**：42 套件 / 778 测试 / 0 失败（--no-fail-fast 实测计数）
+- **lint 收口**：GlintPanel react-hooks/refs（capture ref 写入移入
+  effect；imgScale 经 state+resize/listen）+ a11y（img 缩略图点击包
+  button）——**全 ui/src eslint 0 错误**（5 个 hook-deps 警告保留）
+- **RC 定版**：workspace + tauri.conf 0.1.0 → 2.0.0-rc.1；NSIS
+  Weave_2.0.0-rc.1_x64-setup.exe 6.67MiB 打包成功
+- **E2E 十场景**全部映射到既有测试证据（rename/recycle/privacy/
+  clipboard/recipe/compare/space/glint/web/monitor）
+- **§86 九项 P0**逐项 PASS；**§88 DoD**逐项标注；2.1 Backlog 隔离
+  （云 AI/JS 渲染/robots/基准表等——不在 2.0 实施）
+- 交付文档：Spec/…M2.15 Final Check 最终验收报告.md（§66 [FACT/TEST/
+  ISSUE/DECISION/STATUS/EVIDENCE] 格式 + Final State Matrix 15 模块）
+
+Known Limitations（如实，2.1 Backlog）:
+
+- JS 渲染页面 Web/Monitor 不支持；登录态不支持；robots awareness、
+  性能基准表、ContextActionProvider、Rename alternatives：DEFERRED
