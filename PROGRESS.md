@@ -1202,3 +1202,39 @@ Known Limitations（P1/P2）:
 
 - Level 2 一键内容验证命令未组合；SHA-1/MD5 未加；ZIP 内预览未做；
   嵌套 ZIP 不递归（设计选择）
+
+## M2.6 Agent Core（2.0）
+
+Scope: 后台生命周期的唯一主人——Agent Runtime 状态机（§4 七态+显式迁移）、
+幂等 Start/Stop/Pause/Resume（§8）、Scheduler（NextRunAt 无漂移+MissedRun
+策略+SkipIfRunning §12-§14）、有界队列/并发闸门（§15-§17）、Clipboard 正式
+接入（§27 共享标志=单一主人）、统一通知中心（§22/§23 聚合去重）、App Exit
+→ Agent Stop（§10）。**无第二套执行/Job/通知/存储体系。**
+
+提交链: AG1 (agent/{runtime,queue} 状态机+调度+有界队列 10 测试) /
+AG2 (生命周期接线+IPC 7 命令+调度持久化) / AG2b (Arc 标志共享) /
+A-UI (AgentPanel+i18n) / C6 (总结+PROGRESS)。
+
+关键实现:
+
+- **状态机**：显式迁移校验（非法迁移报错）；幂等转换直接 OK
+- **Scheduler**：NextRunAt = last+interval（无漂移 §12）；Daily 日窗重算；
+  Interval=0/非法 hour ⇒ None（§59 配置归一化）
+- **MissedRun**：Skip（默认）/RunOnce——防补跑风暴 §13
+- **SkipIfRunning**：collect_due 内部 running_jobs 检查 §14
+- **Clipboard 单一主人**（§27）：M2.3 标志位改 Arc<AtomicBool>，Agent
+  ClipboardComponent 共享同一 Arc——agent pause == capture pause
+- **有界队列**：DropOldest/Reject + Interactive 优先 + dropped 计数 §15/§16
+
+Quality:
+
+- 全工作区 42 套件 0 failed；agent 10 单元测试
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 5.26MiB
+- 交付文档：Spec/ifuyo Weave 2.0 M2.6 Agent Core 实施总结.md（§71 廿二节）
+
+Known Limitations（P1/P2）:
+
+- System Tray / Login Startup / 自动恢复 / 1h soak 未做（§67 延期）
+- 调度 handler 注册表空（M2.7 Recipe 接入）；Folder Watcher 未建（无既有
+  Watcher，未引 notify 依赖——M2.7 需要时再建）
+- Scheduler tick 为 1s 轮询（与 clipboard 同模式；事件驱动需 unsafe）
