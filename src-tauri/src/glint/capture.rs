@@ -16,11 +16,12 @@ fn err(code: &'static str, message: impl Into<String>) -> WeaveError {
     WeaveError::io(code, message).with_location("glint::capture")
 }
 
-/// 显示器信息（来自 screenshots crate；物理像素）。
+/// 显示器信息（来自 screenshots crate；物理像素）。index 以 u32 经 IPC
+/// （specta 禁 usize）；id 仅展示用。
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorInfo {
-    pub index: usize,
+    pub index: u32,
     pub id: u32,
     /// 屏幕坐标系原点（可为负——左侧显示器 §33）。
     pub x: i32,
@@ -50,7 +51,7 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>, WeaveError> {
         .map(|(index, screen)| {
             let d = &screen.display_info;
             MonitorInfo {
-                index,
+                index: index as u32,
                 id: d.id,
                 x: d.x,
                 y: d.y,
@@ -111,10 +112,11 @@ pub fn crop_rgba(
 }
 
 /// 前台窗口信息（经 x-win 安全封装；DPI 物理像素，屏幕坐标可含负值 §33）。
+/// hwnd 以字符串经 IPC（specta 禁 isize；句柄只作展示标识，不作系统调用）。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowInfo {
-    pub hwnd: isize,
+    pub hwnd: String,
     pub title: String,
     pub process_name: String,
     pub screen_x: i32,
@@ -148,7 +150,7 @@ pub fn list_windows() -> Vec<WindowInfo> {
                 continue;
             }
             out.push(WindowInfo {
-                hwnd: w.id as isize,
+                hwnd: w.id.to_string(),
                 title: w.title,
                 process_name: w.info.name.clone(),
                 screen_x: x,

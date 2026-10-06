@@ -24,7 +24,8 @@ pub fn captures_dir(app: &tauri::AppHandle) -> Result<PathBuf, WeaveError> {
 pub struct CaptureRecord {
     pub file_name: String,
     pub path: String,
-    pub size: u64,
+    /// 字节（specta 禁 u64 ⇒ f64；文件尺寸远低于 2^53 精度边界）。
+    pub size: f64,
     pub modified_ms: Option<f64>,
     /// 物理像素（PNG 头解析；失败 ⇒ 0,0）
     pub width: u32,
@@ -55,7 +56,7 @@ pub fn list_recent(dir: &Path, max_recent: usize) -> Vec<CaptureRecord> {
         records.push(CaptureRecord {
             file_name: name,
             path: path.to_string_lossy().into_owned(),
-            size: meta.len(),
+            size: meta.len() as f64,
             modified_ms: modified
                 .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_millis() as f64),

@@ -57,7 +57,7 @@ fn save_png(dir: &std::path::Path, png: &[u8], width: u32, height: u32) -> Resul
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
         path: path.to_string_lossy().into_owned(),
-        size: png.len() as u64,
+        size: png.len() as f64,
         modified_ms: Some(
             std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -137,8 +137,8 @@ pub fn glint_list_recent(app: tauri::AppHandle) -> Result<Vec<CaptureRecord>, Ip
 
 #[tauri::command]
 #[specta::specta]
-pub fn glint_capture_screen(app: tauri::AppHandle, monitor_index: usize) -> Result<GlintCaptureSaved, IpcError> {
-    let screen = glint::capture_monitor(monitor_index).map_err(IpcError::from)?;
+pub fn glint_capture_screen(app: tauri::AppHandle, monitor_index: u32) -> Result<GlintCaptureSaved, IpcError> {
+    let screen = glint::capture_monitor(monitor_index as usize).map_err(IpcError::from)?;
     let png = encode_rgba(screen.rgba, screen.width, screen.height, "png", 90)?;
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let record = save_png(&dir, &png, screen.width, screen.height)?;
@@ -153,7 +153,7 @@ pub fn glint_capture_screen(app: tauri::AppHandle, monitor_index: usize) -> Resu
 #[specta::specta]
 pub fn glint_capture_foreground_window(app: tauri::AppHandle) -> Result<GlintCaptureSaved, IpcError> {
     let (_hwnd, title, x, y, w, h, monitor_index) = glint::foreground_window_rect().map_err(IpcError::from)?;
-    let screen = glint::capture_monitor(monitor_index).map_err(IpcError::from)?;
+    let screen = glint::capture_monitor(monitor_index as usize).map_err(IpcError::from)?;
     let (rgba, cw, ch) =
         glint::crop_window_from_monitor(&screen.rgba, &screen.monitor, x, y, w, h).map_err(IpcError::from)?;
     let png = encode_rgba(rgba, cw, ch, "png", 90)?;
@@ -220,7 +220,7 @@ pub fn glint_save_annotated(
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             path: out_path.to_string_lossy().into_owned(),
-            size: png.len() as u64,
+            size: png.len() as f64,
             modified_ms: Some(
                 std::time::SystemTime::now()
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)

@@ -141,6 +141,23 @@ export const commands = {
 	 *  运行时版本由存储内部保证）。
 	 */
 	recipeRunHistory: () => typedError<RecipeRunRecordDto[], IpcError>(__TAURI_INVOKE("recipe_run_history")),
+	glintListMonitors: () => typedError<MonitorInfo[], IpcError>(__TAURI_INVOKE("glint_list_monitors")),
+	glintListWindows: () => __TAURI_INVOKE<WindowInfo[]>("glint_list_windows"),
+	glintListRecent: () => typedError<CaptureRecord[], IpcError>(__TAURI_INVOKE("glint_list_recent")),
+	glintCaptureScreen: (monitorIndex: number) => typedError<GlintCaptureSaved, IpcError>(__TAURI_INVOKE("glint_capture_screen", { monitorIndex })),
+	glintCaptureForegroundWindow: () => typedError<GlintCaptureSaved, IpcError>(__TAURI_INVOKE("glint_capture_foreground_window")),
+	/**
+	 *  从已保存捕获裁剪区域（物理像素，图像坐标 §5）。Region Capture 流程：
+	 *  先全屏捕获 → UI 拖拽 → 从已捕获图像裁剪（不重拍，时刻一致）。
+	 */
+	glintCropCapture: (fileName: string, x: number, y: number, w: number, h: number) => typedError<GlintCaptureSaved, IpcError>(__TAURI_INVOKE("glint_crop_capture", { fileName, x, y, w, h })),
+	glintSaveAnnotated: (fileName: string, annotations: Annotation[], format: string, jpegQuality: number) => typedError<GlintCaptureSaved, IpcError>(__TAURI_INVOKE("glint_save_annotated", { fileName, annotations, format, jpegQuality })),
+	glintPreview: (fileName: string) => typedError<number[], IpcError>(__TAURI_INVOKE("glint_preview", { fileName })),
+	glintThumbnail: (fileName: string) => typedError<number[], IpcError>(__TAURI_INVOKE("glint_thumbnail", { fileName })),
+	glintDeleteCapture: (fileName: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("glint_delete_capture", { fileName })),
+	glintCopyCaptureToClipboard: (fileName: string) => typedError<null, IpcError>(__TAURI_INVOKE("glint_copy_capture_to_clipboard", { fileName })),
+	glintOcrCapture: (fileName: string, language: string | null) => typedError<OcrResultDto, IpcError>(__TAURI_INVOKE("glint_ocr_capture", { fileName, language })),
+	glintOcrRegion: (fileName: string, x: number, y: number, w: number, h: number, language: string | null) => typedError<OcrResultDto, IpcError>(__TAURI_INVOKE("glint_ocr_region", { fileName, x, y, w, h, language })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -315,6 +332,24 @@ export type AgentStatusDto = {
 	schedulerRunning: number | null,
 	lastError: string | null,
 	notifications: AgentNotificationDto[],
+};
+
+export type Annotation = {
+	id: string,
+	shape: AnnotationShape,
+	style: AnnotationStyle,
+};
+
+/**  标注对象（坐标均为图像像素空间；越界部分裁掉，不 panic）。 */
+export type AnnotationShape = { kind: "arrow"; x1: number | null; y1: number | null; x2: number | null; y2: number | null } | { kind: "rectangle"; x: number | null; y: number | null; w: number | null; h: number | null } | { kind: "ellipse"; x: number | null; y: number | null; w: number | null; h: number | null } | { kind: "freehand"; points: ([(number | null), (number | null)])[] } | { kind: "text"; x: number | null; y: number | null; text: string } | { kind: "blur"; x: number | null; y: number | null; w: number | null; h: number | null } | { kind: "pixelate"; x: number | null; y: number | null; w: number | null; h: number | null; block: number | null };
+
+/**  标注样式（§12：只实现真正需要的字段）。 */
+export type AnnotationStyle = {
+	strokeWidth: number | null,
+	/**  RGBA。 */
+	color: [number, number, number, number],
+	fontSize: number | null,
+	filled: boolean,
 };
 
 /**  应用级最小配置。工具参数永远跟随工具本身，不进入全局配置（charter #37）。 */
@@ -492,6 +527,17 @@ export type BatchStageOutcomeDto = {
 
 /**  批量文本算子（镜像 weave_batch::TextOpSpec；§19 可序列化计划）。 */
 export type BatchTextOpDto = { type: "trimLines" } | { type: "lowercase" } | { type: "uppercase" } | { type: "replace"; find: string; replace_with: string; case_sensitive: boolean };
+
+export type CaptureRecord = {
+	fileName: string,
+	path: string,
+	/**  字节（specta 禁 u64 ⇒ f64；文件尺寸远低于 2^53 精度边界）。 */
+	size: number | null,
+	modifiedMs: number | null,
+	/**  物理像素（PNG 头解析；失败 ⇒ 0,0） */
+	width: number,
+	height: number,
+};
 
 export type ClassificationDto = {
 	category: string,
@@ -1010,6 +1056,13 @@ export type FormatOutcomeDto = {
 	changed: boolean,
 };
 
+/**  捕获保存结果（记录 + 来源描述 §4 CaptureMetadata）。 */
+export type GlintCaptureSaved = {
+	record: CaptureRecord,
+	/**  来源描述（如 "monitor 1"、"region 800x600"、"window: Title (app.exe)"）。 */
+	source: string,
+};
+
 export type HashAlgorithmInfoDto = {
 	id: string,
 	name: string,
@@ -1201,6 +1254,22 @@ export type ManifestVerifyResultDto = {
 };
 
 /**
+ *  显示器信息（来自 screenshots crate；物理像素）。index 以 u32 经 IPC
+ *  （specta 禁 usize）；id 仅展示用。
+ */
+export type MonitorInfo = {
+	index: number,
+	id: number,
+	/**  屏幕坐标系原点（可为负——左侧显示器 §33）。 */
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	scaleFactor: number | null,
+	isPrimary: boolean,
+};
+
+/**
  *  空值定义（§30/§31：哪些表示计入"空"——绝不默认把 "NULL"/"N/A"/"0"
  *  与空串混同）。
  */
@@ -1209,6 +1278,19 @@ export type NullPolicy = {
 	whitespaceOnly: boolean,
 	/**  显式配置的 null-like token（如 "NULL"、"N/A"）。 */
 	tokens: string[],
+};
+
+export type OcrLineDto = {
+	text: string,
+	/**  WinRT 不提供行级 confidence ⇒ Unknown（§16 不伪造）。 */
+	confidence: number | null,
+};
+
+export type OcrResultDto = {
+	text: string,
+	lines: OcrLineDto[],
+	/**  引擎语言（如 zh-Hans-CN / en-US）；不可用 ⇒ None。 */
+	engineLanguage: string | null,
 };
 
 export type OrganizerConditionDto = { type: "any" } | { type: "extensionIn"; extensions: string[] } | { type: "nameContains"; text: string } | { type: "namePattern"; pattern: string } | { type: "sizeLargerThan"; bytes: number | null } | { type: "sizeSmallerThan"; bytes: number | null } | { type: "modifiedBefore"; epoch_ms: number | null } | { type: "modifiedAfter"; epoch_ms: number | null };
@@ -1785,6 +1867,22 @@ export type VolumeInfoDto = {
 	usedBytes: number | null,
 	/**  0-100；容量 0 ⇒ None（不伪造百分比）。 */
 	usedPercent: number | null,
+};
+
+/**
+ *  前台窗口信息（经 x-win 安全封装；DPI 物理像素，屏幕坐标可含负值 §33）。
+ *  hwnd 以字符串经 IPC（specta 禁 isize；句柄只作展示标识，不作系统调用）。
+ */
+export type WindowInfo = {
+	hwnd: string,
+	title: string,
+	processName: string,
+	screenX: number,
+	screenY: number,
+	width: number,
+	height: number,
+	/**  x ≤ -32000 是 Windows 最小化窗口的经典位置（启发式，如实标注）。 */
+	minimized: boolean,
 };
 
 /**  §77 Workflow Library 条目。 */
