@@ -20,8 +20,8 @@ use crate::commands::IpcError;
 use crate::recipe::model::{
     Recipe, RecipeAction, RecipeParameter, RecipeStore, RecipeTrigger, import_recipe, validate,
 };
-use crate::recipe::runner::{RecipeRunReport, run_recipe};
-use crate::recipe::store_history::{RecipeRunRecord, RunHistoryStore};
+use crate::recipe::runner::run_recipe;
+use crate::recipe::store_history::RunHistoryStore;
 
 fn err(code: &'static str, message: impl Into<String>) -> IpcError {
     WeaveError::validation(code, message)
@@ -179,7 +179,7 @@ pub fn recipe_save(app: tauri::AppHandle, recipe: RecipeUpsertDto) -> Result<(),
     if !result.is_ok() {
         return Err(err(
             "recipe.validationFailed",
-            format!("{}", result.errors.join("; ")),
+            result.errors.join("; ").to_string(),
         ));
     }
     store.save(&domain).map_err(IpcError::from)
@@ -252,7 +252,7 @@ pub fn recipe_set_enabled(
         Some(recipe) => {
             recipe.enabled = enabled;
             recipe.updated_at = std::time::SystemTime::now();
-            store.save(&recipe).map_err(IpcError::from)
+            store.save(recipe).map_err(IpcError::from)
         }
         None => Err(err("recipe.unknown", format!("no recipe '{id}'"))),
     }
@@ -330,11 +330,10 @@ fn recipe_run_impl(
             .map(|d| d.as_millis())
             .unwrap_or(0)
     );
-    if let Some(handle) = app {
-        if let Ok(history) = history(handle) {
+    if let Some(handle) = app
+        && let Ok(history) = history(handle) {
             let _ = history.record_from_report(&recipe, &report, "manual", &run_id);
         }
-    }
 
     Ok(RecipeRunResultDto {
         run_id,
