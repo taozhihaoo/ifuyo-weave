@@ -1361,3 +1361,50 @@ Known Limitations（如实）:
 - 外部应用原生 Ctrl+V 不可拦截（平台能力边界，全链路声明 Limited）
 - ~~应用规则面板编辑器未做~~（R4 已交付：检测开关/TTL/block_critical/retain/规则增删改启）
 - 1k/10k 压测基准表 P2（逻辑有界：监听节流+去重+事件上限）
+
+## M2.10 Web 内容处理中心（2.0）
+
+状态：P0 PASS（P1 PARTIAL 如实；Security PASS；Regression PASS）。提交：
+R1 (web 领域: url/target SSRF/fetch/html/markdown, 33 测试) / R2 (web_
+service 12 IPC + WebRuntime + WebConfig) / R3 (WebPanel+palette+i18n) /
+lint+flake / docs。
+
+关键实现:
+
+- **URL**（§6-§10/§54）：scheme 白名单拒绝不转换；Tracking（24 项高
+  置信）/AuthRelated（21 项保留+掩码）/Unknown 必保留；清理全可解释
+  （removed/preserved/unknown/warnings）；Functional 留给用户白名单不猜
+- **SSRF**（§16 P0）：GuardedResolver 挂在 ureq——解析结果逐地址分类后
+  才交给连接层（rebinding TOCTOU 闭合）；localhost/.local/私网/CGNAT/
+  link-local/ULA/v4-mapped 全分类；allow_private_targets 默认 false
+- **Fetch**（§13-§21/§44）：唯一网络出口（ureq+rustls+gzip）；timeout
+  30s/redirect 10/response 5MB（解压后计量防炸弹）/分块读取间取消
+  （drop reader 真断连）；403 类别化 message 不说"网页损坏"；编码
+  header→BOM→meta→utf-8(lossy 标注)
+- **HTML**（§22-§29/§76-§79）：html5ever 非正则；迭代遍历；文本按祖先
+  链剔 script/style；链接 base join 七类不硬分；元数据缺失即缺席+证据
+  来源；正文三档置信（语义容器 High/密度启发 Medium/body Low）UI 明示
+  推断
+- **Markdown**（§24/§25）：14 元素+GFM 表格；javascript: href 丢弃留文
+  本；pending-space 状态机保行内标记闭合
+- **批量**（§41-§45/§72）：JobTracker + 有界并发（≤8）+失败隔离+
+  冲突 -N + dest-exists Skipped + 掩码逐条报告 + 产物 creation-undo
+- **集成**（§36/§51/§68/§69）：复制 arboard+suppress 写前登记；导出
+  output-first+atomic_write+可撤销；fetch/analyze 与本地 HTML 同管线
+- **UI**（§59/§60）：统一 Workspace 四 Tab+摘要+推断声明+批量报告+
+  设置八项；不渲染不执行抓取内容（§40）
+
+Quality:
+
+- 42 套件 0 failed（--no-fail-fast）；web 33 测试；fmt/clippy 0；
+  tsc/eslint 0；vitest 38；tauri build 6.49MiB
+- 附带修复预存量 flake：compare nested_directories 两侧同内容+mtime
+  同毫秒 ⇒ Metadata 档偶发 Same——内容改相异（意图不变）
+- 交付文档：Spec/ifuyo Weave 2.0 M2.10 Web 实施总结.md（§109 分级结论）
+
+Known Limitations（如实）:
+
+- QR/Barcode、ETag/304、资源统计、Sanitized-HTML、Recent URLs：未实现
+  （P1 如实；ETag 为 M2.11 前置）
+- 性能基准表（1KB-100MB/批量 10-1000）未做（结构有界+敌意输入验证）
+- 正文提取为启发式（UI 明示）；SSRF 分类不识别"公网 IP 内网映射"环境
