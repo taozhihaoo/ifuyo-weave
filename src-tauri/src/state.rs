@@ -75,15 +75,7 @@ impl AppState {
             clipboard: std::sync::Arc::new(clipboard),
             privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
             archive_results: std::sync::Arc::new(crate::archive_service::ArchiveResultCache::new()),
-            agent: {
-                let mut arc = std::sync::Arc::new(agent);
-                if let Some(clip) = std::sync::Arc::get_mut(&mut arc) {
-                    // Arc 唯一引用 ⇒ 可变绑定 M2.3 标志（经 ClipboardComponent）
-                    use crate::agent::AgentComponent;
-                    clip.clipboard_inner_bind();
-                }
-                arc
-            },
+            agent: std::sync::Arc::new(agent),
             notifications: std::sync::Arc::new(crate::agent_service::NotificationCenter::new()),
         }
     }

@@ -231,13 +231,21 @@ pub struct AgentRuntime {
 }
 
 impl AgentRuntime {
-    pub fn new(max_concurrent: usize, queue_capacity: usize) -> Self {
+    pub fn new(
+        max_concurrent: usize,
+        queue_capacity: usize,
+        clipboard_paused: std::sync::Arc<AtomicBool>,
+        clipboard_enabled: std::sync::Arc<AtomicBool>,
+    ) -> Self {
         Self {
             state: Mutex::new(AgentState::Stopped),
             paused: AtomicBool::new(false),
             scheduler: Mutex::new(SchedulerComponent::default()),
             clipboard: ClipboardComponentState {
-                inner: Mutex::new(crate::clipboard_component::ClipboardComponent::new()),
+                inner: Mutex::new(crate::clipboard_component::ClipboardComponent::with_flags(
+                    clipboard_paused,
+                    clipboard_enabled,
+                )),
             },
             queue: BoundedJobQueue::new(queue_capacity),
             gate: ConcurrencyGate::new(max_concurrent),

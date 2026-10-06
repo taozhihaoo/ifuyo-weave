@@ -198,8 +198,14 @@ pub fn run() {
                 &config.clipboard,
             )?;
             let enabled = config.clipboard.enabled;
-            // M2.6：Agent Runtime（后台生命周期的唯一主人 §5）
-            let agent_runtime = agent::AgentRuntime::new(4, 256);
+            // M2.6：Agent Runtime（后台生命周期的唯一主人 §5）；Clipboard
+            // 标志位由 Agent 与 M2.3 捕获线程共享（§27 单一主人）
+            let agent_runtime = agent::AgentRuntime::new(
+                4,
+                256,
+                clipboard_runtime.paused_flag_clone(),
+                clipboard_runtime.enabled_flag_clone(),
+            );
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),

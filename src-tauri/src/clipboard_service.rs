@@ -11,6 +11,7 @@
 
 #![expect(clippy::result_large_err)] // D10
 
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
@@ -42,8 +43,8 @@ const IMAGE_PROBE_EVERY_TICKS: u64 = 5;
 pub struct ClipboardRuntime {
     pub entries: Mutex<Vec<ClipboardEntry>>,
     pub store: ClipboardStore,
-    pub paused: AtomicBool,
-    pub enabled: AtomicBool,
+    pub paused: std::sync::Arc<AtomicBool>,
+    pub enabled: std::sync::Arc<AtomicBool>,
     pub capture_text: AtomicBool,
     pub capture_images: AtomicBool,
     pub capture_files: AtomicBool,
@@ -70,8 +71,8 @@ impl ClipboardRuntime {
         Ok(Self {
             entries: Mutex::new(outcome.entries),
             store,
-            paused: AtomicBool::new(false),
-            enabled: AtomicBool::new(config.enabled),
+            paused: std::sync::Arc::new(AtomicBool::new(false)),
+            enabled: std::sync::Arc::new(AtomicBool::new(config.enabled)),
             capture_text: AtomicBool::new(config.capture_text),
             capture_images: AtomicBool::new(config.capture_images),
             capture_files: AtomicBool::new(config.capture_files),
@@ -80,6 +81,15 @@ impl ClipboardRuntime {
             tick: AtomicU64::new(0),
             policy: Mutex::new(policy),
         })
+    }
+
+    /// 共享捕获标志给 Agent ClipboardComponent（§27：单一主人，标志位同源）。
+    pub fn paused_flag_clone(&self) -> std::sync::Arc<AtomicBool> {
+        std::sync::Arc::clone(&self.paused)
+    }
+
+    pub fn enabled_flag_clone(&self) -> std::sync::Arc<AtomicBool> {
+        std::sync::Arc::clone(&self.enabled)
     }
 
     pub fn apply_config(&self, config: &crate::config::ClipboardConfig) {

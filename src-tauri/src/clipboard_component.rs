@@ -19,6 +19,18 @@ impl ClipboardComponent {
         }
     }
 
+    /// 以既有标志位构造（M2.6 接线：Agent 直接共享 M2.3 的捕获标志）。
+    pub fn with_flags(
+        paused_flag: std::sync::Arc<AtomicBool>,
+        enabled_flag: std::sync::Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            paused_flag,
+            enabled_flag,
+            state: Mutex::new(ComponentState::Stopped),
+        }
+    }
+
     /// 绑定到 M2.3 ClipboardRuntime 的实际标志位（构造后调用一次）。
     pub fn bind_flags(
         &mut self,
