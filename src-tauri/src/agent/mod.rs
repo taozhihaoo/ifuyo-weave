@@ -123,20 +123,20 @@ impl SchedulerComponent {
                 continue;
             }
             let next = runtime::next_run_at(&def.kind, now, def.last_run_at);
-            if let Some(next_at) = next {
-                if next_at <= now {
-                    if def.concurrency == ConcurrencyPolicy::SkipIfRunning
-                        && self.running_jobs.contains(&def.id)
-                    {
-                        continue; // §14 SkipIfRunning：上次未完成 ⇒ 跳过
-                    }
-                    def.last_run_at = Some(now);
-                    due.push(ScheduleDue {
-                        id: def.id.clone(),
-                        job_name: def.job_name.clone(),
-                        is_catch_up: false,
-                    });
+            if let Some(next_at) = next
+                && next_at <= now
+            {
+                if def.concurrency == ConcurrencyPolicy::SkipIfRunning
+                    && self.running_jobs.contains(&def.id)
+                {
+                    continue; // §14 SkipIfRunning：上次未完成 ⇒ 跳过
                 }
+                def.last_run_at = Some(now);
+                due.push(ScheduleDue {
+                    id: def.id.clone(),
+                    job_name: def.job_name.clone(),
+                    is_catch_up: false,
+                });
             }
             def.next_run_at_cached = runtime::next_run_at(&def.kind, now, def.last_run_at);
         }

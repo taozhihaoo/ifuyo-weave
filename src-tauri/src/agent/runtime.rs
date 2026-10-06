@@ -276,7 +276,7 @@ mod tests {
     fn daily_missed_run_never_runs_multiple_catchups() {
         // §13：睡眠 8 小时 ⇒ 最多补跑一次（RunOnce），Skip 策略直接跳过
         let kind = ScheduleKind::Daily { hour: 1, minute: 0 };
-        let now = ts(9 * 3600); // 09:00，01:00 的运行已错过
+        let _now = ts(9 * 3600); // 09:00，01:00 的运行已错过
         let def = ScheduleDef {
             id: "daily".to_string(),
             name: "daily".to_string(),

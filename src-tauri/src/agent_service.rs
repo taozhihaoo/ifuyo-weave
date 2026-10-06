@@ -366,8 +366,6 @@ pub fn start_agent(app: tauri::AppHandle) {
         use crate::agent::AgentComponent;
         state.agent.clipboard.inner.lock().expect("clip").start();
     }
-    drop(state);
-
     // Scheduler tick 线程（Agent 拥有；App Exit ⇒ 进程退 ⇒ 线程终止 §10）
     std::thread::Builder::new()
         .name("agent-scheduler-tick".to_string())
