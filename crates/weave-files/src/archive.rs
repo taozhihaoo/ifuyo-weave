@@ -165,7 +165,7 @@ pub fn create_zip(
     let options: zip::write::SimpleFileOptions =
         zip::write::SimpleFileOptions::default().compression_method(method);
     let options = if let Some(l) = level {
-        options.compression_level(Some(l as i64))
+        options.compression_level(Some(l))
     } else {
         options
     };
@@ -173,7 +173,7 @@ pub fn create_zip(
     let mut failed_files: Vec<(PathBuf, String)> = Vec::new();
     let mut input_bytes = 0u64;
     let mut files_done = 0u64;
-    let mut dir_count = 0u64;
+    let dir_count = 0u64;
 
     for (rel, disk) in &files {
         if cancel.is_cancelled() {
@@ -223,7 +223,7 @@ pub fn create_zip(
             format!("temp output unreadable: {e}"),
         )
     })?;
-    let mut archive = zip::ZipArchive::new(verify)
+    let archive = zip::ZipArchive::new(verify)
         .map_err(|e| err("archive.verifyFailed", format!("structure invalid: {e}")))?;
     let expected = files.len() - failed_files.len();
     if archive.len() as u64 != expected as u64 {
