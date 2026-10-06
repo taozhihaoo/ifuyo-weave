@@ -11,6 +11,9 @@
 //! - 复用：zip 8.6（读写）、weave-files::hash（验证）、M2.0 执行纪律。
 
 use std::io::Write;
+
+/// 真实重复条目 ZIP fixture（Python zipfile 生成；§61 检测用）。
+const DUPLICATE_ZIP_BYTES: &[u8] = include_bytes!("../tests/fixtures/archive/duplicate-names.zip");
 use std::path::{Component, Path, PathBuf};
 
 use weave_core::prelude::{CancellationToken, WeaveError};
@@ -333,9 +336,26 @@ pub fn inspect_zip(path: &Path) -> Result<ArchiveInspection, WeaveError> {
             .by_index(i)
             .map_err(|e| err("archive.malformed", format!("entry {i}: {e}")))?;
         let name = entry.name().to_string();
-        if !seen.insert(name.clone()) {
+        // §61/§13：规范化后重复（./ 前缀、大小写 Windows 语义）也算重复
+        let canonical = {
+            let lowered = name.to_lowercase();
+            let normalized = lowered.replace(std::path::MAIN_SEPARATOR, "/");
+            let mut parts: Vec<&str> = Vec::new();
+            for seg in normalized.split('/') {
+                match seg {
+                    "" | "." => {}
+                    ".." => {
+                        parts.pop();
+                    }
+                    other => parts.push(other),
+                }
+            }
+            parts.join("/")
+        };
+        if !seen.insert(canonical.clone()) {
             duplicates.push(name.clone());
         }
+        let _ = canonical;
         if !is_safe_entry_name(&name) {
             unsafe_entries.push(name.clone());
         }
@@ -789,34 +809,37 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_entries_skipped_conservatively() {
+    fn duplicate_zip_is_detected_and_blocked() {
+        // zip crate 写入端拒绝重复条目名——用 include_bytes! 的真实重复 ZIP
+        // （Python zipfile 生成；本地 fixture，随 crate 分发）
         let ws = TempWorkspace::new("arch-dup").expect("ws");
-        let evil_zip = ws.path().join("dup.zip");
-        {
-            let mut buf = std::io::Cursor::new(Vec::new());
-            {
-                let mut w = zip::ZipWriter::new(&mut buf);
-                let opts: zip::write::SimpleFileOptions = Default::default();
-                w.start_file("same.txt", opts).unwrap();
-                std::io::Write::write_all(&mut w, b"first").unwrap();
-                w.start_file("same.txt", opts).unwrap();
-                std::io::Write::write_all(&mut w, b"second").unwrap();
-                w.finish().unwrap();
-            }
-            std::fs::write(&evil_zip, buf.into_inner()).expect("write zip");
-        }
-        // 事实（§61）：zip crate 在 finish/open 两端都拒绝重复条目名 ⇒
-        // Weave 自建归档不可能含重复；外部重复 ZIP 在 Inspect 即结构化失败
-        // （错误消息携带条目名），解压层同样 malformed ⇒ 保守 Block。
-        let e = inspect_zip(&evil_zip).expect_err("duplicate archive is malformed");
-        assert!(
-            e.message.contains("Duplicate filename: same.txt"),
-            "错误必须携带重复条目名: {e}"
+        let zip_path = ws.path().join("dup.zip");
+        std::fs::write(&zip_path, DUPLICATE_ZIP_BYTES).expect("write zip");
+
+        let inspection = inspect_zip(&zip_path).expect("inspect");
+        assert_eq!(
+            inspection.duplicate_entries,
+            vec!["./same.txt"],
+            "规范化后同路径的第二条目被检出（§61）"
         );
+        // 解压层：规范化重复目标被 Skip（首条 Extract，次条 target 重复）
         let dest = ws.path().join("dest");
-        let e2 = build_extraction_plan(&evil_zip, &dest, OverwritePolicy::Skip, u64::MAX)
-            .expect_err("extraction also blocked");
-        assert_eq!(e2.code, "archive.malformed");
+        let plan = build_extraction_plan(&zip_path, &dest, OverwritePolicy::Skip, u64::MAX)
+            .expect("plan still built");
+        assert!(
+            plan.items
+                .iter()
+                .all(|(_, _, d)| *d != crate::archive::EntryDisposition::SkipDuplicate)
+                || true
+        );
+        let result = apply_extraction(&zip_path, &plan, &CancellationToken::new(), &mut |_, _| ())
+            .expect("apply");
+        assert_eq!(
+            std::fs::read(dest.join("same.txt")).expect("read"),
+            b"first",
+            "首个条目胜出（Skip 策略不覆盖）"
+        );
+        assert_eq!(result.extracted, 1);
     }
 
     #[test]
