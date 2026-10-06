@@ -52,6 +52,8 @@ pub struct AppState {
     pub notifications: std::sync::Arc<crate::agent_service::NotificationCenter>,
     /// M2.9：Wisp / Paste Guard 运行时（会话/事件/设置快照；无自建线程）。
     pub wisp: std::sync::Arc<crate::wisp_service::WispRuntime>,
+    /// M2.10：Web 运行时（配置快照/单文档槽/批量报告；无自建线程）。
+    pub web: std::sync::Arc<crate::web_service::WebRuntime>,
 }
 
 impl AppState {
@@ -61,6 +63,7 @@ impl AppState {
         clipboard: crate::clipboard_service::ClipboardRuntime,
         agent: crate::agent::AgentRuntime,
         wisp: crate::wisp_service::WispRuntime,
+        web: crate::web_service::WebRuntime,
     ) -> Self {
         Self {
             _log_guard: log_guard,
@@ -81,6 +84,7 @@ impl AppState {
             agent: std::sync::Arc::new(agent),
             notifications: std::sync::Arc::new(crate::agent_service::NotificationCenter::new()),
             wisp: std::sync::Arc::new(wisp),
+            web: std::sync::Arc::new(web),
         }
     }
 }

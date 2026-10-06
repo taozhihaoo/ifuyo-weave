@@ -40,6 +40,7 @@ pub mod text_service;
 pub mod tools;
 pub mod utilities_service;
 pub mod web;
+pub mod web_service;
 pub mod wisp;
 pub mod wisp_service;
 pub mod workflow_service;
@@ -137,6 +138,18 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         wisp_service::wisp_events,
         wisp_service::wisp_clear_events,
         wisp_service::wisp_recopy_guarded,
+        web_service::web_clean_url,
+        web_service::web_display_url,
+        web_service::web_extract_urls_text,
+        web_service::web_analyze_html,
+        web_service::web_fetch_url,
+        web_service::web_get_result,
+        web_service::web_copy_text,
+        web_service::web_export_document,
+        web_service::web_batch_fetch,
+        web_service::web_batch_result,
+        web_service::web_apply_config,
+        web_service::web_get_config,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -250,12 +263,15 @@ pub fn run() {
             // M2.9：Wisp 运行时（复用 M2.3 通路；无自建监听/线程 §27/§29）
             let wisp_runtime =
                 wisp_service::WispRuntime::open(history_dir.join("wisp"), config.wisp.clone());
+            // M2.10：Web 运行时（唯一网络出口经 web::fetch §17）
+            let web_runtime = web_service::WebRuntime::new(config.web.clone());
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
                 clipboard_runtime,
                 agent_runtime,
                 wisp_runtime,
+                web_runtime,
             ));
             if enabled {
                 clipboard_service::start_monitor(app.handle().clone());

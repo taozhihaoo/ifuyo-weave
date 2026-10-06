@@ -40,6 +40,9 @@ pub struct AppConfig {
     /// M2.9：Wisp / Paste Guard 设置（§32）。
     #[serde(default)]
     pub wisp: WispConfig,
+    /// M2.10：Web 设置（§84）。
+    #[serde(default)]
+    pub web: WebConfig,
 }
 
 /// 剪贴板捕获设置（§17/§20/§42：隐私 P0——可停、可清、增长有界）。
@@ -121,6 +124,36 @@ impl Default for WispConfig {
     }
 }
 
+/// M2.10 Web 设置（§84/§85：默认安全保守够用）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WebConfig {
+    /// 网络权限（§17：仅 Web 模块联网；关 ⇒ 全部抓取拒绝）。
+    pub allow_network: bool,
+    /// 内网/本机目标（§16：默认拒绝）。
+    pub allow_private_targets: bool,
+    pub timeout_secs: u32,
+    pub max_response_mb: u32,
+    pub max_redirects: u32,
+    pub max_concurrent: u32,
+    /// 敏感 query 掩码（§54；UI/日志/历史展示层）。
+    pub sensitive_query_masking: bool,
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self {
+            allow_network: true,
+            allow_private_targets: false,
+            timeout_secs: 30,
+            max_response_mb: 5,
+            max_redirects: 10,
+            max_concurrent: 4,
+            sensitive_query_masking: true,
+        }
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -130,6 +163,7 @@ impl Default for AppConfig {
             favorites: Vec::new(),
             clipboard: ClipboardConfig::default(),
             wisp: WispConfig::default(),
+            web: WebConfig::default(),
         }
     }
 }

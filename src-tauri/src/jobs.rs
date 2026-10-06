@@ -44,6 +44,8 @@ pub enum JobOutcome {
     PrivacyCompleted,
     /// M2.5：归档/解压完成（结果经 ArchiveResultCache 领取，终态仅登记）。
     ArchiveCompleted,
+    /// M2.10：Web 抓取/批量完成（结果经 WebRuntime 领取，终态仅登记）。
+    WebCompleted,
 }
 
 #[derive(Debug)]
@@ -192,6 +194,9 @@ impl JobTracker {
                         ("completed", None, None, None, None, None, None, None, None)
                     }
                     JobOutcome::ArchiveCompleted => {
+                        ("completed", None, None, None, None, None, None, None, None)
+                    }
+                    JobOutcome::WebCompleted => {
                         ("completed", None, None, None, None, None, None, None, None)
                     }
                     JobOutcome::TextExecuted(report) => (

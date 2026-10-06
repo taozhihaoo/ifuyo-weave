@@ -235,7 +235,6 @@ pub fn fetch(
     let mut reader = response.into_reader().take((limits.max_bytes + 1) as u64);
     let mut body = Vec::with_capacity(64 * 1024);
     let mut chunk = [0u8; 64 * 1024];
-    let mut truncated = false;
     loop {
         if cancel.is_cancelled() {
             drop(reader);
@@ -246,8 +245,7 @@ pub fn fetch(
             Ok(n) => {
                 body.extend_from_slice(&chunk[..n]);
                 if body.len() > limits.max_bytes {
-                    truncated = true;
-                    // 保留前 max_bytes——如实标注截断
+                    // 保留前 max_bytes——截断事实由 info.size 上限体现（§19）
                     body.truncate(limits.max_bytes);
                     break;
                 }

@@ -199,6 +199,28 @@ export const commands = {
 	/**  参与决策的规则 ID（审计用 §26）。 */
 	ruleIds: string[],
 } | null, IpcError>(__TAURI_INVOKE("wisp_recopy_guarded", { id, confirmed })),
+	webCleanUrl: (input: string, removeTracking: boolean) => typedError<UrlCleanResult, IpcError>(__TAURI_INVOKE("web_clean_url", { input, removeTracking })),
+	webDisplayUrl: (input: string) => typedError<UrlDisplay, IpcError>(__TAURI_INVOKE("web_display_url", { input })),
+	/**
+	 *  自由文本提取 URL（§10；展示文本 = URL 本身；类型 Unknown——无 base
+	 *  语境不硬分类 §11）。
+	 */
+	webExtractUrlsText: (text: string) => __TAURI_INVOKE<WebLink[]>("web_extract_urls_text", { text }),
+	/**  本地 HTML 分析（§63：与远程同一 Parse/Extract/Transform 管线；不上网）。 */
+	webAnalyzeHtml: (htmlText: string, baseUrl: string | null) => typedError<WebDocument, IpcError>(__TAURI_INVOKE("web_analyze_html", { htmlText, baseUrl })),
+	/**  抓取任务（§13-§16/§44：后台 Job——可取消、不阻塞 UI）。 */
+	webFetchUrl: (url: string, allowPrivate: boolean) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("web_fetch_url", { url, allowPrivate })),
+	webGetResult: (jobId: string) => typedError<WebDocument, IpcError>(__TAURI_INVOKE("web_get_result", { jobId })),
+	/**  复制文本（§36/§51：arboard + M2.3 suppress 指纹**写前登记**）。 */
+	webCopyText: (text: string) => typedError<null, IpcError>(__TAURI_INVOKE("web_copy_text", { text })),
+	/**  导出（§37/§68/§69）：output-first + atomic_write + creation-undo。 */
+	webExportDocument: (request: WebExportRequest) => typedError<WebExportResult, IpcError>(__TAURI_INVOKE("web_export_document", { request })),
+	/**  批量抓取+导出（§41-§45/§72：有界并发/取消/失败隔离/汇总）。 */
+	webBatchFetch: (urls: string[], destDir: string, format: string, allowPrivate: boolean) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("web_batch_fetch", { urls, destDir, format, allowPrivate })),
+	webBatchResult: (jobId: string) => typedError<WebBatchReport, IpcError>(__TAURI_INVOKE("web_batch_result", { jobId })),
+	/**  设置立即生效（§84；持久化走既有 set_app_config 全量 round-trip）。 */
+	webApplyConfig: (config: WebConfig) => __TAURI_INVOKE<void>("web_apply_config", { config }),
+	webGetConfig: () => __TAURI_INVOKE<WebConfig>("web_get_config"),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -407,6 +429,8 @@ export type AppConfig = {
 	clipboard?: ClipboardConfig,
 	/**  M2.9：Wisp / Paste Guard 设置（§32）。 */
 	wisp?: WispConfig,
+	/**  M2.10：Web 设置（§84）。 */
+	web?: WebConfig,
 };
 
 /**  应用信息（品牌 + 版本 + 运行环境）。 */
@@ -584,6 +608,11 @@ export type CaptureRecord = {
 	width: number,
 	height: number,
 };
+
+/**  编码判定来源（§21：不静默宣称 UTF-8）。 */
+export type CharsetSource = "httpHeader" | "bom" | "metaTag" | 
+/**  合理默认（如实标注 default）。 */
+"utf8Default";
 
 export type ClassificationDto = {
 	category: string,
@@ -1028,6 +1057,9 @@ export type ExtractResultDto = {
 	truncated: boolean,
 };
 
+/**  正文提取置信度（§27：High/Medium/Low/Unknown——UI 必须呈现"这是推断"）。 */
+export type ExtractionConfidence = "high" | "medium" | "low" | "unknown";
+
 /**
  *  收藏条目（M11 §37）：只存 type/id（引用），label 等从当前 Registry
  *  重新解析；数组顺序 = 用户顺序（§39）。
@@ -1302,6 +1334,16 @@ export type ManifestVerifyResultDto = {
 	items: ([string, string])[],
 };
 
+/**  元数据字段证据（§67：值 + 来源；缺失 ⇒ 字段整个缺席，不猜 §28）。 */
+export type MetaField = {
+	value: string,
+	/**
+	 *  证据来源（如 "title-tag" / "og:title" / "meta[name=author]" /
+	 *  "canonical" / "html-lang" / "heuristic"）。
+	 */
+	source: string,
+};
+
 /**
  *  显示器信息（来自 screenshots crate；物理像素）。index 以 u32 经 IPC
  *  （specta 禁 usize）；id 仅展示用。
@@ -1347,6 +1389,21 @@ export type OrganizerConditionDto = { type: "any" } | { type: "extensionIn"; ext
 export type OrganizerRuleDto = {
 	condition: OrganizerConditionDto,
 	targetFolder: string,
+};
+
+/**  页面元数据（§28；缺失即缺席）。 */
+export type PageMetadata = {
+	title: MetaField | null,
+	description: MetaField | null,
+	author: MetaField | null,
+	publishedTime: MetaField | null,
+	modifiedTime: MetaField | null,
+	language: MetaField | null,
+	/**  canonical（§29：仅记录；绝不静默替换 RequestedUrl）。 */
+	canonicalUrl: MetaField | null,
+	ogTitle: MetaField | null,
+	ogDescription: MetaField | null,
+	ogImage: MetaField | null,
 };
 
 /**  决策动作（§16）。 */
@@ -1985,6 +2042,44 @@ export type UndoReportDto = {
 	leakedTemps: number | null,
 };
 
+/**  URL 清理结果（§9 UrlCleanResult）——删除了什么、保留了什么、为什么。 */
+export type UrlCleanResult = {
+	originalUrl: string,
+	/**  规范化 URL（请求/比较/缓存键用；§6 与 Display 区分）。 */
+	normalizedUrl: string,
+	/**  清理后 URL（默认仅移除 Tracking）。 */
+	cleanedUrl: string,
+	removedParameters: UrlParameter[],
+	preservedParameters: UrlParameter[],
+	unknownParameters: UrlParameter[],
+	warnings: string[],
+};
+
+/**  展示用脱敏 URL（§54：token=***——日志/历史/报告一律用这个）。 */
+export type UrlDisplay = {
+	original: string,
+	masked: string,
+	sensitiveParameterNames: string[],
+};
+
+/**  单个查询参数（§5 UrlParameter）。 */
+export type UrlParameter = {
+	name: string,
+	value: string,
+	category: UrlParameterCategory,
+};
+
+/**  查询参数分类（§8）。 */
+export type UrlParameterCategory = 
+/**  高置信度追踪参数（utm_* / fbclid / gclid…）——默认建议删除。 */
+"tracking" | 
+/**  功能参数（预留给未来用户显式白名单——本版不猜测赋值）。 */
+"functional" | 
+/**  认证相关（token/signature/session…）——**默认保留**，展示脱敏。 */
+"authRelated" | 
+/**  未知业务参数——**必须保留（§8）**。 */
+"unknown";
+
 export type UrlPartDto = {
 	scheme: string,
 	userinfo: string | null,
@@ -2020,6 +2115,107 @@ export type VolumeInfoDto = {
 	/**  0-100；容量 0 ⇒ None（不伪造百分比）。 */
 	usedPercent: number | null,
 };
+
+/**  批量条目状态（§42；URL 经掩码 §54）。 */
+export type WebBatchItem = {
+	maskedUrl: string,
+	/**  fetching | exported | failed | skipped | cancelled */
+	status: string,
+	fileName: string | null,
+	errorCode: string | null,
+};
+
+/**  批量报告（§42/§72）。 */
+export type WebBatchReport = {
+	total: number | null,
+	succeeded: number | null,
+	failed: number | null,
+	cancelled: number | null,
+	skipped: number | null,
+	items: WebBatchItem[],
+};
+
+/**  M2.10 Web 设置（§84/§85：默认安全保守够用）。 */
+export type WebConfig = {
+	/**  网络权限（§17：仅 Web 模块联网；关 ⇒ 全部抓取拒绝）。 */
+	allowNetwork?: boolean,
+	/**  内网/本机目标（§16：默认拒绝）。 */
+	allowPrivateTargets?: boolean,
+	timeoutSecs?: number,
+	maxResponseMb?: number,
+	maxRedirects?: number,
+	maxConcurrent?: number,
+	/**  敏感 query 掩码（§54；UI/日志/历史展示层）。 */
+	sensitiveQueryMasking?: boolean,
+};
+
+/**
+ *  Content-Type 识别（§20；核心只处理 HTML/Text，其余 Recognized but
+ *  Not Supported ⇒ 交还用户/既有模块）。
+ */
+export type WebContentType = "html" | "plainText" | "json" | "xml" | "image" | "pdf" | "binary" | "unknown";
+
+/**
+ *  抓取 + 提取 + 转换的统一文档（§5 WebDocument / §66 WebContent——
+ *  按需生成：text/markdown/links 在 analyze 时一次算好，原始字节只存缓存）。
+ */
+export type WebDocument = {
+	info: WebFetchInfo,
+	metadata: PageMetadata,
+	/**  正文提取置信（heuristic 不冒充事实 §27）。 */
+	contentConfidence: ExtractionConfidence,
+	contentSource: string,
+	plainText: string,
+	markdown: string,
+	links: WebLink[],
+	truncated: boolean,
+};
+
+/**
+ *  导出请求（§37/§68/§69）：content 直出（UI 预览确认后的文本）或
+ *  job_id（缓存文档）；format 明确产物语义。
+ */
+export type WebExportRequest = {
+	jobId: string | null,
+	/**  UI 直接提交的预览内容（与 job_id 二选一；优先）。 */
+	content: string | null,
+	/**  txt | md | html（html = 原始响应 HTML——Original 语义，如实标注 §37） */
+	format: string,
+	destDir: string,
+	fileName: string | null,
+};
+
+export type WebExportResult = {
+	output: string,
+	bytes: number | null,
+};
+
+/**  抓取元信息（§5 WebFetchResult 的 metadata 部分；§13-§15/§29）。 */
+export type WebFetchInfo = {
+	requestedUrl: string,
+	finalUrl: string,
+	status: number,
+	contentType: WebContentType,
+	contentTypeRaw: string,
+	charset: string,
+	charsetSource: CharsetSource,
+	sizeBytes: number | null,
+	durationMs: number | null,
+	redirectCount: number,
+	redirectChain: string[],
+};
+
+/**  页面链接（§11 WebLink；absolute 基于文档 base URL 解析 §12）。 */
+export type WebLink = {
+	absoluteUrl: string,
+	displayText: string,
+	linkType: WebLinkType,
+	/**  href 原文（相对链接保留原文证据 §55）。 */
+	rawHref: string,
+};
+
+/**  链接类型（§11；不可靠判断 ⇒ Unknown，不硬分类）。 */
+export type WebLinkType = "internal" | "external" | "relative" | "mail" | "tel" | "anchor" | "unknown";
 
 /**
  *  前台窗口信息（经 x-win 安全封装；DPI 物理像素，屏幕坐标可含负值 §33）。

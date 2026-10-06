@@ -17,12 +17,6 @@ use scraper::{ElementRef, Html, Node, Selector};
 
 use super::model::{ExtractionConfidence, MetaField, PageMetadata, WebLink, WebLinkType};
 use super::url;
-use weave_core::prelude::WeaveError;
-
-fn err(code: &'static str, message: impl Into<String>) -> WeaveError {
-    WeaveError::io(code, message).with_location("web::html")
-}
-
 const MAX_LINKS: usize = 5000;
 const NONCONTENT: [&str; 4] = ["script", "style", "noscript", "template"];
 

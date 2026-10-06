@@ -11,7 +11,6 @@ use ego_tree::NodeRef as EgoNodeRef;
 use scraper::{ElementRef, Html, Node};
 
 use super::html::resolve_relative;
-use super::url;
 
 /// 表格状态（GFM：首行 = 表头 ⇒ 其后补 `---` 分隔行）。
 struct TableState {
