@@ -1104,5 +1104,8 @@
   "notif.clear": "Clear all",
   "notif.dismiss": "Dismiss",
   "notif.open": "Open",
-  "app.paletteHint": "Press Ctrl+K or Ctrl+P for commands"
+  "app.paletteHint": "Press Ctrl+K or Ctrl+P for commands",
+  "smart.empty": "No analysis yet. Enter file or folder paths above and press Analyze — suggestions appear here for review.",
+  "glint.recent.hint": "Captures appear here after your first capture.",
+  "smart.noSuggestions": "No suggestions for this mode — the analyzed files look already well-organized (or evidence was insufficient §9)."
 }

@@ -229,6 +229,9 @@ export function SmartPanel({ onOperationDone }: SmartPanelProps) {
                             {t("smart.previewPlan", { count: accepted.size })}
                         </button>
                     </div>
+                    {result.suggestions.length === 0 ? (
+                        <p style={{ fontSize: 12 }}>{t("smart.noSuggestions")}</p>
+                    ) : (
                     <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                         <tbody>
                             {result.suggestions.slice(0, 100).map((s: SmartSuggestion) => (
@@ -257,6 +260,7 @@ export function SmartPanel({ onOperationDone }: SmartPanelProps) {
                             ))}
                         </tbody>
                     </table>
+                    )}
 
                     {/* Plan 预览 + 执行（§22：经 M2.0 执行核心） */}
                     {plans ? (

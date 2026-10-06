@@ -1104,5 +1104,8 @@
   "notif.clear": "清空全部",
   "notif.dismiss": "关闭",
   "notif.open": "打开",
-  "app.paletteHint": "按 Ctrl+K 或 Ctrl+P 打开命令面板"
+  "app.paletteHint": "按 Ctrl+K 或 Ctrl+P 打开命令面板",
+  "smart.empty": "尚未分析。在上方输入文件/目录路径并点击分析——建议会出现在这里供确认。",
+  "glint.recent.hint": "首次截图后，最近捕获会出现在这里。",
+  "smart.noSuggestions": "该模式下无建议——被分析的文件看起来已井然有序（或证据不足 §9）。"
 }
