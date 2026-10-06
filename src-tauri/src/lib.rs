@@ -5,6 +5,7 @@
 //! 单元测试放在 `tests/`（集成测试目标）——测试可执行文件需要嵌入
 //! common-controls manifest 才能在 Windows 上启动（见 build.rs）。
 
+pub mod agent;
 pub mod app_info;
 pub mod archive_service;
 pub mod batch_service;
