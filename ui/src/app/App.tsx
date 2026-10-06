@@ -18,6 +18,7 @@ import { ArchivePanel } from "../features/archive/ArchivePanel";
 import { AgentPanel } from "../features/agent/AgentPanel";
 import { RecipePanel } from "../features/recipe/RecipePanel";
 import { GlintPanel } from "../features/glint/GlintPanel";
+import { WispPanel } from "../features/wisp/WispPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -85,6 +86,7 @@ function App() {
     | "agent"
     | "recipes"
     | "glint"
+    | "wisp"
     | "text"
     | "data"
     | "image"
@@ -118,6 +120,7 @@ function App() {
       ["agent", "nav.agent", "agent background scheduler 后台 调度"],
       ["recipes", "nav.recipes", "recipe automation 配方 自动化"],
       ["glint", "nav.glint", "glint screenshot capture 截图 屏幕捕获"],
+      ["wisp", "nav.wisp", "wisp paste guard sensitive 敏感 粘贴防护 剪贴板"],
       ["text", "nav.text", "text editor 文本 format"],
       ["data", "nav.data", "csv json data 数据"],
       ["image", "nav.image", "image resize convert 图片"],
@@ -177,6 +180,33 @@ function App() {
       category: "tools",
       keywords: ["capture", "window", "screenshot", "窗口截图", "截图"],
       run: () => glintCapture("window"),
+    });
+    // M2.9 §31：Paste Guard 命令（状态面板如实呈现 enabled/paused）
+    upsertCommand({
+      id: "wisp.open",
+      labelKey: "nav.wisp",
+      category: "tools",
+      keywords: ["wisp", "paste", "guard", "敏感", "粘贴", "防护"],
+      run: () => setView("wisp"),
+    });
+    upsertCommand({
+      id: "wisp.toggle-paused",
+      labelKey: "wisp.action.togglePaused",
+      category: "tools",
+      keywords: ["wisp", "pause", "resume", "暂停", "恢复"],
+      run: () => {
+        setView("wisp");
+        void commands.wispStatus().then((st) => {
+          void commands.wispSetPaused(!(st.paused ?? false));
+        });
+      },
+    });
+    upsertCommand({
+      id: "wisp.recent-events",
+      labelKey: "wisp.events.title",
+      category: "tools",
+      keywords: ["wisp", "security", "events", "安全", "事件"],
+      run: () => setView("wisp"),
     });
   }, []);
   const startHash = (path: string): void => {
@@ -598,6 +628,10 @@ function App() {
 
       {view === "glint" ? (
         <GlintPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
+      ) : null}
+
+      {view === "wisp" ? (
+        <WispPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
 
       {view === "agent" ? (
