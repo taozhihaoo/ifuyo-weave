@@ -10,7 +10,7 @@
 //! - **取消**（§17）：条目间安全点；取消 ⇒ 删临时件 + Cancelled 状态。
 //! - 复用：zip 8.6（读写）、weave-files::hash（验证）、M2.0 执行纪律。
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use weave_core::prelude::{CancellationToken, WeaveError};
@@ -257,7 +257,7 @@ pub fn create_zip(
     Ok(ArchiveCreateResult {
         output: plan.output.clone(),
         file_count: expected as u64,
-        dir_count: dir_count,
+        dir_count,
         input_bytes,
         archive_bytes,
         failed_files,
