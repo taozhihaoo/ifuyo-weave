@@ -76,14 +76,15 @@ impl AppState {
             privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
             archive_results: std::sync::Arc::new(crate::archive_service::ArchiveResultCache::new()),
             agent: {
-                let mut a = agent;
-                if let Ok(mut clip) = a.clipboard.inner.try_lock() {
+                let a = agent;
+                let mut arc = std::sync::Arc::new(a);
+                if let Ok(mut clip) = arc.clipboard.inner.try_lock() {
                     clip.bind_flags(
                         std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                         std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
                     );
                 }
-                std::sync::Arc::new(a)
+                arc
             },
             notifications: std::sync::Arc::new(crate::agent_service::NotificationCenter::new()),
         }
