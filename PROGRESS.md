@@ -1126,3 +1126,41 @@ Known Limitations（P1/P2）:
 - HTML 捕获未做（arboard 无 HTML 读取——模型支持 kind，平台层诚实降级）
 - 来源应用/排除应用未做（§16/§43：模型字段已留位，不伪造检测）
 - 轮询 CPU（1s 文本+5s 图像节流）——事件驱动需 unsafe，留 M2.6 评估
+
+## M2.4 Privacy / Share Preflight（2.0）
+
+Scope: 分享前隐私预检——Scan→Findings(Confirmed/Suspected/Unknown 三级证据)→
+Review→Export Safe Copy（原文件零接触）→Re-scan 对比→Audit。Detection 与
+Response 分离（§53）；无第二套执行/审计系统；Out of Scope 全部未越（§71）。
+
+提交链: P1 a36a518 (weave-privacy 域模型+模式检测+M2.3 原语共享重构) /
+d0be933/703bce7 (fixes) / P2 aaf0c3f (五格式扫描器 7 测试) / P3 11d1648
+(cleanup 变换+verify+死循环修复) / P4 5f8f0a7 (privacy_service IPC) /
+P5 6c65858 (SharePreflight 页+i18n) / P6 (perf+总结+PROGRESS)。
+
+关键实现:
+
+- **统一 Finding**：稳定指纹（hash(relPath+cat+sub+loc+evidenceIdentity §28)）、
+  EvidenceLevel 三级、CleanupAction 风险分级+推荐契约（§34 仅低风险 Confirmed）
+- **五格式扫描**：image（M6 inspect GPS/EXIF/ICC，GPS=High）/office（ZIP 包
+  core/app+隐藏表/修订/批注 scan-only §9）/pdf（lopdf Info，加密→明示不可查/
+  text（位置级模式，误报矩阵 §60 测试固化）/zip（深度 1 有界 §40）
+- **Safe Copy 链**（§21/§22/§36/§42）：stale 重验→变换→verify_safe_copy→
+  atomic_write→输出已存在拒绝→事务（undo=删 Safe Copy）→历史仅路径/计数
+- **Re-scan**（§26/§27）：fingerprint 对比 Resolved/Remaining/New
+- **UI**：finding 列表（§68 层级）+默认勾选推荐+not-fully-checked 明示+
+  honest disclaimer（§25）
+
+Quality:
+
+- 全工作区 42 套件 0 failed；weave-privacy 24 单元（含误报矩阵/死循环回归）
+  + 1 perf（10k 行 23ms 线性）
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 通过
+- 交付文档：Spec/ifuyo Weave 2.0 M2.4 Privacy Share Preflight 实施总结.md
+  （§74 格式×Finding×Cleanup 如实清单 + 已确认/部分/不支持/启发式分级）
+
+Known Limitations（P1/P2）:
+
+- 隐藏内容/修订/批注删除 = scan-only（§9 明确）；PDF 元数据清理 scan-only
+- 导出 stale 快照 UI 未传 ⇒ 服务端现读 stat（窗口极小+输出永不覆盖，已注释）
+- 嵌套 archive 不递归（§40 设计选择）
