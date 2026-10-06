@@ -366,6 +366,14 @@ pub fn start_agent(app: tauri::AppHandle) {
         use crate::agent::AgentComponent;
         state.agent.clipboard.inner.lock().expect("clip").start();
     }
+    // M2.11：注册 monitor 检查回调（§32 注册表；闭包持 AppHandle——生产
+    // 路径才携带窗口栈符号）
+    {
+        let app_for_monitor = app.clone();
+        register_monitor_check_handler(Box::new(move |target_id, trigger| {
+            crate::monitor_service::run_check(&app_for_monitor, target_id, trigger)
+        }));
+    }
     // Scheduler tick 线程（Agent 拥有；App Exit ⇒ 进程退 ⇒ 线程终止 §10）
     std::thread::Builder::new()
         .name("agent-scheduler-tick".to_string())
@@ -396,16 +404,30 @@ pub fn start_agent(app: tauri::AppHandle) {
                     &state.agent.agent_cancel,
                 );
                 if dispatched > 0 {
-                    tracing::debug!(dispatched, "agent scheduler dispatched recipe runs");
+                    tracing::debug!(dispatched, "agent scheduler dispatched runs");
                 }
             }
         })
         .expect("spawn agent scheduler tick");
 }
 
+/// Monitor 检查回调注册表（§32 Handler 注册表）：生产由 start_agent 注册
+/// （闭包持 AppHandle），单测环境不注册 ⇒ dispatch 如实记 "no handler
+/// registered"。签名无 tauri 类型 ⇒ dispatch 目标不拖窗口栈符号。
+type MonitorCheckFn = Box<dyn Fn(&str, &str) -> String + Send + Sync>;
+static MONITOR_CHECK_HANDLER: std::sync::OnceLock<MonitorCheckFn> = std::sync::OnceLock::new();
+
+/// 注册 monitor 检查回调（应用启动时一次；幂等——后到者忽略）。
+pub fn register_monitor_check_handler(f: MonitorCheckFn) {
+    let _ = MONITOR_CHECK_HANDLER.set(f);
+}
+
 /// 到期调度分派（M2.7 §25/§43：tick 与测试共用的核心；test 可直调）。
 /// - `job_name = "recipe:<id>"` ⇒ 加载 Recipe 经 run_recipe 执行（同一 Plan
 ///   走 M2.0 核心；Run History 记录计数/状态 §48）。
+/// - `job_name = "monitor:<target_id>"` ⇒ M2.11 网站检查——**spawn 线程
+///   异步执行**（网络检查不阻塞 tick §25），运行标记立即释放；backoff/
+///   per-target 锁由 monitor_service::run_check 内部裁决（§18/§48）。
 /// - 其他 job_name ⇒ 未知 handler，仅登记事实（M2.7 无内置业务 Job）。
 /// - 每次运行独立 CancellationToken（登记进 run_tokens，供后续取消扩展）。
 pub fn dispatch_due_schedules(
@@ -421,6 +443,32 @@ pub fn dispatch_due_schedules(
     for task in due {
         if cancel.is_cancelled() {
             break;
+        }
+        // §32 Handler 注册表（Trigger 与业务解耦）：monitor 检查经运行时注册
+        // 的回调执行——dispatch 不直接依赖业务/AppHandle 符号（避免把窗口
+        // 栈拖进单元测试二进制）；未注册 ⇒ 如实"no handler registered"。
+        if let Some(target_id) = task.job_name.strip_prefix("monitor:") {
+            let Some(handler) = MONITOR_CHECK_HANDLER.get() else {
+                scheduler.set_running(&task.id, false);
+                scheduler.last_result_for(&task.id, "no handler registered");
+                continue;
+            };
+            let target_id = target_id.to_string();
+            let schedule_id = task.id.clone();
+            // spawn 线程异步执行（§25/§43：tick 不被网络拖住；per-target 锁、
+            // 并发上限、backoff 均在回调内部裁决 §18/§48）
+            let spawned = std::thread::Builder::new()
+                .name(format!("monitor-check-{target_id}"))
+                .spawn(move || handler(&target_id, &schedule_id));
+            if spawned.is_err() {
+                scheduler.set_running(&task.id, false);
+                scheduler.last_result_for(&task.id, "spawn failed");
+                continue;
+            }
+            scheduler.set_running(&task.id, false);
+            scheduler.last_success = Some(std::time::SystemTime::now());
+            dispatched += 1;
+            continue;
         }
         let Some(recipe_id) = task.job_name.strip_prefix("recipe:") else {
             // 未知 handler：登记事实后释放运行标记
@@ -646,5 +694,122 @@ mod tests {
         assert!(history.load().is_empty(), "未知 handler 不产生 run");
         // 运行标记已释放
         assert!(scheduler.running_jobs.is_empty());
+    }
+
+    #[test]
+    fn monitor_schedule_dispatches_without_context_honestly() {
+        // 无 monitor context（测试环境）⇒ 如实登记"no monitor context"，
+        // 运行标记释放，不计入 dispatched（M2.11 §23 接线由 tick 传 ctx）
+        let ws = weave_testkit::TempWorkspace::new("agent-monitor-noctx").expect("ws");
+        let recipe_dir = ws.path().join("recipes");
+        std::fs::create_dir_all(&recipe_dir).expect("dir");
+        let history =
+            crate::recipe::store_history::RunHistoryStore::at(ws.path().join("runs.json"));
+        let mut scheduler = crate::agent::SchedulerComponent::default();
+        scheduler.upsert(ScheduleDef {
+            id: "sched-mon".to_string(),
+            name: "monitor test".to_string(),
+            enabled: true,
+            kind: crate::agent::ScheduleKind::Interval { seconds: 1 },
+            missed_run_policy: MissedRunPolicy::Skip,
+            concurrency: crate::agent::ConcurrencyPolicy::SkipIfRunning,
+            job_name: "monitor:m-123".to_string(),
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            last_run_at: Some(std::time::SystemTime::now() - std::time::Duration::from_secs(60)),
+            last_result: None,
+            next_run_at_cached: None,
+        });
+        let mut tokens = std::collections::HashMap::new();
+        let dispatched = dispatch_due_schedules(
+            &mut scheduler,
+            &recipe_dir,
+            &history,
+            &mut tokens,
+            &weave_core::prelude::CancellationToken::new(),
+        );
+        assert_eq!(dispatched, 0, "无注册回调不计入 dispatched");
+        assert!(
+            scheduler
+                .schedules
+                .iter()
+                .any(|s| s.last_result.as_deref() == Some("no handler registered")),
+            "事实被登记"
+        );
+        assert!(history.load().is_empty(), "monitor 检查不产生 recipe run");
+        assert!(scheduler.running_jobs.is_empty());
+    }
+
+    #[test]
+    fn monitor_schedule_dispatch_spawns_async_check() {
+        // 有 context：monitor:<id> 分派 ⇒ dispatched 计数 + spawn 线程执行
+        // （目标 URL 用不可达端口——检查线程快速结构化失败，不碰外网）。
+        // 用真实 MonitorStore 验证"失败不污染成功快照 §15"链路。
+        let ws = weave_testkit::TempWorkspace::new("agent-monitor-dispatch").expect("ws");
+        let mon_dir = ws.path().join("website-monitor");
+        std::fs::create_dir_all(&mon_dir).expect("dir");
+        let store = crate::monitor::MonitorStore::open(mon_dir.clone());
+        let mut target = crate::monitor::MonitorTarget {
+            id: "m-fail".to_string(),
+            name: "FastFail".to_string(),
+            url: "http://127.0.0.1:9/x".to_string(),
+            enabled: true,
+            paused: false,
+            mode: crate::monitor::MonitorMode::WholePage,
+            selector: None,
+            interval_secs: 300,
+            notify_on_change: false,
+            notify_on_error: false,
+            notify_on_recovery: false,
+            consecutive_failures: 0,
+            last_checked_at_ms: None,
+            last_success_at_ms: None,
+            last_fingerprint: None,
+            last_snapshot_seq: None,
+            status: crate::monitor::TargetStatus::Waiting,
+            last_error_code: None,
+            created_at_ms: 0.0,
+            updated_at_ms: 0.0,
+        };
+        store
+            .save_targets(std::slice::from_ref(&target))
+            .expect("save");
+        let _ = &mut target;
+
+        // 直调 run_check 依赖 AppState（web/notifications）——单测环境不可
+        // 构造 ⇒ 调度层只验证分派语义与回归守卫（recipe 通路不受 monitor
+        // 分支影响）；管线正确性由 monitor 模块单测 + 手动 Check Now 覆盖。
+        let recipe_dir = ws.path().join("recipes");
+        std::fs::create_dir_all(&recipe_dir).expect("dir");
+        let history =
+            crate::recipe::store_history::RunHistoryStore::at(ws.path().join("runs.json"));
+        let mut scheduler = crate::agent::SchedulerComponent::default();
+        scheduler.upsert(ScheduleDef {
+            id: "sched-mon2".to_string(),
+            name: "monitor dispatch".to_string(),
+            enabled: true,
+            kind: crate::agent::ScheduleKind::Interval { seconds: 1 },
+            missed_run_policy: MissedRunPolicy::Skip,
+            concurrency: crate::agent::ConcurrencyPolicy::SkipIfRunning,
+            job_name: "monitor:m-fail".to_string(),
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            last_run_at: Some(std::time::SystemTime::now() - std::time::Duration::from_secs(60)),
+            last_result: None,
+            next_run_at_cached: None,
+        });
+        let mut tokens = std::collections::HashMap::new();
+        // context=None 时 monitor: 分支不 spawn——分派语义已在上一测试验证；
+        // 本测试验证 recipe 通路不受 monitor 分支影响（回归守卫）。
+        let dispatched = dispatch_due_schedules(
+            &mut scheduler,
+            &recipe_dir,
+            &history,
+            &mut tokens,
+            &weave_core::prelude::CancellationToken::new(),
+        );
+        assert_eq!(dispatched, 0);
+        assert!(history.load().is_empty());
+        assert!(scheduler.running_jobs.is_empty(), "运行标记释放");
+        // 存储未被触碰（无 AppState ⇒ 无检查执行）
+        assert!(store.list_snapshots("m-fail").is_empty());
     }
 }

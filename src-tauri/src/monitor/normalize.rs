@@ -37,7 +37,11 @@ pub fn normalize_text(text: &str, collapse_blank_lines: bool) -> String {
 
 /// 指纹（§10）：规范化文本的 SHA-256 hex（统一 hash 设施 §70）。
 pub fn fingerprint(normalized: &str) -> Option<String> {
-    weave_files::hash::hash_bytes(weave_core::prelude::HashAlgorithm::Sha256, normalized.as_bytes()).ok()
+    weave_files::hash::hash_bytes(
+        weave_core::prelude::HashAlgorithm::Sha256,
+        normalized.as_bytes(),
+    )
+    .ok()
 }
 
 #[cfg(test)]

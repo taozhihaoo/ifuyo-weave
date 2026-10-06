@@ -10,11 +10,11 @@
 
 use scraper::{Html, Selector};
 
-use crate::web::fetch::{fetch, FetchLimits};
+use crate::web::fetch::{FetchLimits, fetch};
 
 use super::model::{
-    magnitude_for, summarize, ChangeMagnitude, CheckResult, MonitorChangeEvent, MonitorMode,
-    MonitorSnapshot, MonitorTarget,
+    ChangeMagnitude, CheckResult, MonitorChangeEvent, MonitorMode, MonitorSnapshot, MonitorTarget,
+    magnitude_for, summarize,
 };
 use super::normalize::{fingerprint, normalize_text};
 use super::store::MonitorStore;
@@ -32,7 +32,11 @@ pub struct CheckOutcome {
 }
 
 /// 按 mode 提取比较对象文本（§5；§55 基于真正比较对象）。
-pub fn extract_by_mode(html_text: &str, mode: MonitorMode, selector: Option<&str>) -> Result<String, String> {
+pub fn extract_by_mode(
+    html_text: &str,
+    mode: MonitorMode,
+    selector: Option<&str>,
+) -> Result<String, String> {
     let dom = Html::parse_document(html_text);
     match mode {
         MonitorMode::WholePage => Ok(crate::web::html::plain_text(&dom)),
@@ -125,10 +129,22 @@ pub fn check_target(
     let status = response.info.status;
     let (result, code) = match status {
         s if (200..300).contains(&s) => (None, None),
-        401 | 403 => (Some(CheckResult::Blocked), Some(format!("web.httpStatus:{status}"))),
-        404 => (Some(CheckResult::FetchFailed), Some(format!("web.httpNotFound:{status}"))),
-        s if (400..500).contains(&s) => (Some(CheckResult::FetchFailed), Some(format!("web.httpStatus:{status}"))),
-        s => (Some(CheckResult::FetchFailed), Some(format!("web.httpStatus:{status}"))),
+        401 | 403 => (
+            Some(CheckResult::Blocked),
+            Some(format!("web.httpStatus:{status}")),
+        ),
+        404 => (
+            Some(CheckResult::FetchFailed),
+            Some(format!("web.httpNotFound:{status}")),
+        ),
+        s if (400..500).contains(&s) => (
+            Some(CheckResult::FetchFailed),
+            Some(format!("web.httpStatus:{status}")),
+        ),
+        s => (
+            Some(CheckResult::FetchFailed),
+            Some(format!("web.httpStatus:{status}")),
+        ),
     };
     if let Some(result) = result {
         return failure(result, code.expect("code"));
@@ -143,16 +159,29 @@ pub fn check_target(
     }
 
     // 解码 + 提取（编码失败容忍——decode_body 已 best-effort §53）
-    let charset_hint = if response.info.charset.is_empty() { None } else { Some(response.info.charset.clone()) };
+    let charset_hint = if response.info.charset.is_empty() {
+        None
+    } else {
+        Some(response.info.charset.clone())
+    };
     let crate::web::fetch::FetchResponse { info, body } = response;
-    let (raw_text, _charset, _source) = crate::web::fetch::decode_body(&body, charset_hint.as_deref());
+    let (raw_text, _charset, _source) =
+        crate::web::fetch::decode_body(&body, charset_hint.as_deref());
     let extracted = match extract_by_mode(&raw_text, target.mode, target.selector.as_deref()) {
         Ok(t) => t,
-        Err(message) => return failure(CheckResult::Unsupported, format!("web.extractFailed:{message}")),
+        Err(message) => {
+            return failure(
+                CheckResult::Unsupported,
+                format!("web.extractFailed:{message}"),
+            );
+        }
     };
     let normalized = normalize_text(&extracted, true);
     let Some(fp) = fingerprint(&normalized) else {
-        return failure(CheckResult::FetchFailed, "web.fingerprintFailed".to_string());
+        return failure(
+            CheckResult::FetchFailed,
+            "web.fingerprintFailed".to_string(),
+        );
     };
 
     // 与最近成功快照比较（§10 fast-path）
@@ -173,11 +202,16 @@ pub fn check_target(
         result
     };
 
-    let previous_lines = previous_payload.as_deref().map(|p| p.lines().count()).unwrap_or(0) as u32;
+    let previous_lines = previous_payload
+        .as_deref()
+        .map(|p| p.lines().count())
+        .unwrap_or(0) as u32;
     let magnitude = magnitude_for(added, removed, previous_lines);
     // 有正文才值得存 payload：Initial/ContentChanged/Recovered-有变化
     let store_payload = matches!(result, CheckResult::Initial | CheckResult::ContentChanged)
-        || (result == CheckResult::Recovered && !normalized.is_empty() && target.last_fingerprint.as_deref() != Some(fp.as_str()));
+        || (result == CheckResult::Recovered
+            && !normalized.is_empty()
+            && target.last_fingerprint.as_deref() != Some(fp.as_str()));
     let snapshot = MonitorSnapshot {
         target_id: target.id.clone(),
         seq: next_seq,
@@ -224,7 +258,11 @@ pub fn build_event(
             outcome.result,
             outcome.added_lines,
             outcome.removed_lines,
-            outcome.snapshot.as_ref().map(|s| s.status_code).unwrap_or(0),
+            outcome
+                .snapshot
+                .as_ref()
+                .map(|s| s.status_code)
+                .unwrap_or(0),
         ),
     }
 }

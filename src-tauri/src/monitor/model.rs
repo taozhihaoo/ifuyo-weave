@@ -26,6 +26,8 @@ pub enum TargetStatus {
     Checking,
     /// 已启用，等待下次计划检查。
     Idle,
+    /// 最近一次检查发现内容变化（§47 状态机含 Changed）。
+    Changed,
     /// 暂停（不自动检查；历史保留 §64）。
     Paused,
     /// 已禁用（§65 与 Paused/Deleted 区分）。

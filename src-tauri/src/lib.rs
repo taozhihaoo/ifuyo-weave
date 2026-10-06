@@ -28,6 +28,8 @@ pub mod logging;
 pub mod m2_commands;
 pub mod m3_commands;
 pub mod m4_commands;
+pub mod monitor;
+pub mod monitor_service;
 pub mod ops_dto;
 pub mod privacy_service;
 pub mod recipe;
@@ -39,7 +41,6 @@ pub mod text_dto;
 pub mod text_service;
 pub mod tools;
 pub mod utilities_service;
-pub mod monitor;
 pub mod web;
 pub mod web_service;
 pub mod wisp;
@@ -151,6 +152,20 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         web_service::web_batch_result,
         web_service::web_apply_config,
         web_service::web_get_config,
+        monitor_service::monitor_list,
+        monitor_service::monitor_create,
+        monitor_service::monitor_update,
+        monitor_service::monitor_delete,
+        monitor_service::monitor_set_paused,
+        monitor_service::monitor_set_enabled,
+        monitor_service::monitor_check_now,
+        monitor_service::monitor_history,
+        monitor_service::monitor_changes,
+        monitor_service::monitor_diff,
+        monitor_service::monitor_test_selector,
+        monitor_service::monitor_export,
+        monitor_service::monitor_apply_config,
+        monitor_service::monitor_get_config,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,
@@ -266,6 +281,11 @@ pub fn run() {
                 wisp_service::WispRuntime::open(history_dir.join("wisp"), config.wisp.clone());
             // M2.10：Web 运行时（唯一网络出口经 web::fetch §17）
             let web_runtime = web_service::WebRuntime::new(config.web.clone());
+            // M2.11：Monitor 运行时（调度经 M2.6 Agent §23）
+            let monitor_runtime = monitor_service::MonitorRuntime::new(
+                history_dir.join("website-monitor"),
+                config.monitor.clone(),
+            );
             app.manage(state::AppState::new(
                 log_guard,
                 tools::build_file_tools_registry(),
@@ -273,7 +293,10 @@ pub fn run() {
                 agent_runtime,
                 wisp_runtime,
                 web_runtime,
+                monitor_runtime,
             ));
+            // M2.11：恢复监控调度（§23 Agent + Scheduler 真实消费者）
+            monitor_service::register_all_schedules(app.handle());
             if enabled {
                 clipboard_service::start_monitor(app.handle().clone());
             }

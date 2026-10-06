@@ -142,6 +142,15 @@ impl WebRuntime {
         *self.latest.lock().expect("web latest") = Some(slot);
     }
 
+    /// 最近抓取的原始 HTML（M2.11 selector 测试 §34 复用；无 ⇒ None）。
+    pub fn latest_raw_html(&self) -> Option<String> {
+        self.latest
+            .lock()
+            .expect("web latest")
+            .as_ref()
+            .and_then(|s| s.raw_html.clone())
+    }
+
     pub fn store_batch_report(&self, job_id: &str, report: WebBatchReport) {
         {
             let mut order = self.report_order.lock().expect("web report order");

@@ -19,9 +19,10 @@ pub mod model;
 pub mod normalize;
 pub mod store;
 
+pub use check::{build_event, check_target, extract_by_mode};
 pub use model::{
-    backoff_delay_secs, magnitude_for, summarize, ChangeMagnitude, CheckResult, MonitorChangeEvent,
-    MonitorMode, MonitorSnapshot, MonitorTarget, TargetStatus, MIN_INTERVAL_SECS,
+    ChangeMagnitude, CheckResult, MIN_INTERVAL_SECS, MonitorChangeEvent, MonitorMode,
+    MonitorSnapshot, MonitorTarget, TargetStatus, backoff_delay_secs, magnitude_for, summarize,
 };
 pub use normalize::{fingerprint, normalize_text};
-pub use store::{valid_target_id, MonitorStore, MAX_EVENTS, MAX_SNAPSHOTS_PER_TARGET};
+pub use store::{MAX_EVENTS, MAX_SNAPSHOTS_PER_TARGET, MonitorStore, valid_target_id};

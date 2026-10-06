@@ -117,7 +117,10 @@ impl MonitorStore {
         }
         write_json(
             &self.snapshot_path(&snapshot.target_id, snapshot.seq),
-            &SnapshotFile { meta: snapshot, payload },
+            &SnapshotFile {
+                meta: snapshot,
+                payload,
+            },
         )
     }
 
@@ -182,7 +185,11 @@ impl MonitorStore {
             return 0;
         }
         let latest_seq = snapshots.last().map(|s| s.seq);
-        let latest_payload_seq = snapshots.iter().rev().find(|s| s.payload_file.is_some()).map(|s| s.seq);
+        let latest_payload_seq = snapshots
+            .iter()
+            .rev()
+            .find(|s| s.payload_file.is_some())
+            .map(|s| s.seq);
         let total = snapshots.len() as u64;
         let mut kept = 0u64;
         let mut removed = 0usize;
@@ -209,7 +216,8 @@ impl MonitorStore {
     pub fn delete_target_data(&self, target_id: &str) -> Result<(), WeaveError> {
         let dir = self.snapshot_dir(target_id);
         if dir.exists() {
-            std::fs::remove_dir_all(dir).map_err(|e| err("monitor.deleteFailed", format!("{e}")))?;
+            std::fs::remove_dir_all(dir)
+                .map_err(|e| err("monitor.deleteFailed", format!("{e}")))?;
         }
         Ok(())
     }
@@ -217,9 +225,7 @@ impl MonitorStore {
 
 /// target_id 合法性（存储路径安全：仅字母数字与连字符）。
 pub fn valid_target_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 64
-        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 #[cfg(test)]
@@ -264,7 +270,11 @@ mod tests {
             text_size: 100,
             duration_ms: 5.0,
             result,
-            payload_file: if with_payload { Some(format!("{seq}.txt")) } else { None },
+            payload_file: if with_payload {
+                Some(format!("{seq}.txt"))
+            } else {
+                None
+            },
             truncated: false,
         }
     }
@@ -273,7 +283,9 @@ mod tests {
     fn targets_roundtrip_and_corrupt_isolation() {
         let ws = weave_testkit::TempWorkspace::new("mon-store").expect("ws");
         let store = MonitorStore::open(ws.path().to_path_buf());
-        store.save_targets(&[target("t1"), target("t2")]).expect("save");
+        store
+            .save_targets(&[target("t1"), target("t2")])
+            .expect("save");
         assert_eq!(store.load_targets().len(), 2);
         // 损坏 ⇒ 隔离为空，不 panic
         std::fs::write(store.targets_path(), b"{broken").expect("w");
@@ -286,7 +298,10 @@ mod tests {
         let ws = weave_testkit::TempWorkspace::new("mon-snap").expect("ws");
         let store = MonitorStore::open(ws.path().to_path_buf());
         store
-            .save_snapshot(&snapshot("t1", 1, CheckResult::ContentChanged, true), Some("hello body"))
+            .save_snapshot(
+                &snapshot("t1", 1, CheckResult::ContentChanged, true),
+                Some("hello body"),
+            )
             .expect("save");
         store
             .save_snapshot(&snapshot("t1", 2, CheckResult::NoChange, false), None)
@@ -309,16 +324,26 @@ mod tests {
         // 4 条：1(有 payload 旧)、2、3(有 payload)、4 最新(无 payload)
         for seq in 1..=4u64 {
             let with_payload = seq == 1 || seq == 3;
-            let result = if with_payload { CheckResult::ContentChanged } else { CheckResult::NoChange };
+            let result = if with_payload {
+                CheckResult::ContentChanged
+            } else {
+                CheckResult::NoChange
+            };
             store
-                .save_snapshot(&snapshot("t1", seq, result, with_payload), if with_payload { Some("x") } else { None })
+                .save_snapshot(
+                    &snapshot("t1", seq, result, with_payload),
+                    if with_payload { Some("x") } else { None },
+                )
                 .expect("save");
         }
         let removed = store.retain_snapshots("t1", 2, f64::MAX, 99999.0);
         assert!(removed >= 1);
         let left = store.list_snapshots("t1");
         assert!(left.iter().any(|s| s.seq == 4), "最新必须保留 §28");
-        assert!(left.iter().any(|s| s.seq == 3), "最近有正文快照必须保留（diff 基线）");
+        assert!(
+            left.iter().any(|s| s.seq == 3),
+            "最近有正文快照必须保留（diff 基线）"
+        );
         assert!(!left.iter().any(|s| s.seq == 1), "旧 payload 被清理");
     }
 

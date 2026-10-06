@@ -54,6 +54,8 @@ pub struct AppState {
     pub wisp: std::sync::Arc<crate::wisp_service::WispRuntime>,
     /// M2.10：Web 运行时（配置快照/单文档槽/批量报告；无自建线程）。
     pub web: std::sync::Arc<crate::web_service::WebRuntime>,
+    /// M2.11：Website Monitor 运行时（存储/配置/执行锁）。
+    pub monitor: std::sync::Arc<crate::monitor_service::MonitorRuntime>,
 }
 
 impl AppState {
@@ -64,6 +66,7 @@ impl AppState {
         agent: crate::agent::AgentRuntime,
         wisp: crate::wisp_service::WispRuntime,
         web: crate::web_service::WebRuntime,
+        monitor: crate::monitor_service::MonitorRuntime,
     ) -> Self {
         Self {
             _log_guard: log_guard,
@@ -85,6 +88,7 @@ impl AppState {
             notifications: std::sync::Arc::new(crate::agent_service::NotificationCenter::new()),
             wisp: std::sync::Arc::new(wisp),
             web: std::sync::Arc::new(web),
+            monitor: std::sync::Arc::new(monitor),
         }
     }
 }

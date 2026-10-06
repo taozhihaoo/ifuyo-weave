@@ -43,6 +43,9 @@ pub struct AppConfig {
     /// M2.10：Web 设置（§84）。
     #[serde(default)]
     pub web: WebConfig,
+    /// M2.11：Website Monitor 设置（§68）。
+    #[serde(default)]
+    pub monitor: MonitorConfig,
 }
 
 /// 剪贴板捕获设置（§17/§20/§42：隐私 P0——可停、可清、增长有界）。
@@ -124,6 +127,37 @@ impl Default for WispConfig {
     }
 }
 
+/// M2.11 Website Monitor 设置（§68：默认保守；target 专属设置优先）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MonitorConfig {
+    pub default_interval_secs: u32,
+    pub timeout_secs: u32,
+    pub max_response_mb: u32,
+    pub max_concurrent_checks: u32,
+    pub max_snapshots_per_target: u32,
+    pub retention_days: u32,
+    pub notify_on_change: bool,
+    pub notify_on_error: bool,
+    pub notify_on_recovery: bool,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        Self {
+            default_interval_secs: 1800,
+            timeout_secs: 30,
+            max_response_mb: 5,
+            max_concurrent_checks: 4,
+            max_snapshots_per_target: 50,
+            retention_days: 30,
+            notify_on_change: true,
+            notify_on_error: false,
+            notify_on_recovery: true,
+        }
+    }
+}
+
 /// M2.10 Web 设置（§84/§85：默认安全保守够用）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", default)]
@@ -164,6 +198,7 @@ impl Default for AppConfig {
             clipboard: ClipboardConfig::default(),
             wisp: WispConfig::default(),
             web: WebConfig::default(),
+            monitor: MonitorConfig::default(),
         }
     }
 }
