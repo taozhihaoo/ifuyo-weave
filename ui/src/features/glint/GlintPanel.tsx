@@ -53,6 +53,7 @@ export function GlintPanel({ onOperationDone }: GlintPanelProps) {
     const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
     const [freehand, setFreehand] = useState<[number, number][]>([]);
     const imgRef = useRef<HTMLImageElement | null>(null);
+    const [imgScale, setImgScale] = useState(0);
 
     const fail = useCallback((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);
@@ -161,7 +162,9 @@ export function GlintPanel({ onOperationDone }: GlintPanelProps) {
 
     // palette 捕获请求消费（tick 防重复触发；ref 避免闭包过期）
     const captureRef = useRef({ screen: captureScreen, window: captureWindow });
-    captureRef.current = { screen: captureScreen, window: captureWindow };
+    useEffect(() => {
+        captureRef.current = { screen: captureScreen, window: captureWindow };
+    }, [captureScreen, captureWindow]);
     const glintCaptureRequest = useAppStore((s) => s.glintCaptureRequest);
     const lastTickRef = useRef(0);
     useEffect(() => {
@@ -372,7 +375,16 @@ export function GlintPanel({ onOperationDone }: GlintPanelProps) {
               height: Math.abs(drag.y1 - drag.y0),
           }
         : null;
-    const imgScale = imgRef.current && previewUrl ? imgRef.current.clientWidth / imgRef.current.naturalWidth : 0;
+    // 缩放比经 state 维护（渲染期不读 ref——react-hooks/refs）
+    const updateImgScale = useCallback(() => {
+        const img = imgRef.current;
+        setImgScale(img && previewUrl && img.naturalWidth > 0 ? img.clientWidth / img.naturalWidth : 0);
+    }, [previewUrl]);
+    useEffect(() => {
+        updateImgScale();
+        window.addEventListener("resize", updateImgScale);
+        return () => window.removeEventListener("resize", updateImgScale);
+    }, [updateImgScale]);
 
     return (
         <section aria-label={t("glint.title")}>
@@ -487,6 +499,7 @@ export function GlintPanel({ onOperationDone }: GlintPanelProps) {
                             alt={current.fileName}
                             style={{ maxWidth: "100%", maxHeight: 480, display: "block", cursor: mode === "view" ? "default" : "crosshair" }}
                             draggable={false}
+                            onLoad={updateImgScale}
                         />
                         {/* 选区/标注拖拽框（显示坐标 = 图像坐标 × 缩放） */}
                         {regionRect && imgScale > 0 ? (
@@ -565,12 +578,18 @@ export function GlintPanel({ onOperationDone }: GlintPanelProps) {
                     {recent.map((c) => (
                         <div key={c.fileName} style={{ ...boxStyle, width: 168 }}>
                             {thumbs[c.fileName] ? (
-                                <img
-                                    src={thumbs[c.fileName]}
-                                    alt={c.fileName}
-                                    style={{ width: "100%", cursor: "pointer" }}
+                                <button
+                                    type="button"
                                     onClick={() => openCapture(c, "")}
-                                />
+                                    style={{ padding: 0, border: "none", background: "none", width: "100%" }}
+                                    aria-label={c.fileName}
+                                >
+                                    <img
+                                        src={thumbs[c.fileName]}
+                                        alt={c.fileName}
+                                        style={{ width: "100%", display: "block" }}
+                                    />
+                                </button>
                             ) : (
                                 <div style={{ width: "100%", height: 90, background: "var(--color-border)" }} />
                             )}
