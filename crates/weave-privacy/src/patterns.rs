@@ -272,3 +272,31 @@ mod tests {
         assert!(hits.iter().all(|h| h.line == 12));
     }
 }
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+
+    /// M2.4 §62：批量文本行检测（10k 行 × 混合内容）——线性即可。
+    #[test]
+    #[ignore = "perf: release 手动运行"]
+    fn perf_pattern_scan_10k_lines() {
+        let started = std::time::Instant::now();
+        let mut hits = 0usize;
+        for i in 0..10_000usize {
+            let line = match i % 5 {
+                0 => format!("contact user{i}@example.com"),
+                1 => format!(r"path C:\Users\user{i}\doc.txt"),
+                2 => format!("note the secret of recipe {i}"),
+                3 => format!("api_key = sk-val-{i}-12345678"),
+                _ => format!("plain line {i}"),
+            };
+            hits += scan_line(&line, i + 1).len();
+        }
+        eprintln!(
+            "PERF privacy-patterns@10k-lines: {:?} hits={hits}",
+            started.elapsed()
+        );
+        assert!(hits >= 6000);
+    }
+}
