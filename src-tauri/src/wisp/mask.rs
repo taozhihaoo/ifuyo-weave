@@ -101,7 +101,10 @@ mod tests {
     #[test]
     fn email_masks_local_part() {
         // 本地名 a••••f（等长替换；§40 示例为示意）
-        assert_eq!(mask_email("abcdef@gmail.com"), Some("a••••f@gmail.com".into()));
+        assert_eq!(
+            mask_email("abcdef@gmail.com"),
+            Some("a••••f@gmail.com".into())
+        );
         assert_eq!(mask_email("ab@x.com"), Some("ab••••@x.com".into()));
         assert_eq!(mask_email("no-at-sign"), None);
     }

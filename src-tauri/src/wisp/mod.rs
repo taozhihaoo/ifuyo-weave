@@ -23,10 +23,8 @@ pub use model::{
     Severity,
 };
 pub use risk::{
-    classify_app, evaluate, AppClass, AppRule, GlobalPolicy, PasteAction, PasteDecision,
-    PasteRisk, PolicyMode, TargetConfidence, TargetContext,
+    AppClass, AppRule, GlobalPolicy, PasteAction, PasteDecision, PasteRisk, PolicyMode,
+    TargetConfidence, TargetContext, classify_app, evaluate,
 };
-pub use rules::{analyze_text, DetectionToggles, ANALYZER_VERSION, RULESET_VERSION};
-pub use session::{
-    is_expired, precheck_restore, ProtectionSession, SessionPayload, SessionState,
-};
+pub use rules::{ANALYZER_VERSION, DetectionToggles, RULESET_VERSION, analyze_text};
+pub use session::{ProtectionSession, SessionPayload, SessionState, is_expired, precheck_restore};

@@ -19,7 +19,18 @@ pub enum SensitivityLevel {
 }
 
 /// 检测置信度（§39：可解释规则优先，不造复杂数学模型）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, specta::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    specta::Type,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum Confidence {
     Low,
@@ -28,7 +39,18 @@ pub enum Confidence {
 }
 
 /// 潜在风险严重度（检测侧；≠ 粘贴风险 §7）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, specta::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    specta::Type,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum Severity {
     Low,

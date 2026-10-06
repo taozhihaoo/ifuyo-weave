@@ -73,17 +73,36 @@ impl TargetContext {
 /// 按可执行文件名分类（§22 不依赖标题；表驱动，P1 可扩展）。
 /// 防御性内部小写化——调用方约定小写，函数自身不再依赖约定。
 pub fn classify_app(process_lower: &str) -> AppClass {
-    const BROWSERS: [&str; 8] = ["chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "safari", "360se"];
-    const TERMINALS: [&str; 6] = ["cmd", "powershell", "pwsh", "wt", "windowsterminal", "conhost"];
-    const EDITORS: [&str; 7] = ["code", "devenv", "notepad", "notepad++", "sublime_text", "idea", "rider"];
-    const CHAT: [&str; 7] = ["teams", "slack", "discord", "wechat", "weixin", "qq", "telegram"];
+    const BROWSERS: [&str; 8] = [
+        "chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "safari", "360se",
+    ];
+    const TERMINALS: [&str; 6] = [
+        "cmd",
+        "powershell",
+        "pwsh",
+        "wt",
+        "windowsterminal",
+        "conhost",
+    ];
+    const EDITORS: [&str; 7] = [
+        "code",
+        "devenv",
+        "notepad",
+        "notepad++",
+        "sublime_text",
+        "idea",
+        "rider",
+    ];
+    const CHAT: [&str; 7] = [
+        "teams", "slack", "discord", "wechat", "weixin", "qq", "telegram",
+    ];
     const OFFICE: [&str; 5] = ["winword", "excel", "powerpnt", "outlook", "wps"];
     let lower = process_lower.to_lowercase();
     let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
     let matches_group = |names: &[&str]| {
-        names
-            .iter()
-            .any(|g| stem == *g || stem.starts_with(&format!("{g}-")) || stem.starts_with(&format!("{g} ")))
+        names.iter().any(|g| {
+            stem == *g || stem.starts_with(&format!("{g}-")) || stem.starts_with(&format!("{g} "))
+        })
     };
     if matches_group(&BROWSERS) {
         AppClass::Browser
@@ -101,7 +120,18 @@ pub fn classify_app(process_lower: &str) -> AppClass {
 }
 
 /// 粘贴风险（§7：Low/Medium/High/Critical/Unknown）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, specta::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    specta::Type,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum PasteRisk {
     Low,
@@ -144,16 +174,10 @@ pub struct AppRule {
 }
 
 /// 全局策略输入（来自 WispConfig 的决策相关字段快照）。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct GlobalPolicy {
     pub block_critical: bool,
     pub app_rules: Vec<AppRule>,
-}
-
-impl Default for GlobalPolicy {
-    fn default() -> Self {
-        Self { block_critical: false, app_rules: Vec::new() }
-    }
 }
 
 /// 统一决策对象（§16）。
@@ -179,7 +203,11 @@ fn is_high_exposure_target(target: &TargetContext) -> bool {
 }
 
 /// 风险评估（§7/§10 保守默认；可解释理由逐条给出）。
-pub fn evaluate(result: &SensitivityResult, target: &TargetContext, policy: &GlobalPolicy) -> PasteDecision {
+pub fn evaluate(
+    result: &SensitivityResult,
+    target: &TargetContext,
+    policy: &GlobalPolicy,
+) -> PasteDecision {
     let mut reasons = Vec::new();
     let mut rule_ids: Vec<String> = result
         .findings
@@ -190,31 +218,32 @@ pub fn evaluate(result: &SensitivityResult, target: &TargetContext, policy: &Glo
     rule_ids.dedup();
 
     // ── 每应用显式规则优先（§9）──
-    if let Some(process) = &target.process {
-        if let Some(rule) = policy.app_rules.iter().find(|r| {
-            r.enabled && r.process.eq_ignore_ascii_case(process)
-        }) {
-            let action = match rule.mode {
-                PolicyMode::Allow => PasteAction::Allow,
-                PolicyMode::Warn => PasteAction::Warn,
-                PolicyMode::Mask => PasteAction::MaskAndPaste,
-                PolicyMode::Block | PolicyMode::Default => PasteAction::Block,
-            };
-            reasons.push(format!("app rule: {} = {:?}", process, rule.mode));
-            let risk = match rule.mode {
-                PolicyMode::Allow => PasteRisk::Low,
-                PolicyMode::Block => PasteRisk::Critical,
-                _ => content_risk(result, target, &mut reasons),
-            };
-            return PasteDecision {
-                action,
-                risk,
-                reasons,
-                requires_confirmation: action == PasteAction::Warn,
-                target: target.clone(),
-                rule_ids,
-            };
-        }
+    if let Some(process) = &target.process
+        && let Some(rule) = policy
+            .app_rules
+            .iter()
+            .find(|r| r.enabled && r.process.eq_ignore_ascii_case(process))
+    {
+        let action = match rule.mode {
+            PolicyMode::Allow => PasteAction::Allow,
+            PolicyMode::Warn => PasteAction::Warn,
+            PolicyMode::Mask => PasteAction::MaskAndPaste,
+            PolicyMode::Block | PolicyMode::Default => PasteAction::Block,
+        };
+        reasons.push(format!("app rule: {} = {:?}", process, rule.mode));
+        let risk = match rule.mode {
+            PolicyMode::Allow => PasteRisk::Low,
+            PolicyMode::Block => PasteRisk::Critical,
+            _ => content_risk(result, target, &mut reasons),
+        };
+        return PasteDecision {
+            action,
+            risk,
+            reasons,
+            requires_confirmation: action == PasteAction::Warn,
+            target: target.clone(),
+            rule_ids,
+        };
     }
 
     // ── 全局规则（§10）──
@@ -226,11 +255,22 @@ pub fn evaluate(result: &SensitivityResult, target: &TargetContext, policy: &Glo
         PasteRisk::Critical if policy.block_critical => (PasteAction::Block, true),
         PasteRisk::Critical => (PasteAction::Warn, true),
     };
-    PasteDecision { action, risk, reasons, requires_confirmation, target: target.clone(), rule_ids }
+    PasteDecision {
+        action,
+        risk,
+        reasons,
+        requires_confirmation,
+        target: target.clone(),
+        rule_ids,
+    }
 }
 
 /// 内容 × 目标 ⇒ 风险（不混决策；§7 语义分离）。
-fn content_risk(result: &SensitivityResult, target: &TargetContext, reasons: &mut Vec<String>) -> PasteRisk {
+fn content_risk(
+    result: &SensitivityResult,
+    target: &TargetContext,
+    reasons: &mut Vec<String>,
+) -> PasteRisk {
     match result.level {
         SensitivityLevel::Normal => {
             reasons.push("no findings".to_string());
@@ -247,7 +287,8 @@ fn content_risk(result: &SensitivityResult, target: &TargetContext, reasons: &mu
                 .all(|f| f.confidence == Confidence::Low);
             if only_low_confidence {
                 // 单条邮箱/占位符等：低风险不打扰（§5D/§46）
-                reasons.push("only low-confidence findings (placeholder/personal info)".to_string());
+                reasons
+                    .push("only low-confidence findings (placeholder/personal info)".to_string());
                 PasteRisk::Low
             } else {
                 reasons.push("potentially sensitive content".to_string());
@@ -293,7 +334,7 @@ impl RiskEscalation for PasteRisk {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wisp::rules::{analyze_text, DetectionToggles};
+    use crate::wisp::rules::{DetectionToggles, analyze_text};
 
     fn decision_for(text: &str, target: TargetContext) -> PasteDecision {
         let result = analyze_text(text, &DetectionToggles::default());
@@ -314,7 +355,10 @@ mod tests {
 
     #[test]
     fn normal_content_is_allowed_quietly() {
-        let d = decision_for("Hello World", TargetContext::likely("chrome.exe".into(), None));
+        let d = decision_for(
+            "Hello World",
+            TargetContext::likely("chrome.exe".into(), None),
+        );
         assert_eq!(d.action, PasteAction::Allow);
         assert_eq!(d.risk, PasteRisk::Low);
         assert!(!d.requires_confirmation);
@@ -323,7 +367,10 @@ mod tests {
     #[test]
     fn placeholder_only_content_is_not_disturbed() {
         // §5D/§46：低置信（占位符/单邮箱）⇒ Low 风险不打扰
-        let d = decision_for("password = \"<your-password>\"", TargetContext::likely("code.exe".into(), None));
+        let d = decision_for(
+            "password = \"<your-password>\"",
+            TargetContext::likely("code.exe".into(), None),
+        );
         assert_eq!(d.risk, PasteRisk::Low);
         assert_eq!(d.action, PasteAction::Allow);
     }
@@ -369,7 +416,11 @@ mod tests {
         let target = TargetContext::likely("chrome.exe".into(), None);
         let policy = GlobalPolicy {
             block_critical: true,
-            app_rules: vec![AppRule { process: "chrome.exe".into(), mode: PolicyMode::Block, enabled: true }],
+            app_rules: vec![AppRule {
+                process: "chrome.exe".into(),
+                mode: PolicyMode::Block,
+                enabled: true,
+            }],
         };
         let d = evaluate(&result, &target, &policy);
         assert_eq!(d.action, PasteAction::Block);
@@ -383,7 +434,11 @@ mod tests {
         let target = TargetContext::likely("code.exe".into(), None);
         let policy = GlobalPolicy {
             block_critical: false,
-            app_rules: vec![AppRule { process: "code.exe".into(), mode: PolicyMode::Allow, enabled: true }],
+            app_rules: vec![AppRule {
+                process: "code.exe".into(),
+                mode: PolicyMode::Allow,
+                enabled: true,
+            }],
         };
         let d = evaluate(&result, &target, &policy);
         assert_eq!(d.action, PasteAction::Allow);

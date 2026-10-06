@@ -12,8 +12,8 @@
 #![expect(clippy::result_large_err)] // D10：IpcError DTO 体积豁免（与 archive_service 同）
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use tauri::Manager;
@@ -21,17 +21,17 @@ use tauri::Manager;
 use crate::commands::IpcError;
 use crate::config::WispConfig;
 use crate::wisp::model::{SensitivityLevel, SensitivityResult};
-use crate::wisp::risk::{AppClass, AppRule, GlobalPolicy, PasteRisk, PolicyMode, TargetConfidence, TargetContext};
-use crate::wisp::rules::{analyze_text, DetectionToggles, ANALYZER_VERSION, RULESET_VERSION};
-use crate::wisp::session::{
-    self, apply_restore_outcome, precheck_restore, ProtectionSession, SessionPayload, SessionState,
+use crate::wisp::risk::{
+    AppClass, AppRule, GlobalPolicy, PasteRisk, PolicyMode, TargetConfidence, TargetContext,
 };
-use crate::wisp::{mask_text, PasteAction, PasteDecision};
+use crate::wisp::rules::{ANALYZER_VERSION, DetectionToggles, RULESET_VERSION, analyze_text};
+use crate::wisp::session::{
+    self, ProtectionSession, SessionPayload, SessionState, apply_restore_outcome, precheck_restore,
+};
+use crate::wisp::{PasteAction, PasteDecision, mask_text};
 
 fn err(code: &'static str, message: impl Into<String>) -> IpcError {
-    IpcError::from(
-        weave_core::prelude::WeaveError::io(code, message).with_location("wisp_service"),
-    )
+    IpcError::from(weave_core::prelude::WeaveError::io(code, message).with_location("wisp_service"))
 }
 
 pub const EVENTS_CAP: usize = 200;
@@ -176,18 +176,16 @@ impl WispRuntime {
             app_rules: c
                 .app_rules
                 .iter()
-                .filter_map(|r| {
-                    Some(AppRule {
-                        process: r.process.clone(),
-                        mode: match r.mode.as_str() {
-                            "allow" => PolicyMode::Allow,
-                            "warn" => PolicyMode::Warn,
-                            "mask" => PolicyMode::Mask,
-                            "block" => PolicyMode::Block,
-                            _ => PolicyMode::Default,
-                        },
-                        enabled: r.enabled,
-                    })
+                .map(|r| AppRule {
+                    process: r.process.clone(),
+                    mode: match r.mode.as_str() {
+                        "allow" => PolicyMode::Allow,
+                        "warn" => PolicyMode::Warn,
+                        "mask" => PolicyMode::Mask,
+                        "block" => PolicyMode::Block,
+                        _ => PolicyMode::Default,
+                    },
+                    enabled: r.enabled,
                 })
                 .collect(),
         }
@@ -253,7 +251,11 @@ fn foreground_target() -> TargetContext {
             TargetContext {
                 app_class,
                 process,
-                window_title: if win.title.is_empty() { None } else { Some(win.title) },
+                window_title: if win.title.is_empty() {
+                    None
+                } else {
+                    Some(win.title)
+                },
                 identity_confidence: TargetConfidence::Likely,
             }
         }
@@ -295,11 +297,16 @@ pub fn note_clipboard_text(app: &tauri::AppHandle, text: &str) {
         target: None,
         rule_ids: rule_ids.clone(),
     });
-    *rt.latest.lock().expect("wisp latest") = Some(WispAnalysisDto { at_ms: at, result: result.clone() });
+    *rt.latest.lock().expect("wisp latest") = Some(WispAnalysisDto {
+        at_ms: at,
+        result: result.clone(),
+    });
     // 通知中心（M2.6 复用；60s 聚合防风暴 §23/§48）——只报数量不报内容
-    state
-        .notifications
-        .notify("wisp.sensitiveClipboard", "warning", &format!("clipboard findings: {} rule(s)", rule_ids.len()));
+    state.notifications.notify(
+        "wisp.sensitiveClipboard",
+        "warning",
+        &format!("clipboard findings: {} rule(s)", rule_ids.len()),
+    );
     tracing::info!(target: "wisp", rules = rule_ids.len(), level = ?result.level, "sensitive clipboard analyzed");
 }
 
@@ -317,7 +324,12 @@ pub fn wisp_status(app: tauri::AppHandle) -> WispStatusDto {
         detection_capability: "limited".to_string(),
         ruleset_version: RULESET_VERSION,
         analyzer_version: ANALYZER_VERSION,
-        session: rt.session.lock().expect("wisp session").as_ref().map(|a| a.meta.clone()),
+        session: rt
+            .session
+            .lock()
+            .expect("wisp session")
+            .as_ref()
+            .map(|a| a.meta.clone()),
         latest: rt.latest.lock().expect("wisp latest").clone(),
         event_count: rt.event_count() as f64,
     }
@@ -357,11 +369,18 @@ pub fn wisp_evaluate_current(
     let state = app.state::<crate::state::AppState>();
     let rt = &state.wisp;
     rt.expire_if_due(now_ms());
-    let mut clip = arboard::Clipboard::new()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("open clipboard failed: {e}")))?;
-    let text = clip
-        .get_text()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("read clipboard failed: {e}")))?;
+    let mut clip = arboard::Clipboard::new().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("open clipboard failed: {e}"),
+        )
+    })?;
+    let text = clip.get_text().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("read clipboard failed: {e}"),
+        )
+    })?;
     if text.is_empty() {
         return Err(err("wisp.clipboardUnavailable", "clipboard has no text"));
     }
@@ -404,20 +423,33 @@ pub fn wisp_mask_current(
     {
         let guard = rt.session.lock().expect("wisp session");
         if guard.is_some() {
-            return Err(err("wisp.sessionActive", "a protection session already exists"));
+            return Err(err(
+                "wisp.sessionActive",
+                "a protection session already exists",
+            ));
         }
     }
-    let mut clip = arboard::Clipboard::new()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("open clipboard failed: {e}")))?;
-    let text = clip
-        .get_text()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("read clipboard failed: {e}")))?;
+    let mut clip = arboard::Clipboard::new().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("open clipboard failed: {e}"),
+        )
+    })?;
+    let text = clip.get_text().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("read clipboard failed: {e}"),
+        )
+    })?;
     if text.is_empty() {
         return Err(err("wisp.clipboardUnavailable", "clipboard has no text"));
     }
     let result = analyze_text(&text, &rt.toggles());
     if result.level == SensitivityLevel::Normal {
-        return Err(err("wisp.nothingToMask", "no sensitive findings in clipboard text"));
+        return Err(err(
+            "wisp.nothingToMask",
+            "no sensitive findings in clipboard text",
+        ));
     }
     let Some(original_fp) = fingerprint(&text) else {
         return Err(err("wisp.fingerprintFailed", "hash unavailable"));
@@ -452,14 +484,20 @@ pub fn wisp_mask_current(
     };
     // 写 masked 前登记 M2.3 抑制指纹（消自循环 §13/消 1s 轮询竞态）
     *state.clipboard.suppress.lock().expect("suppress") = Some(masked_fp.to_lowercase());
-    clip.set_text(payload.masked_text.clone())
-        .map_err(|e| err("wisp.maskWriteFailed", format!("set masked text failed: {e}")))?;
+    clip.set_text(payload.masked_text.clone()).map_err(|e| {
+        err(
+            "wisp.maskWriteFailed",
+            format!("set masked text failed: {e}"),
+        )
+    })?;
     // §25：原文落盘仅在显式开启（不伪装保险库；关 ⇒ 崩溃后不可恢复，如实）
     if rt.config_snapshot().retain_sensitive_payload {
         session::save_snapshot(rt.dir(), &payload).map_err(IpcError::from)?;
     }
-    *rt.session.lock().expect("wisp session") =
-        Some(ActiveSession { meta: meta.clone(), payload: Some(payload) });
+    *rt.session.lock().expect("wisp session") = Some(ActiveSession {
+        meta: meta.clone(),
+        payload: Some(payload),
+    });
     rt.push_event(WispEventDto {
         at_ms: at,
         kind: "masked".into(),
@@ -499,18 +537,24 @@ pub fn wisp_restore_session(app: tauri::AppHandle) -> Result<ProtectionSession, 
             "original payload not retained (retain disabled and runtime restarted)",
         ));
     };
-    let mut clip = arboard::Clipboard::new()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("open clipboard failed: {e}")))?;
-    let current = clip
-        .get_text()
-        .map_err(|e| err("wisp.clipboardUnavailable", format!("read clipboard failed: {e}")))?;
+    let mut clip = arboard::Clipboard::new().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("open clipboard failed: {e}"),
+        )
+    })?;
+    let current = clip.get_text().map_err(|e| {
+        err(
+            "wisp.clipboardUnavailable",
+            format!("read clipboard failed: {e}"),
+        )
+    })?;
     let current_fp = fingerprint(&current);
     let mut guard = rt.session.lock().expect("wisp session");
     let Some(active) = guard.as_mut() else {
         return Err(err("wisp.noSession", "no protection session"));
     };
-    let matches_masked =
-        current_fp.is_some_and(|fp| fp == active.meta.masked_fingerprint);
+    let matches_masked = current_fp.is_some_and(|fp| fp == active.meta.masked_fingerprint);
     match apply_restore_outcome(&mut active.meta, matches_masked) {
         Ok(()) => {
             // 写原文前登记 M2.3 抑制（§13）
@@ -584,7 +628,9 @@ pub fn wisp_cancel_session(app: tauri::AppHandle) -> Result<(), IpcError> {
 #[specta::specta]
 pub fn wisp_events(app: tauri::AppHandle, limit: Option<u32>) -> Vec<WispEventDto> {
     let state = app.state::<crate::state::AppState>();
-    state.wisp.recent_events(limit.unwrap_or(50).min(EVENTS_CAP as u32) as usize)
+    state
+        .wisp
+        .recent_events(limit.unwrap_or(50).min(EVENTS_CAP as u32) as usize)
 }
 
 #[tauri::command]

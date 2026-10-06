@@ -9,11 +9,11 @@
 
 use std::sync::OnceLock;
 
-use crate::wisp::model::{
-    overall_level, ANALYZE_MAX_CHARS, Confidence, SensitivityCategory, SensitivityFinding,
-    SensitivityResult, Severity,
-};
 use crate::wisp::mask;
+use crate::wisp::model::{
+    ANALYZE_MAX_CHARS, Confidence, SensitivityCategory, SensitivityFinding, SensitivityResult,
+    Severity, overall_level,
+};
 
 pub const RULESET_VERSION: u32 = 1;
 pub const ANALYZER_VERSION: u32 = 1;
@@ -29,7 +29,12 @@ pub struct DetectionToggles {
 
 impl Default for DetectionToggles {
     fn default() -> Self {
-        Self { credentials: true, local_paths: true, personal_info: true, secret_config: true }
+        Self {
+            credentials: true,
+            local_paths: true,
+            personal_info: true,
+            secret_config: true,
+        }
     }
 }
 
@@ -47,31 +52,148 @@ use SensitivityCategory as C;
 
 const RULES: &[SensitivityRule] = &[
     // ── A/B：凭证与云凭证（具名前缀 = Known Prefix，高置信 §39）──
-    SensitivityRule { id: "wisp.aws-access-key", category: C::CloudCredential, pattern: r"\bAKIA[0-9A-Z]{16}\b", severity: Severity::Critical, confidence: Confidence::High, description: "AWS access key id prefix" },
-    SensitivityRule { id: "wisp.github-token", category: C::CloudCredential, pattern: r"\bgh[pousr]_[A-Za-z0-9]{20,}\b", severity: Severity::Critical, confidence: Confidence::High, description: "GitHub token prefix" },
-    SensitivityRule { id: "wisp.slack-token", category: C::CloudCredential, pattern: r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b", severity: Severity::Critical, confidence: Confidence::High, description: "Slack token prefix" },
-    SensitivityRule { id: "wisp.secret-key-prefix", category: C::CloudCredential, pattern: r"\bsk-[A-Za-z0-9_-]{20,}\b", severity: Severity::Critical, confidence: Confidence::High, description: "secret key style prefix (sk-…)" },
-    SensitivityRule { id: "wisp.private-key-block", category: C::Credential, pattern: r"-----BEGIN [A-Z ]*PRIVATE KEY-----", severity: Severity::Critical, confidence: Confidence::High, description: "PEM private key header" },
-    SensitivityRule { id: "wisp.db-connection-string", category: C::CloudCredential, pattern: r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|mssql)://[^\s:@/]+:[^\s@]+@", severity: Severity::Critical, confidence: Confidence::High, description: "database URL with embedded credentials" },
-    SensitivityRule { id: "wisp.jwt", category: C::Credential, pattern: r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b", severity: Severity::High, confidence: Confidence::High, description: "JWT three-segment shape" },
-    SensitivityRule { id: "wisp.bearer-token", category: C::Credential, pattern: r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{16,}", severity: Severity::High, confidence: Confidence::High, description: "Bearer auth scheme with long token" },
-    SensitivityRule { id: "wisp.long-hex-run", category: C::Credential, pattern: r"\b[a-fA-F0-9]{40,}\b", severity: Severity::Medium, confidence: Confidence::Medium, description: "long hex run (key/hash-like)" },
+    SensitivityRule {
+        id: "wisp.aws-access-key",
+        category: C::CloudCredential,
+        pattern: r"\bAKIA[0-9A-Z]{16}\b",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "AWS access key id prefix",
+    },
+    SensitivityRule {
+        id: "wisp.github-token",
+        category: C::CloudCredential,
+        pattern: r"\bgh[pousr]_[A-Za-z0-9]{20,}\b",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "GitHub token prefix",
+    },
+    SensitivityRule {
+        id: "wisp.slack-token",
+        category: C::CloudCredential,
+        pattern: r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "Slack token prefix",
+    },
+    SensitivityRule {
+        id: "wisp.secret-key-prefix",
+        category: C::CloudCredential,
+        pattern: r"\bsk-[A-Za-z0-9_-]{20,}\b",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "secret key style prefix (sk-…)",
+    },
+    SensitivityRule {
+        id: "wisp.private-key-block",
+        category: C::Credential,
+        pattern: r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "PEM private key header",
+    },
+    SensitivityRule {
+        id: "wisp.db-connection-string",
+        category: C::CloudCredential,
+        pattern: r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|mssql)://[^\s:@/]+:[^\s@]+@",
+        severity: Severity::Critical,
+        confidence: Confidence::High,
+        description: "database URL with embedded credentials",
+    },
+    SensitivityRule {
+        id: "wisp.jwt",
+        category: C::Credential,
+        pattern: r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b",
+        severity: Severity::High,
+        confidence: Confidence::High,
+        description: "JWT three-segment shape",
+    },
+    SensitivityRule {
+        id: "wisp.bearer-token",
+        category: C::Credential,
+        pattern: r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{16,}",
+        severity: Severity::High,
+        confidence: Confidence::High,
+        description: "Bearer auth scheme with long token",
+    },
+    SensitivityRule {
+        id: "wisp.long-hex-run",
+        category: C::Credential,
+        pattern: r"\b[a-fA-F0-9]{40,}\b",
+        severity: Severity::Medium,
+        confidence: Confidence::Medium,
+        description: "long hex run (key/hash-like)",
+    },
     // ── E：配置/代码 secret 形态（placeholder 降置信在匹配后处理 §5E）──
-    SensitivityRule { id: "wisp.secret-assignment", category: C::SecretConfig, pattern: r#"(?im)^[ \t]*(?:password|passwd|secret|api[_-]?key|apikey|access[_-]?token|auth[_-]?token|token)[a-z0-9_-]*[ \t]*[:=][ \t]*["']?([^\s"']{6,})"#, severity: Severity::High, confidence: Confidence::Medium, description: "secret-like key/value assignment" },
-    SensitivityRule { id: "wisp.authorization-header", category: C::Credential, pattern: r"(?im)^[ \t]*authorization:[ \t]*\S+", severity: Severity::High, confidence: Confidence::Medium, description: "Authorization header" },
+    SensitivityRule {
+        id: "wisp.secret-assignment",
+        category: C::SecretConfig,
+        pattern: r#"(?im)^[ \t]*(?:password|passwd|secret|api[_-]?key|apikey|access[_-]?token|auth[_-]?token|token)[a-z0-9_-]*[ \t]*[:=][ \t]*["']?([^\s"']{6,})"#,
+        severity: Severity::High,
+        confidence: Confidence::Medium,
+        description: "secret-like key/value assignment",
+    },
+    SensitivityRule {
+        id: "wisp.authorization-header",
+        category: C::Credential,
+        pattern: r"(?im)^[ \t]*authorization:[ \t]*\S+",
+        severity: Severity::High,
+        confidence: Confidence::Medium,
+        description: "Authorization header",
+    },
     // ── C：本地路径（Potentially——本地路径 ≠ 一定敏感 §5C）──
-    SensitivityRule { id: "wisp.win-user-path", category: C::LocalPath, pattern: r"(?i)\b[A-Z]:\\Users\\[^\\\s]+", severity: Severity::Low, confidence: Confidence::Medium, description: "Windows user profile path" },
-    SensitivityRule { id: "wisp.unc-path", category: C::LocalPath, pattern: r"\\\\[A-Za-z0-9_.-]+\\[^\s]+", severity: Severity::Low, confidence: Confidence::Medium, description: "UNC network path" },
-    SensitivityRule { id: "wisp.unix-home-path", category: C::LocalPath, pattern: r"(?:/Users|/home)/[A-Za-z0-9_.-]+/", severity: Severity::Low, confidence: Confidence::Medium, description: "unix home directory path" },
+    SensitivityRule {
+        id: "wisp.win-user-path",
+        category: C::LocalPath,
+        pattern: r"(?i)\b[A-Z]:\\Users\\[^\\\s]+",
+        severity: Severity::Low,
+        confidence: Confidence::Medium,
+        description: "Windows user profile path",
+    },
+    SensitivityRule {
+        id: "wisp.unc-path",
+        category: C::LocalPath,
+        pattern: r"\\\\[A-Za-z0-9_.-]+\\[^\s]+",
+        severity: Severity::Low,
+        confidence: Confidence::Medium,
+        description: "UNC network path",
+    },
+    SensitivityRule {
+        id: "wisp.unix-home-path",
+        category: C::LocalPath,
+        pattern: r"(?:/Users|/home)/[A-Za-z0-9_.-]+/",
+        severity: Severity::Low,
+        confidence: Confidence::Medium,
+        description: "unix home directory path",
+    },
     // ── D：个人信息（保守；单条邮箱/ IP 默认不阻断 §5D）──
-    SensitivityRule { id: "wisp.email", category: C::PersonalInfo, pattern: r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", severity: Severity::Low, confidence: Confidence::Medium, description: "email address" },
-    SensitivityRule { id: "wisp.ipv4", category: C::PersonalInfo, pattern: r"\b(?:\d{1,3}\.){3}\d{1,3}\b", severity: Severity::Low, confidence: Confidence::Low, description: "IPv4 address" },
+    SensitivityRule {
+        id: "wisp.email",
+        category: C::PersonalInfo,
+        pattern: r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        severity: Severity::Low,
+        confidence: Confidence::Medium,
+        description: "email address",
+    },
+    SensitivityRule {
+        id: "wisp.ipv4",
+        category: C::PersonalInfo,
+        pattern: r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+        severity: Severity::Low,
+        confidence: Confidence::Low,
+        description: "IPv4 address",
+    },
 ];
 
 static REGEXES: OnceLock<Vec<Option<regex::Regex>>> = OnceLock::new();
 
 fn compiled() -> &'static Vec<Option<regex::Regex>> {
-    REGEXES.get_or_init(|| RULES.iter().map(|r| regex::Regex::new(r.pattern).ok()).collect())
+    REGEXES.get_or_init(|| {
+        RULES
+            .iter()
+            .map(|r| regex::Regex::new(r.pattern).ok())
+            .collect()
+    })
 }
 
 /// placeholder/示例值形态 ⇒ 降置信（§5E：password = "<your-password>"
@@ -80,16 +202,32 @@ fn value_is_placeholder(value: &str) -> bool {
     let lower = value.to_lowercase();
     let trimmed = lower.trim_matches(|c: char| c == '"' || c == '\'' || c == '`');
     const HINTS: [&str; 12] = [
-        "your", "xxx", "<", "${", "example", "changeme", "change_me", "placeholder", "todo",
-        "dummy", "sample", "********",
+        "your",
+        "xxx",
+        "<",
+        "${",
+        "example",
+        "changeme",
+        "change_me",
+        "placeholder",
+        "todo",
+        "dummy",
+        "sample",
+        "********",
     ];
-    HINTS.iter().any(|h| trimmed.contains(h)) || trimmed == "test" || trimmed == "none" || trimmed == "null"
+    HINTS.iter().any(|h| trimmed.contains(h))
+        || trimmed == "test"
+        || trimmed == "none"
+        || trimmed == "null"
 }
 
 /// 值形状熵提示：长且多样 ⇒ 更像真实 secret（§39 Keyword Context/Length）。
 fn value_looks_secret_like(value: &str) -> bool {
-    let unique = value.chars().collect::<std::collections::HashSet<_>>().len();
-    value.len() >= 16 && unique * 4 >= value.len() as usize
+    let unique = value
+        .chars()
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    value.len() >= 16 && unique * 4 >= value.len()
 }
 
 /// 分析文本（≤ ANALYZE_MAX_CHARS 截断，如实标注 §35）。
@@ -109,14 +247,12 @@ pub fn analyze_text(text: &str, toggles: &DetectionToggles) -> SensitivityResult
             continue;
         }
         let Some(re) = &regexes[idx] else { continue };
-        let mut per_rule = 0usize;
-        for m in re.captures_iter(&analyzed) {
+        for (per_rule, m) in re.captures_iter(&analyzed).enumerate() {
             let whole = m.get(0).expect("match");
             // 单规则最多报 20 处（防风暴 §34；同一规则重复命中价值有限）
             if per_rule >= 20 {
                 break;
             }
-            per_rule += 1;
             let mut confidence = rule.confidence;
             let mut evidence = rule.description.to_string();
             // secret-assignment：值形态细化置信（§5E/§39）
@@ -229,7 +365,11 @@ mod tests {
                 .iter()
                 .find(|f| f.rule_id == "wisp.secret-assignment")
                 .expect("assignment finding");
-            assert_eq!(f.confidence, Confidence::Low, "placeholder must be low: {t}");
+            assert_eq!(
+                f.confidence,
+                Confidence::Low,
+                "placeholder must be low: {t}"
+            );
         }
     }
 
@@ -255,7 +395,10 @@ mod tests {
 
     #[test]
     fn toggles_disable_categories() {
-        let t = DetectionToggles { personal_info: false, ..DetectionToggles::default() };
+        let t = DetectionToggles {
+            personal_info: false,
+            ..DetectionToggles::default()
+        };
         let r = analyze_text("mail me at test@example.com", &t);
         assert_eq!(r.level, SensitivityLevel::Normal);
     }
@@ -273,7 +416,11 @@ mod tests {
         let token = "ghp_AbcdefGhijKlmnopPqrstUv1234 ";
         let text = token.repeat(100);
         let r = levels(&text);
-        let count = r.findings.iter().filter(|f| f.rule_id == "wisp.github-token").count();
+        let count = r
+            .findings
+            .iter()
+            .filter(|f| f.rule_id == "wisp.github-token")
+            .count();
         assert_eq!(count, 20, "per-rule cap 防风暴 §34");
     }
 
