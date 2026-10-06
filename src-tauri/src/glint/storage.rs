@@ -64,7 +64,11 @@ pub fn list_recent(dir: &Path, max_recent: usize) -> Vec<CaptureRecord> {
             height,
         });
     }
-    records.sort_by(|a, b| b.modified_ms.partial_cmp(&a.modified_ms).unwrap_or(std::cmp::Ordering::Equal));
+    records.sort_by(|a, b| {
+        b.modified_ms
+            .partial_cmp(&a.modified_ms)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     // §26 有界：超出 max_recent 的最旧文件删除（均为 Glint 自产输出）
     if records.len() > max_recent {
         for old in records.iter().skip(max_recent) {

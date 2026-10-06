@@ -44,13 +44,45 @@ impl Default for AnnotationStyle {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AnnotationShape {
-    Arrow { x1: f64, y1: f64, x2: f64, y2: f64 },
-    Rectangle { x: f64, y: f64, w: f64, h: f64 },
-    Ellipse { x: f64, y: f64, w: f64, h: f64 },
-    Freehand { points: Vec<[f64; 2]> },
-    Text { x: f64, y: f64, text: String },
-    Blur { x: f64, y: f64, w: f64, h: f64 },
-    Pixelate { x: f64, y: f64, w: f64, h: f64, block: f64 },
+    Arrow {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+    },
+    Rectangle {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
+    Ellipse {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
+    Freehand {
+        points: Vec<[f64; 2]>,
+    },
+    Text {
+        x: f64,
+        y: f64,
+        text: String,
+    },
+    Blur {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
+    Pixelate {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        block: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
@@ -82,12 +114,7 @@ pub fn render(
     Ok(out)
 }
 
-fn render_one(
-    buf: &mut [u8],
-    width: u32,
-    height: u32,
-    ann: &Annotation,
-) -> Result<(), WeaveError> {
+fn render_one(buf: &mut [u8], width: u32, height: u32, ann: &Annotation) -> Result<(), WeaveError> {
     let style = &ann.style;
     match &ann.shape {
         AnnotationShape::Arrow { x1, y1, x2, y2 } => {
@@ -158,7 +185,9 @@ fn render_one(
         }
         AnnotationShape::Freehand { points } => {
             for pair in points.windows(2) {
-                draw_line(buf, width, height, pair[0][0], pair[0][1], pair[1][0], pair[1][1], style);
+                draw_line(
+                    buf, width, height, pair[0][0], pair[0][1], pair[1][0], pair[1][1], style,
+                );
             }
         }
         AnnotationShape::Text { x, y, text } => {
@@ -171,7 +200,9 @@ fn render_one(
         AnnotationShape::Pixelate { x, y, w, h, block } => {
             let (x, y, w, h) = norm_rect(*x, *y, *w, *h);
             let block = (*block).max(2.0) as u32;
-            pixelate_region(buf, width, height, x as u32, y as u32, w as u32, h as u32, block);
+            pixelate_region(
+                buf, width, height, x as u32, y as u32, w as u32, h as u32, block,
+            );
         }
     }
     Ok(())
@@ -184,6 +215,7 @@ fn norm_rect(x: f64, y: f64, w: f64, h: f64) -> (f64, f64, f64, f64) {
 }
 
 /// 有宽度线段（沿线刷圆）；越界点被 blend_px 裁掉。
+#[allow(clippy::too_many_arguments)]
 fn draw_line(
     buf: &mut [u8],
     width: u32,
@@ -230,7 +262,17 @@ fn blend_px(buf: &mut [u8], width: u32, height: u32, x: i64, y: i64, color: &[u8
 }
 
 /// 区域盒模糊（迭代 3x3；只在区域内读写，边缘 clamp）。
-fn box_blur_region(buf: &mut [u8], width: u32, height: u32, x: f64, y: f64, w: f64, h: f64, passes: u32) {
+#[allow(clippy::too_many_arguments)]
+fn box_blur_region(
+    buf: &mut [u8],
+    width: u32,
+    height: u32,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    passes: u32,
+) {
     let x0 = x.max(0.0) as u32;
     let y0 = y.max(0.0) as u32;
     let x1 = ((x + w) as u32).min(width);
@@ -267,7 +309,17 @@ fn box_blur_region(buf: &mut [u8], width: u32, height: u32, x: f64, y: f64, w: f
 }
 
 /// 区域块像素化（块内取平均色）。
-fn pixelate_region(buf: &mut [u8], width: u32, height: u32, x: u32, y: u32, w: u32, h: u32, block: u32) {
+#[allow(clippy::too_many_arguments)]
+fn pixelate_region(
+    buf: &mut [u8],
+    width: u32,
+    height: u32,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+    block: u32,
+) {
     let x1 = (x + w).min(width);
     let y1 = (y + h).min(height);
     let mut by = y;
@@ -286,8 +338,14 @@ fn pixelate_region(buf: &mut [u8], width: u32, height: u32, x: u32, y: u32, w: u
                     n += 1;
                 }
             }
-            if n > 0 {
-                let avg = [(sr / n) as u8, (sg / n) as u8, (sb / n) as u8, (sa / n) as u8];
+            let n = n.max(1); // 块非空 ⇒ n>=1；max 仅满足除法静态安全
+            {
+                let avg = [
+                    (sr / n) as u8,
+                    (sg / n) as u8,
+                    (sb / n) as u8,
+                    (sa / n) as u8,
+                ];
                 for py in by..(by + block).min(y1) {
                     for px in bx..(bx + block).min(x1) {
                         let idx = ((py * width + px) * 4) as usize;
@@ -318,10 +376,10 @@ fn load_font() -> Option<&'static Vec<u8>> {
     FONT_CACHE
         .get_or_init(|| {
             for cand in font_candidates() {
-                if let Ok(bytes) = std::fs::read(&cand) {
-                    if ab_glyph::FontRef::try_from_slice(&bytes).is_ok() {
-                        return Some(bytes);
-                    }
+                if let Ok(bytes) = std::fs::read(&cand)
+                    && ab_glyph::FontRef::try_from_slice(&bytes).is_ok()
+                {
+                    return Some(bytes);
                 }
             }
             None
@@ -409,7 +467,12 @@ mod tests {
             32,
             &[Annotation {
                 id: "r1".into(),
-                shape: AnnotationShape::Rectangle { x: 8.0, y: 8.0, w: 8.0, h: 8.0 },
+                shape: AnnotationShape::Rectangle {
+                    x: 8.0,
+                    y: 8.0,
+                    w: 8.0,
+                    h: 8.0,
+                },
                 style: style(),
             }],
         )
@@ -430,7 +493,12 @@ mod tests {
             16,
             &[Annotation {
                 id: "r2".into(),
-                shape: AnnotationShape::Rectangle { x: 12.0, y: 12.0, w: 20.0, h: 20.0 },
+                shape: AnnotationShape::Rectangle {
+                    x: 12.0,
+                    y: 12.0,
+                    w: 20.0,
+                    h: 20.0,
+                },
                 style: style(),
             }],
         );
@@ -446,7 +514,12 @@ mod tests {
             32,
             &[Annotation {
                 id: "b1".into(),
-                shape: AnnotationShape::Blur { x: 8.0, y: 8.0, w: 8.0, h: 8.0 },
+                shape: AnnotationShape::Blur {
+                    x: 8.0,
+                    y: 8.0,
+                    w: 8.0,
+                    h: 8.0,
+                },
                 style: style(),
             }],
         )
@@ -468,7 +541,13 @@ mod tests {
             32,
             &[Annotation {
                 id: "p1".into(),
-                shape: AnnotationShape::Pixelate { x: 0.0, y: 0.0, w: 16.0, h: 16.0, block: 8.0 },
+                shape: AnnotationShape::Pixelate {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 16.0,
+                    h: 16.0,
+                    block: 8.0,
+                },
                 style: style(),
             }],
         )
@@ -493,7 +572,11 @@ mod tests {
             64,
             &[Annotation {
                 id: "t1".into(),
-                shape: AnnotationShape::Text { x: 4.0, y: 4.0, text: "Hi 截图".into() },
+                shape: AnnotationShape::Text {
+                    x: 4.0,
+                    y: 4.0,
+                    text: "Hi 截图".into(),
+                },
                 style: style(),
             }],
         );

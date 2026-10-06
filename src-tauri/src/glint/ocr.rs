@@ -4,11 +4,11 @@
 //! - Confidence 缺失 ⇒ Unknown（不伪造）。
 //! - 隐私（§17/§27）：识别文本只经返回值给 UI，不写日志。
 
-use windows::core::HSTRING;
 use windows::Globalization::Language;
 use windows::Graphics::Imaging::BitmapDecoder;
 use windows::Media::Ocr::OcrEngine;
 use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
+use windows::core::HSTRING;
 
 use weave_core::prelude::WeaveError;
 
@@ -49,8 +49,12 @@ fn to_stream(png: &[u8]) -> windows::core::Result<InMemoryRandomAccessStream> {
 /// 引擎优先级：用户配置语言 → 用户档案语言 → Globalization 偏好。
 /// 大图超过引擎 MaxImageDimension ⇒ 先缩放（保 OCR 可行）。
 pub fn ocr_png(png: &[u8], language_hint: Option<&str>) -> Result<OcrResultDto, WeaveError> {
-    let engine = create_engine(language_hint)
-        .map_err(|e| err("glint.ocrUnavailable", format!("OCR engine unavailable: {e}")))?;
+    let engine = create_engine(language_hint).map_err(|e| {
+        err(
+            "glint.ocrUnavailable",
+            format!("OCR engine unavailable: {e}"),
+        )
+    })?;
     let max_dim = OcrEngine::MaxImageDimension().unwrap_or(u32::MAX);
     let png = if let Some((w, h)) = png_dimensions_bytes(png) {
         if w > max_dim || h > max_dim {
@@ -92,13 +96,16 @@ pub fn ocr_png(png: &[u8], language_hint: Option<&str>) -> Result<OcrResultDto, 
     if let Ok(line_list) = result.Lines() {
         for line in line_list {
             let text_h = line.Text().unwrap_or_default();
-            let text = String::from_utf16_lossy(&text_h.as_wide());
+            let text = String::from_utf16_lossy(text_h.as_wide());
             if text.is_empty() {
                 continue;
             }
             full.push_str(&text);
             full.push('\n');
-            lines.push(OcrLineDto { text, confidence: None });
+            lines.push(OcrLineDto {
+                text,
+                confidence: None,
+            });
         }
     }
     Ok(OcrResultDto {
@@ -118,12 +125,11 @@ fn png_dimensions_bytes(png: &[u8]) -> Option<(u32, u32)> {
 }
 
 fn create_engine(hint: Option<&str>) -> windows::core::Result<OcrEngine> {
-    if let Some(lang) = hint {
-        if let Ok(language) = Language::CreateLanguage(&HSTRING::from(lang)) {
-            if let Ok(engine) = OcrEngine::TryCreateFromLanguage(&language) {
-                return Ok(engine);
-            }
-        }
+    if let Some(lang) = hint
+        && let Ok(language) = Language::CreateLanguage(&HSTRING::from(lang))
+        && let Ok(engine) = OcrEngine::TryCreateFromLanguage(&language)
+    {
+        return Ok(engine);
     }
     OcrEngine::TryCreateFromUserProfileLanguages()
 }
@@ -150,10 +156,7 @@ mod tests {
         match result {
             Ok(_) => {} // 引擎可用的机器上成功也算通过
             Err(e) => {
-                assert!(
-                    e.code.starts_with("glint.ocr"),
-                    "结构化错误码: {e}"
-                );
+                assert!(e.code.starts_with("glint.ocr"), "结构化错误码: {e}");
             }
         }
     }

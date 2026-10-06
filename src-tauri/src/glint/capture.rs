@@ -43,8 +43,12 @@ pub struct CapturedScreen {
 
 /// 列出全部显示器（§5：物理坐标；可为负）。
 pub fn list_monitors() -> Result<Vec<MonitorInfo>, WeaveError> {
-    let screens = screenshots::Screen::all()
-        .map_err(|e| err("glint.screenEnumFailed", format!("screen enumeration failed: {e}")))?;
+    let screens = screenshots::Screen::all().map_err(|e| {
+        err(
+            "glint.screenEnumFailed",
+            format!("screen enumeration failed: {e}"),
+        )
+    })?;
     Ok(screens
         .iter()
         .enumerate()
@@ -68,12 +72,18 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>, WeaveError> {
 pub fn capture_monitor(monitor_index: usize) -> Result<CapturedScreen, WeaveError> {
     let monitors = list_monitors()?;
     let Some(info) = monitors.get(monitor_index) else {
-        return Err(err("glint.monitorNotFound", format!("monitor {monitor_index} not found")));
+        return Err(err(
+            "glint.monitorNotFound",
+            format!("monitor {monitor_index} not found"),
+        ));
     };
-    let screens = screenshots::Screen::all()
-        .map_err(|e| err("glint.screenEnumFailed", format!("{e}")))?;
+    let screens =
+        screenshots::Screen::all().map_err(|e| err("glint.screenEnumFailed", format!("{e}")))?;
     let Some(screen) = screens.get(monitor_index) else {
-        return Err(err("glint.monitorNotFound", format!("monitor {monitor_index} not found")));
+        return Err(err(
+            "glint.monitorNotFound",
+            format!("monitor {monitor_index} not found"),
+        ));
     };
     let image = screen
         .capture()
@@ -101,7 +111,11 @@ pub fn crop_rgba(
     }
     let img = image::RgbaImage::from_raw(width, height, rgba.to_vec())
         .ok_or_else(|| err("glint.invalidRegion", "rgba buffer size mismatch"))?;
-    if crop_w == 0 || crop_h == 0 || x.saturating_add(crop_w) > width || y.saturating_add(crop_h) > height {
+    if crop_w == 0
+        || crop_h == 0
+        || x.saturating_add(crop_w) > width
+        || y.saturating_add(crop_h) > height
+    {
         return Err(err(
             "glint.invalidRegion",
             format!("region ({x},{y},{crop_w},{crop_h}) out of bounds {width}x{height}"),
@@ -140,8 +154,12 @@ pub fn list_windows() -> Vec<WindowInfo> {
     let mut out = Vec::new();
     if let Ok(windows) = x_win::get_open_windows() {
         for w in windows {
-            let (x, y, width, height) =
-                (w.position.x, w.position.y, w.position.width, w.position.height);
+            let (x, y, width, height) = (
+                w.position.x,
+                w.position.y,
+                w.position.width,
+                w.position.height,
+            );
             if width <= 0 || height <= 0 {
                 continue;
             }
@@ -165,9 +183,21 @@ pub fn list_windows() -> Vec<WindowInfo> {
     out
 }
 
+/// 前台窗口捕获结果：屏幕坐标矩形 + 所属显示器 index。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForegroundWindow {
+    pub hwnd: isize,
+    pub title: String,
+    pub screen_x: i32,
+    pub screen_y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub monitor_index: usize,
+}
+
 /// 前台窗口捕获：返回屏幕坐标矩形 + 所属显示器 index。
 /// 失败模型（§7）：已最小化/不可见/零尺寸 ⇒ 结构化错误（不伪造截图）。
-pub fn foreground_window_rect() -> Result<(isize, String, i32, i32, u32, u32, usize), WeaveError> {
+pub fn foreground_window_rect() -> Result<ForegroundWindow, WeaveError> {
     let active = x_win::get_active_window()
         .map_err(|e| err("glint.noForegroundWindow", format!("no active window: {e}")))?;
     let (x, y, width, height) = (
@@ -185,18 +215,24 @@ pub fn foreground_window_rect() -> Result<(isize, String, i32, i32, u32, u32, us
     let monitors = list_monitors()?;
     let cx = x + width / 2;
     let cy = y + height / 2;
-    let Some((index, _)) = monitors
-        .iter()
-        .enumerate()
-        .find(|(_, m)| {
-            let (mw, mh) = (m.width as i32, m.height as i32);
-            cx >= m.x && cx < m.x + mw && cy >= m.y && cy < m.y + mh
-        })
-    else {
-        return Err(err("glint.monitorNotFound", "window center outside known monitors"));
+    let Some((index, _)) = monitors.iter().enumerate().find(|(_, m)| {
+        let (mw, mh) = (m.width as i32, m.height as i32);
+        cx >= m.x && cx < m.x + mw && cy >= m.y && cy < m.y + mh
+    }) else {
+        return Err(err(
+            "glint.monitorNotFound",
+            "window center outside known monitors",
+        ));
     };
-    let title = active.title.clone();
-    Ok((active.id as isize, title, x, y, width as u32, height as u32, index))
+    Ok(ForegroundWindow {
+        hwnd: active.id as isize,
+        title: active.title,
+        screen_x: x,
+        screen_y: y,
+        width: width as u32,
+        height: height as u32,
+        monitor_index: index,
+    })
 }
 
 /// 在显示器捕获图上裁出窗口区域（屏幕坐标 → 显示器相对坐标）。
@@ -215,7 +251,15 @@ pub fn crop_window_from_monitor(
     let max_h = monitor.height.saturating_sub(rel_y);
     let crop_w = w.min(max_w);
     let crop_h = h.min(max_h);
-    crop_rgba(rgba, monitor.width, monitor.height, rel_x, rel_y, crop_w, crop_h)
+    crop_rgba(
+        rgba,
+        monitor.width,
+        monitor.height,
+        rel_x,
+        rel_y,
+        crop_w,
+        crop_h,
+    )
 }
 
 // ── 输出命名与存储路径（§8/§9：稳定命名、不覆盖）──

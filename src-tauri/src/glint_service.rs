@@ -7,6 +7,8 @@
 //!   内容、剪贴板内容。
 //! - OCR 文本（§17）：只经返回值交 UI，不落盘、不入历史。
 
+#![expect(clippy::result_large_err)] // D10：IpcError DTO 体积豁免（与 archive_service 同）
+
 use tauri::Manager;
 
 use crate::commands::IpcError;
@@ -14,7 +16,9 @@ use crate::glint::storage::DEFAULT_MAX_RECENT;
 use crate::glint::{self, Annotation, CaptureRecord, MonitorInfo, OcrResultDto, WindowInfo};
 
 fn err(code: &'static str, message: impl Into<String>) -> IpcError {
-    IpcError::from(weave_core::prelude::WeaveError::io(code, message).with_location("glint_service"))
+    IpcError::from(
+        weave_core::prelude::WeaveError::io(code, message).with_location("glint_service"),
+    )
 }
 
 /// 捕获保存结果（记录 + 来源描述 §4 CaptureMetadata）。
@@ -47,7 +51,12 @@ fn encode_rgba(
 }
 
 /// 保存 PNG 到 Glint 捕获目录（唯一命名，不覆盖 §8；仅记元数据日志 §27）。
-fn save_png(dir: &std::path::Path, png: &[u8], width: u32, height: u32) -> Result<CaptureRecord, IpcError> {
+fn save_png(
+    dir: &std::path::Path,
+    png: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<CaptureRecord, IpcError> {
     let path = glint::unique_output_path(dir, "png", std::time::SystemTime::now());
     std::fs::write(&path, png).map_err(|e| err("glint.saveFailed", format!("{e}")))?;
     tracing::info!(target: "glint", file = %path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(), w = width, h = height, size = png.len(), "capture saved");
@@ -75,7 +84,10 @@ fn guarded_path(dir: &std::path::Path, file_name: &str) -> Result<std::path::Pat
     }
     let path = dir.join(file_name);
     if !path.starts_with(dir) || !path.is_file() {
-        return Err(err("glint.notFound", format!("capture '{file_name}' not found")));
+        return Err(err(
+            "glint.notFound",
+            format!("capture '{file_name}' not found"),
+        ));
     }
     Ok(path)
 }
@@ -137,30 +149,44 @@ pub fn glint_list_recent(app: tauri::AppHandle) -> Result<Vec<CaptureRecord>, Ip
 
 #[tauri::command]
 #[specta::specta]
-pub fn glint_capture_screen(app: tauri::AppHandle, monitor_index: u32) -> Result<GlintCaptureSaved, IpcError> {
+pub fn glint_capture_screen(
+    app: tauri::AppHandle,
+    monitor_index: u32,
+) -> Result<GlintCaptureSaved, IpcError> {
     let screen = glint::capture_monitor(monitor_index as usize).map_err(IpcError::from)?;
     let png = encode_rgba(screen.rgba, screen.width, screen.height, "png", 90)?;
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let record = save_png(&dir, &png, screen.width, screen.height)?;
     Ok(GlintCaptureSaved {
-        source: format!("monitor {} ({}x{} @ {},{})",
-            screen.monitor.index, screen.width, screen.height, screen.monitor.x, screen.monitor.y),
+        source: format!(
+            "monitor {} ({}x{} @ {},{})",
+            screen.monitor.index, screen.width, screen.height, screen.monitor.x, screen.monitor.y
+        ),
         record,
     })
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn glint_capture_foreground_window(app: tauri::AppHandle) -> Result<GlintCaptureSaved, IpcError> {
-    let (_hwnd, title, x, y, w, h, monitor_index) = glint::foreground_window_rect().map_err(IpcError::from)?;
-    let screen = glint::capture_monitor(monitor_index as usize).map_err(IpcError::from)?;
-    let (rgba, cw, ch) =
-        glint::crop_window_from_monitor(&screen.rgba, &screen.monitor, x, y, w, h).map_err(IpcError::from)?;
+pub fn glint_capture_foreground_window(
+    app: tauri::AppHandle,
+) -> Result<GlintCaptureSaved, IpcError> {
+    let win = glint::foreground_window_rect().map_err(IpcError::from)?;
+    let screen = glint::capture_monitor(win.monitor_index).map_err(IpcError::from)?;
+    let (rgba, cw, ch) = glint::crop_window_from_monitor(
+        &screen.rgba,
+        &screen.monitor,
+        win.screen_x,
+        win.screen_y,
+        win.width,
+        win.height,
+    )
+    .map_err(IpcError::from)?;
     let png = encode_rgba(rgba, cw, ch, "png", 90)?;
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let record = save_png(&dir, &png, cw, ch)?;
     Ok(GlintCaptureSaved {
-        source: format!("window: {title}"),
+        source: format!("window: {}", win.title),
         record,
     })
 }
@@ -180,7 +206,8 @@ pub fn glint_crop_capture(
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let path = guarded_path(&dir, &file_name)?;
     let (rgba, width, height) = load_rgba(&path)?;
-    let (cropped, cw, ch) = glint::crop_rgba(&rgba, width, height, x, y, w, h).map_err(IpcError::from)?;
+    let (cropped, cw, ch) =
+        glint::crop_rgba(&rgba, width, height, x, y, w, h).map_err(IpcError::from)?;
     let png = encode_rgba(cropped, cw, ch, "png", 90)?;
     let record = save_png(&dir, &png, cw, ch)?;
     Ok(GlintCaptureSaved {
@@ -203,7 +230,8 @@ pub fn glint_save_annotated(
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let path = guarded_path(&dir, &file_name)?;
     let (rgba, width, height) = load_rgba(&path)?;
-    let rendered = glint::render_annotations(&rgba, width, height, &annotations).map_err(IpcError::from)?;
+    let rendered =
+        glint::render_annotations(&rgba, width, height, &annotations).map_err(IpcError::from)?;
     let png = encode_rgba(rendered, width, height, &format, jpeg_quality)?;
     let ext = if format.eq_ignore_ascii_case("jpeg") || format.eq_ignore_ascii_case("jpg") {
         "jpg"
@@ -269,7 +297,10 @@ pub fn glint_delete_capture(app: tauri::AppHandle, file_name: String) -> Result<
 
 #[tauri::command]
 #[specta::specta]
-pub fn glint_copy_capture_to_clipboard(app: tauri::AppHandle, file_name: String) -> Result<(), IpcError> {
+pub fn glint_copy_capture_to_clipboard(
+    app: tauri::AppHandle,
+    file_name: String,
+) -> Result<(), IpcError> {
     let dir = glint::captures_dir(&app).map_err(IpcError::from)?;
     let path = guarded_path(&dir, &file_name)?;
     let png = load_png_bytes(&path)?;
@@ -279,8 +310,12 @@ pub fn glint_copy_capture_to_clipboard(app: tauri::AppHandle, file_name: String)
     let rgba = decoded.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
     {
-        let mut clip = arboard::Clipboard::new()
-            .map_err(|e| err("glint.clipboardFailed", format!("open clipboard failed: {e}")))?;
+        let mut clip = arboard::Clipboard::new().map_err(|e| {
+            err(
+                "glint.clipboardFailed",
+                format!("open clipboard failed: {e}"),
+            )
+        })?;
         clip.set_image(arboard::ImageData {
             width: w as usize,
             height: h as usize,
@@ -292,8 +327,8 @@ pub fn glint_copy_capture_to_clipboard(app: tauri::AppHandle, file_name: String)
     let dynamic = image::DynamicImage::ImageRgba8(rgba);
     let canonical = weave_media::ops::encode_image(&dynamic, weave_media::ImageFormat::Png, None)
         .map_err(|e| err("glint.encodeFailed", e))?;
-    if let Some(fp) =
-        weave_files::hash::hash_bytes(weave_core::prelude::HashAlgorithm::Sha256, &canonical).ok()
+    if let Ok(fp) =
+        weave_files::hash::hash_bytes(weave_core::prelude::HashAlgorithm::Sha256, &canonical)
     {
         let state = app.state::<crate::state::AppState>();
         *state.clipboard.suppress.lock().expect("suppress") = Some(fp.to_lowercase());

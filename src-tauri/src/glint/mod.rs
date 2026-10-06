@@ -12,10 +12,11 @@ pub mod capture;
 pub mod ocr;
 pub mod storage;
 
-pub use annotation::{render as render_annotations, Annotation, AnnotationShape, AnnotationStyle};
+pub use annotation::{Annotation, AnnotationShape, AnnotationStyle, render as render_annotations};
 pub use capture::{
-    capture_monitor, crop_rgba, crop_window_from_monitor, foreground_window_rect, list_monitors,
-    list_windows, unique_output_path, CapturedScreen, MonitorInfo, WindowInfo,
+    CapturedScreen, ForegroundWindow, MonitorInfo, WindowInfo, capture_monitor, crop_rgba,
+    crop_window_from_monitor, foreground_window_rect, list_monitors, list_windows,
+    unique_output_path,
 };
 pub use ocr::{OcrLineDto, OcrResultDto};
-pub use storage::{captures_dir, delete_capture, list_recent, CaptureRecord};
+pub use storage::{CaptureRecord, captures_dir, delete_capture, list_recent};
