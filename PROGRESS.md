@@ -1408,3 +1408,43 @@ Known Limitations（如实）:
   （P1 如实；ETag 为 M2.11 前置）
 - 性能基准表（1KB-100MB/批量 10-1000）未做（结构有界+敌意输入验证）
 - 正文提取为启发式（UI 明示）；SSRF 分类不识别"公网 IP 内网映射"环境
+
+## M2.11 Website Monitor 网站监控中心（2.0）
+
+状态：P0 PASS（P1 PARTIAL 如实）。提交：R1 (monitor 领域 12 测试) /
+R2/R3 (monitor_service 14 IPC + §32 handler 注册表接 Scheduler) /
+R2b (specta f64) / R4 (MonitorPanel+palette+i18n+clippy 0) / docs。
+
+关键实现:
+
+- **模型**（§4/§9/§47）：Target/Snapshot(元数据+payload 分离 §46)/
+  ChangeEvent；状态机业务层统一定义；CheckResult 八值不人为复杂分类
+- **指纹优先**（§10/§55）：规范化提取文本（行尾/空白归一）SHA-256——
+  非 raw body；MainContent 模式下广告/时间戳不产生假变化（§75 测试）
+- **失败纪律**（§15/§73）：失败不写快照不覆盖 last_fingerprint；
+  失败后成功 ⇒ Recovered；backoff=interval×2^min(n,4) §18
+- **调度**（§23/§32）：每 target 一个 Interval Schedule（≥60s §18），
+  dispatch monitor: 分支经 Handler 注册表（OnceLock 回调）spawn 线程
+  异步检查——tick 不被网络拖住；启动恢复注册
+- **稳定性**（§25/§43/§46/§48）：per-target inflight 锁 + 全局并发 ≤4
+  + catch_unwind + 历史容量（50 快照/30 天，最近+基线受保护）
+- **集成**：Diff=weave-text（无第二 Diff §41）；通知=M2.6 中心三策略
+  §22；导出报告 atomic_write+creation-undo；无第二套任何基础设施
+- **UI**（§31/§32/§33）：列表+创建卡（scope 解释行）+Check Now+暂停/
+  恢复+删除保留历史 §63+详情（历史/变化/diff unified §56）
+
+Quality:
+
+- 42 套件 0 failed；monitor 12 测试；fmt/clippy 0；tsc/eslint 0；
+  vitest 38；tauri build ✓
+- **构建回归修复**：rustc-link-arg-tests 不覆盖 lib 单元测试二进制——
+  M2.11 检查代码拖入窗口栈符号后 clean 重建即触发加载器失败；修复 =
+  §32 Handler 注册表解耦（dispatch 零 tauri 符号），非链接器 hack
+- 交付文档：Spec/ifuyo Weave 2.0 M2.11 Website Monitor 实施总结.md
+  （§88 十四问逐答）
+
+Known Limitations（如实）:
+
+- JS 渲染页面不支持（§36）；登录页不支持（§37/§38）；robots awareness
+  未实现（§20）；500/1000 targets 压测基准表未做（§50 P2）
+- diff 依赖两次有 payload 快照（NoChange metadata-only 的容量取舍 §46）
