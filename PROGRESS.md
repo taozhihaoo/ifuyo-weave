@@ -1164,3 +1164,41 @@ Known Limitations（P1/P2）:
 - 隐藏内容/修订/批注删除 = scan-only（§9 明确）；PDF 元数据清理 scan-only
 - 导出 stale 快照 UI 未传 ⇒ 服务端现读 stat（窗口极小+输出永不覆盖，已注释）
 - 嵌套 archive 不递归（§40 设计选择）
+
+## M2.5 Archive / Integrity（2.0）
+
+Scope: ZIP 创建/检查/安全解压 + SHA-256 文件校验 + 目录 Manifest——统一执行
+模型下"归档 + 验证 + 可审计"。**无第二套执行/Job/恢复体系**；清理/覆盖策略
+集中 Plan 层。
+
+提交链: A1 (weave-files::archive create/inspect/extract + Zip Slip/保留名/
+重复/炸弹防护 + 8 测试) / lint / A2 (weave-files::integrity manifest+verify
+4 测试) / A3 (archive_service IPC 7 命令) / A4 (ArchivePanel 三 tab+i18n) /
+A5 (perf+总结+PROGRESS)。
+
+关键实现:
+
+- **临时输出**（§18）：`*.weave-zip-tmp` → Level 0 结构验证（重开+条目数）→
+  rename；取消/失败 ⇒ 删临时件（测试守护）
+- **Zip Slip**（§9 P0）：is_safe_entry_name 逐分量（拒绝盘符/UNC/`..`）+
+  resolve_entry_target 二次校验 + 深度复核；8 名矩阵全 Block
+- **保留名**（§60）：CON/NUL/COM1…/尾点/尾空格 Blocked
+- **重复条目**（§61）：zip crate 双端拒绝；外部包 Inspect malformed 错误携带
+  条目名；规范化重复（./ 前缀）检出+Skip
+- **Zip Bomb**（§34）：总量上限 ⇒ bomb_suspect ⇒ 服务端 Block
+- **覆盖策略**（§29）：Skip/Overwrite/Rename 集中 build_extraction_plan
+- **Manifest**（§22/§23/§65）：相对路径行式；Same/Modified/Added/Removed/
+  Unreadable 复用 M2.1 语义
+
+Quality:
+
+- 全工作区 42 套件 0 failed；archive 9 + integrity 4 新测试；172 lib 总量
+- perf（release 实测）：zip Normal 1k create=97ms/extract=280ms；10k
+  create=781ms/extract=3.7s（线性流式）
+- tsc/eslint/vitest 38 绿；fmt/clippy 0；tauri build 通过
+- 交付文档：Spec/ifuyo Weave 2.0 M2.5 Archive Integrity 实施总结.md（§81 全节）
+
+Known Limitations（P1/P2）:
+
+- Level 2 一键内容验证命令未组合；SHA-1/MD5 未加；ZIP 内预览未做；
+  嵌套 ZIP 不递归（设计选择）
