@@ -1448,3 +1448,43 @@ Known Limitations（如实）:
 - JS 渲染页面不支持（§36）；登录页不支持（§37/§38）；robots awareness
   未实现（§20）；500/1000 targets 压测基准表未做（§50 P2）
 - diff 依赖两次有 payload 快照（NoChange metadata-only 的容量取舍 §46）
+
+## M2.12 Smart Processing 智能处理中心（2.0）
+
+状态：P0 PASS（§61 26 项逐项 PASS；§68 逐答）。提交：R1/R2 (smart 领域
++规则引擎+Provider+service 21 测试) / R3 (SmartPanel+i18n+palette) /
+docs。
+
+关键实现:
+
+- **Advisor/Authority 边界**（§31）：本模块只产出 Suggestion；执行 =
+  smart_build_plan 直接构造 M2.0 Plan（Rename/Move/DuplicateRecycle 三
+  kind）进 PlanCache ⇒ **既有 execute_plan/execute_recycle_plan/undo
+  IPC**——执行代码零新增（Revalidate=STALE 防护 §23/冲突标记 §24/
+  批内环 Conflict §25/回收站可恢复 §29 全部继承）
+- **本地规则引擎**（§12/§47 无 AI 完整可用）：Classify（Type=weave-files
+  FileCategory Confirmed + 文件名关键词 Medium + 不一致备选 §11 +
+  Unknown 一等 §27）；Rename（EXIF DateTimeOriginal Confirmed High/文档
+  title Confirmed Medium/噪声清洗 Heuristic Low/证据不足不建议 §9）；
+  Cleanup（空文件 Confirmed/temp 命名 Heuristic High-risk/重复=同尺寸
+  →partial_hash 分组 Confirmed 只删副本 §28）
+- **Provider 边界**（§13/§30）：trait + schema（deny_unknown_fields）+
+  domain（action 白名单 **delete 永不在列**/path-in-scope/file-exists/
+  confidence ∈[0,1]）+ Disabled 默认 §14 + mock 8 测试；无云实现（§63）
+- **UI**（§20/§21）：输入/四模式/分析摘要（高/中/低计数）/建议表（证据
+  串/置信/冲突 ⚠）/只默认勾选 High §21/生成 Plan/经既有 IPC 执行
+- **会话历史**（§34）：smart-sessions.json 有界 20 仅元数据计数
+
+Quality:
+
+- 42 套件 0 failed；smart 21 测试；fmt/clippy 0；tsc/eslint 0；
+  vitest 38；tauri build ✓
+- 交付文档：Spec/ifuyo Weave 2.0 M2.12 Smart Processing 实施总结.md
+  （§68 六组逐答）
+
+Known Limitations（如实）:
+
+- AI Provider 无具体云实现（trait/schema/边界就绪，opt-in 后续）
+- Rename alternatives、两阶段 rename 自动解环（当前环=Conflict 拒绝，
+  安全优先）、Recipe Smart Actions：P1 未做
+- 1k/10k/50k 性能基准表 P2（单遍扫描+5000 上限结构有界）
