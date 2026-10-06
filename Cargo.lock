@@ -4784,6 +4784,7 @@ dependencies = [
  "weave-files",
  "weave-history",
  "weave-media",
+ "weave-privacy",
  "weave-testkit",
  "weave-text",
  "weave-utilities",

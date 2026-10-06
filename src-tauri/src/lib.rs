@@ -23,6 +23,7 @@ pub mod m2_commands;
 pub mod m3_commands;
 pub mod m4_commands;
 pub mod ops_dto;
+pub mod privacy_service;
 pub mod rename_service;
 pub mod space_service;
 pub mod state;
@@ -75,6 +76,10 @@ pub fn ipc_builder() -> Builder<tauri::Wry> {
         clipboard_service::clipboard_set_favorite,
         clipboard_service::clipboard_thumbnail,
         clipboard_service::clipboard_apply_config,
+        privacy_service::privacy_scan,
+        privacy_service::privacy_get_result,
+        privacy_service::privacy_export_safe_copy,
+        privacy_service::privacy_compare,
         m3_commands::scan_duplicates,
         m3_commands::build_recycle_plan,
         m3_commands::execute_recycle_plan,

@@ -42,6 +42,8 @@ pub struct AppState {
     pub space_results: std::sync::Arc<crate::space_service::SpaceResultCache>,
     /// M2.3：剪贴板运行时（条目/存储/暂停/抑制）。
     pub clipboard: std::sync::Arc<crate::clipboard_service::ClipboardRuntime>,
+    /// M2.4：隐私扫描结果缓存（job_id 为键）。
+    pub privacy_results: std::sync::Arc<crate::privacy_service::PrivacyResultCache>,
 }
 
 impl AppState {
@@ -64,6 +66,7 @@ impl AppState {
             compare_results: std::sync::Arc::new(crate::compare_service::CompareResultCache::new()),
             space_results: std::sync::Arc::new(crate::space_service::SpaceResultCache::new()),
             clipboard: std::sync::Arc::new(clipboard),
+            privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
         }
     }
 }

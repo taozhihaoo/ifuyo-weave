@@ -14,9 +14,9 @@ pub mod scanners;
 
 pub use cleanup::{apply_cleanup, verify_safe_copy};
 pub use model::{
-    CleanupAction, CleanupRisk, EvidenceLevel, FindingCategory, NotCheckedItem, PrivacyFinding,
-    PrivacyScanComparison, PrivacyScanSession, SessionStatus, Severity, compare_sessions,
-    masked_preview,
+    CleanupAction, CleanupRisk, EvidenceLevel, FindingCategory, FindingFacts, NotCheckedItem,
+    PrivacyFinding, PrivacyScanComparison, PrivacyScanSession, SessionStatus, Severity,
+    compare_sessions, masked_preview,
 };
 pub use patterns::{PatternHit, PatternKind, scan_line};
 pub use scanners::{ScanLimits, scan_bytes_auto};

@@ -88,6 +88,17 @@ export const commands = {
 	clipboardThumbnail: (id: string) => typedError<number[], IpcError>(__TAURI_INVOKE("clipboard_thumbnail", { id })),
 	/**  监控设置立即生效（§42；设置持久化走既有 set_app_config）。 */
 	clipboardApplyConfig: (config: ClipboardConfig) => __TAURI_INVOKE<void>("clipboard_apply_config", { config }),
+	privacyScan: (request: PrivacyScanRequestDto) => typedError<JobHandleDto, IpcError>(__TAURI_INVOKE("privacy_scan", { request })),
+	/**  领取扫描结果。 */
+	privacyGetResult: (jobId: string) => typedError<PrivacyReportDto, IpcError>(__TAURI_INVOKE("privacy_get_result", { jobId })),
+	/**
+	 *  导出 Safe Copy（§21/§22/§42）：
+	 *  stale 重验（size+mtime 与扫描快照一致）→ 内容变换 → verify → 原子写。
+	 *  原文件全程只读；输出已存在 ⇒ 拒绝（No accidental overwrite §22）。
+	 */
+	privacyExportSafeCopy: (items: PrivacyExportItemDto[]) => typedError<PrivacyExportResultDto, IpcError>(__TAURI_INVOKE("privacy_export_safe_copy", { items })),
+	/**  Before vs After（按稳定指纹；§27）。 */
+	privacyCompare: (request: PrivacyCompareRequestDto) => typedError<PrivacyComparisonDto, IpcError>(__TAURI_INVOKE("privacy_compare", { request })),
 	/**
 	 *  重复扫描任务（三级管线；非阻塞；进度经 get_job 轮询，取消经 cancel_job）。
 	 *  取消时返回 partial_result 标记的部分报告（M3 §27）。
@@ -1129,6 +1140,81 @@ export type PreviewSummaryDto = {
 	outputBytes: number | null,
 	/**  潜在失败摘录（§57 有界 20 条）。 */
 	issues: string[],
+};
+
+export type PrivacyCompareRequestDto = {
+	beforeJobId: string,
+	afterJobId: string,
+};
+
+export type PrivacyComparisonDto = {
+	resolved: number | null,
+	remaining: number | null,
+	new: number | null,
+};
+
+export type PrivacyExportFindingDto = {
+	relativePath: string,
+	subCategory: string,
+	cleanup: string,
+};
+
+export type PrivacyExportItemDto = {
+	/**  原文件绝对路径。 */
+	source: string,
+	/**  Safe Copy 输出绝对路径（§21：显式输出；默认由 UI 给 `<name>.safe.<ext>`）。 */
+	output: string,
+	/**  扫描时的源快照（stale 重验依据 §42）。 */
+	size: number | null,
+	modifiedMs: number | null,
+	/**  选中清理项（相对路径 + cleanup 类型 + sub_category）。 */
+	findings: PrivacyExportFindingDto[],
+};
+
+export type PrivacyExportResultDto = {
+	exported: number | null,
+	staleSkipped: number | null,
+	failed: number | null,
+	operationId: string,
+	/**  每项：source → output（已验证）。 */
+	outputs: ([string, string])[],
+};
+
+export type PrivacyFindingDto = {
+	fingerprint: string,
+	relativePath: string,
+	category: string,
+	subCategory: string,
+	severity: string,
+	evidence: string,
+	location: string,
+	description: string,
+	evidenceSummary: string,
+	cleanup: string,
+	recommended: boolean,
+};
+
+export type PrivacyReportDto = {
+	sessionId: string,
+	root: string,
+	durationMs: number | null,
+	status: string,
+	filesScanned: number | null,
+	filesSupported: number | null,
+	filesUnsupported: number | null,
+	filesFailed: number | null,
+	highCount: number | null,
+	mediumCount: number | null,
+	lowCount: number | null,
+	confirmedCount: number | null,
+	suspectedCount: number | null,
+	findings: PrivacyFindingDto[],
+	notFullyChecked: ([string, string])[],
+	warnings: string[],
+};
+
+export type PrivacyScanRequestDto = {
+	root: string,
 };
 
 /**  组内回收选择（M3 §52–§56）。 */

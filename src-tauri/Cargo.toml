@@ -25,6 +25,7 @@ weave-media = { path = "../crates/weave-media" }
 weave-batch = { path = "../crates/weave-batch" }
 weave-compare = { path = "../crates/weave-compare" }
 weave-clipboard = { path = "../crates/weave-clipboard" }
+weave-privacy = { path = "../crates/weave-privacy" }
 sysinfo = { workspace = true }
 arboard = { workspace = true }
 clipboard-win = { workspace = true }
