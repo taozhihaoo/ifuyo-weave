@@ -1276,3 +1276,42 @@ Known Limitations（P1/P2）:
   分派 recipe:<id> → run_recipe → Run History（集成测试：到期触发→run 被记录）
 - Folder Watch/Clipboard 触发未接线（§23 如实 Partial）
 - 参数占位符解析（§11）未做；条件树（§12）以 filter 步骤代
+
+## M2.8 Glint Screen Capture（2.0）
+
+状态：P0 COMPLETE（Partial 项如实标注）。提交：R1 (capture core:
+screenshots+x-win 安全封装/OCR WinRT/非破坏标注/有界存储) / R2 (IPC 13
+命令) / R2b (specta DTO: usize/u64→u32/String/f64) / R3 (GlintPanel UI+
+palette+i18n) / lint (clippy 0)。
+
+关键实现:
+
+- **捕获**（§5/§7/§33）：物理像素全链路；区域=先捕获后裁剪（不重拍）；
+  前台窗口最小化/零尺寸/未知显示器 ⇒ 结构化错误不伪造；显示器坐标可负；
+  workspace unsafe=forbid ⇒ 全部经安全 crate（screenshots/x-win/WinRT）
+- **标注**（§11/§12）：render 纯函数非破坏（原图永不变）；7 种 P0 形状
+  Arrow/Rect/Ellipse/Freehand/Text/Blur/Pixelate；Text 经 ab_glyph 读
+  系统字体（msyh→simsun→arial，缺失 ⇒ glint.fontUnavailable）；保存标注
+  ⇒ 新文件
+- **OCR**（§15-§17）：WinRT Media.Ocr；不可用 ⇒ glint.ocrUnavailable；
+  行 confidence None 不伪造；文本只经返回值不落盘不入历史不写日志
+- **Clipboard**（§10/§15）：复用 M2.3 arboard 写入 + 规范 PNG SHA-256
+  指纹抑制（与监听同构 ⇒ 无自循环）
+- **存储**（§26）：glint-captures 有界（max 100 自动清理）；唯一命名
+  不覆盖；删除仅限 Glint 目录内（路径穿越防护）
+- **UI**（§6/§23/§36/§46）：拖拽选区（Enter/Esc）+ 实时尺寸；7 标注工具
+  +撤销；OCR 面板+复制文本；最近捕获懒加载缩略图（前 24 张）；palette
+  捕获命令经 store 请求分发；i18n zh/en 同笔 key 对等
+
+Quality:
+
+- 全工作区 42 套件 0 failed；glint 10 测试
+- tsc 0 / vitest 38 绿 / fmt、clippy 0 / tauri build 通过
+- 交付文档：Spec/ifuyo Weave 2.0 M2.8 Glint 实施总结.md
+
+Known Limitations（P2 如实）:
+
+- 捕获含 Weave 自身窗口（未做 hide-then-capture）；窗口捕获未去 DWM 阴影
+- 热键→捕获、Settings Glint 段、Privacy Preflight 接入、Show in
+  Explorer：未做；录屏仅评估（成本高，按 §52 允许不引入）
+- OCR 行级 confidence 为 None（WinRT 不提供）；Audit=tracing 元数据
