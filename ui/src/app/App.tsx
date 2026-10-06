@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listCommands, runCommand } from "../commands/registry";
-import type { IpcError } from "../generated/bindings";
+import type { AgentNotificationDto, IpcError } from "../generated/bindings";
 import { InspectorPanel, type HashJobView } from "../features/files/InspectorPanel";
 import { DuplicatesPanel } from "../features/ops/DuplicatesPanel";
 import { TextPanel } from "../features/text/TextPanel";
@@ -22,6 +22,8 @@ import { WispPanel } from "../features/wisp/WispPanel";
 import { WebPanel } from "../features/web/WebPanel";
 import { MonitorPanel } from "../features/monitor/MonitorPanel";
 import { SmartPanel } from "../features/smart/SmartPanel";
+import { JobsPanel } from "../features/shell/JobsPanel";
+import { SettingsPanel } from "../features/shell/SettingsPanel";
 import { WorkflowPanel } from "../features/workflow/WorkflowPanel";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { upsertCommand } from "../commands/registry";
@@ -53,6 +55,19 @@ const pillStyle: CSSProperties = {
   ...buttonStyle,
   borderRadius: "var(--radius-full)",
 };
+
+// M2.13 §35：通知 code 前缀 → 目标视图（通知点击精准返回上下文；
+// 未映射的 code 返回 undefined = 仅展示，不导航）。
+function notifTarget(
+  code: string,
+): "monitor" | "wisp" | "clipboard" | "smart" | "web" | undefined {
+  if (code.startsWith("monitor.")) return "monitor";
+  if (code.startsWith("wisp.")) return "wisp";
+  if (code.startsWith("clipboard")) return "clipboard";
+  if (code.startsWith("smart.")) return "smart";
+  if (code.startsWith("web.")) return "web";
+  return undefined;
+}
 
 function App() {
   const t = useT();
@@ -93,6 +108,8 @@ function App() {
     | "web"
     | "monitor"
     | "smart"
+    | "jobs"
+    | "settings"
     | "text"
     | "data"
     | "image"
@@ -103,6 +120,24 @@ function App() {
     | "history"
   >("tools");
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  // M2.13 §23/§35：通知中心 UI（Agent 通知聚合展示 + 代码前缀 → 视图跳转）
+  const [notifications, setNotifications] = useState<
+    AgentNotificationDto[]
+  >([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const loadNotifications = useCallback(() => {
+    commands
+      .agentStatus()
+      .then((r) => {
+        if (r.status === "ok") setNotifications(r.data.notifications);
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    loadNotifications();
+    const timer = setInterval(loadNotifications, 4000);
+    return () => clearInterval(timer);
+  }, [loadNotifications]);
   // M3 §106：统一 Drop 入口落在 Duplicates 页的目录（面板去重后追加到 roots）。
   const [dupSeedFolder, setDupSeedFolder] = useState<string | null>(null);
   // M4 下 §102：统一 Drop 入口落在文本页的文件（面板直接加载）。
@@ -528,44 +563,192 @@ function App() {
         >
           {t(`app.themeName.${theme}`)}
         </button>
+        <button
+          type="button"
+          onClick={() => setNotifOpen((o) => !o)}
+          style={{ ...pillStyle, position: "relative" }}
+          aria-label={t("notif.title")}
+        >
+          {t("notif.title")}
+          {notifications.length > 0 ? (
+            <span
+              style={{
+                position: "absolute",
+                top: -6,
+                right: -6,
+                background: "var(--color-danger)",
+                color: "var(--color-surface)",
+                borderRadius: "var(--radius-full)",
+                fontSize: 11,
+                padding: "0 5px",
+              }}
+            >
+              {notifications.length}
+            </span>
+          ) : null}
+        </button>
+        {notifOpen ? (
+          <div
+            role="dialog"
+            aria-label={t("notif.title")}
+            style={{
+              position: "absolute",
+              top: 60,
+              right: 24,
+              zIndex: 30,
+              width: 360,
+              maxHeight: 420,
+              overflow: "auto",
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              padding: "var(--spacing-sm)",
+              boxShadow: "var(--shadow-lg)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong>{t("notif.title")}</strong>
+              <button onClick={() => { commands.agentClearNotifications().then(loadNotifications).catch(() => {}); }}>
+                {t("notif.clear")}
+              </button>
+            </div>
+            {notifications.length === 0 ? (
+              <p style={{ fontSize: 12 }}>{t("notif.empty")}</p>
+            ) : (
+              notifications.map((n) => (
+                <div
+                  key={n.code}
+                  style={{
+                    borderTop: "1px solid var(--color-border)",
+                    padding: "var(--spacing-xs) 0",
+                    fontSize: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <strong>
+                      {(n.count ?? 0) > 1 ? `×${n.count ?? 0} ` : ""}
+                      {n.code}
+                    </strong>
+                    <button onClick={() => { commands.agentDismissNotification(n.code).then(loadNotifications).catch(() => {}); }}>
+                      {t("notif.dismiss")}
+                    </button>
+                  </div>
+                  <div>{n.message}</div>
+                  {(() => {
+                    const targetView = notifTarget(n.code);
+                    return targetView ? (
+                      <button
+                        onClick={() => {
+                          setNotifOpen(false);
+                          setView(targetView);
+                        }}
+                      >
+                        {t("notif.open")}
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
       </header>
 
       <nav
         aria-label={t("app.nav")}
-        style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}
+        style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}
       >
         {(
           [
-            "tools",
-            "rename",
-            "organizer",
-            "duplicates",
-            "text",
-            "data",
-            "image",
-            "batch",
-            "documents",
-            "utilities",
-            "workflow",
-            "history",
+            {
+              labelKey: "nav.group.files",
+              views: ["rename", "organizer", "duplicates", "batch"] as const,
+            },
+            {
+              labelKey: "nav.group.analyze",
+              views: ["compare", "space"] as const,
+            },
+            {
+              labelKey: "nav.group.content",
+              views: ["text", "data", "image", "documents"] as const,
+            },
+            {
+              labelKey: "nav.group.protect",
+              views: ["archive", "privacy"] as const,
+            },
+            {
+              labelKey: "nav.group.web",
+              views: ["web"] as const,
+            },
+            {
+              labelKey: "nav.group.capture",
+              views: ["clipboard", "glint", "wisp"] as const,
+            },
+            {
+              labelKey: "nav.group.automate",
+              views: ["agent", "recipes", "monitor"] as const,
+            },
+            {
+              labelKey: "nav.group.smart",
+              views: ["smart"] as const,
+            },
+            {
+              labelKey: "nav.group.tools",
+              views: ["utilities", "workflow"] as const,
+            },
           ] as const
-        ).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            aria-current={view === v ? "page" : undefined}
-            style={{
-              ...pillStyle,
-              background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
-              borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
-              color: view === v ? "var(--color-accent)" : "inherit",
-              fontWeight: view === v ? 600 : 400,
-            }}
-          >
-            {t(`nav.${v}`)}
-          </button>
+        ).map((group) => (
+          <div key={group.labelKey} style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "baseline", flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: "var(--typography-size-sm)",
+                color: "var(--color-text-muted)",
+                minWidth: 72,
+              }}
+            >
+              {t(group.labelKey)}
+            </span>
+            {group.views.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-current={view === v ? "page" : undefined}
+                style={{
+                  ...pillStyle,
+                  background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
+                  borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+                  color: view === v ? "var(--color-accent)" : "inherit",
+                  fontWeight: view === v ? 600 : 400,
+                }}
+              >
+                {t(`nav.${v}`)}
+              </button>
+            ))}
+          </div>
         ))}
+        <div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "baseline", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "var(--typography-size-sm)", color: "var(--color-text-muted)", minWidth: 72 }}>
+            {t("nav.group.system")}
+          </span>
+          {(["history", "jobs", "settings"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-current={view === v ? "page" : undefined}
+              style={{
+                ...pillStyle,
+                background: view === v ? "var(--color-accent-soft)" : "var(--color-surface)",
+                borderColor: view === v ? "var(--color-accent)" : "var(--color-border)",
+                color: view === v ? "var(--color-accent)" : "inherit",
+                fontWeight: view === v ? 600 : 400,
+              }}
+            >
+              {t(`nav.${v}`)}
+            </button>
+          ))}
+        </div>
       </nav>
 
       <section
@@ -668,6 +851,10 @@ function App() {
       {view === "smart" ? (
         <SmartPanel onOperationDone={() => setHistoryRefresh((n) => n + 1)} />
       ) : null}
+
+      {view === "jobs" ? <JobsPanel /> : null}
+
+      {view === "settings" ? <SettingsPanel /> : null}
 
       {view === "agent" ? (
         <AgentPanel locale={locale} />

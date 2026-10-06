@@ -378,7 +378,7 @@ impl JobTracker {
                     ("running", Some(*progress_current as f64))
                 }
                 JobState::Done(_) => ("completed", None),
-                JobState::Failed(e) => ("failed", None),
+                JobState::Failed(_e) => ("failed", None),
             };
             let error_code = if let JobState::Failed(e) = &*guard {
                 Some(e.code.clone())
