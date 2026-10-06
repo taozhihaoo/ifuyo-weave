@@ -13,7 +13,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::time::SystemTime;
-use tauri::Manager;
 use weave_core::prelude::{CancellationToken, WeaveError};
 
 use crate::commands::IpcError;
@@ -331,9 +330,10 @@ fn recipe_run_impl(
             .unwrap_or(0)
     );
     if let Some(handle) = app
-        && let Ok(history) = history(handle) {
-            let _ = history.record_from_report(&recipe, &report, "manual", &run_id);
-        }
+        && let Ok(history) = history(handle)
+    {
+        let _ = history.record_from_report(&recipe, &report, "manual", &run_id);
+    }
 
     Ok(RecipeRunResultDto {
         run_id,
