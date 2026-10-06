@@ -12,7 +12,7 @@ pub mod model;
 pub mod patterns;
 pub mod scanners;
 
-pub use cleanup::{CleanupSelection, apply_cleanup};
+pub use cleanup::{apply_cleanup, verify_safe_copy};
 pub use model::{
     CleanupAction, CleanupRisk, EvidenceLevel, FindingCategory, NotCheckedItem, PrivacyFinding,
     PrivacyScanComparison, PrivacyScanSession, SessionStatus, Severity, compare_sessions,

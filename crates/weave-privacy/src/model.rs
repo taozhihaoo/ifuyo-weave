@@ -54,7 +54,7 @@ pub enum FindingCategory {
 }
 
 /// 清理动作（§24；与"发现"分离——发现 ≠ 可安全删除，§9）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CleanupAction {
     /// 图片元数据剥离（像素重编码；方向已应用；§7 须明示）。

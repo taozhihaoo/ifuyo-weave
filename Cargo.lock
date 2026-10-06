@@ -4903,6 +4903,7 @@ dependencies = [
 name = "weave-privacy"
 version = "0.1.0"
 dependencies = [
+ "image",
  "lopdf",
  "serde",
  "serde_json",
