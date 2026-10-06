@@ -155,6 +155,13 @@ impl SchedulerComponent {
         due
     }
 
+    /// 设置某调度的最近结果摘要（§21 可观察性）。
+    pub fn last_result_for(&mut self, id: &str, result: &str) {
+        if let Some(def) = self.schedules.iter_mut().find(|s| s.id == id) {
+            def.last_result = Some(result.to_string());
+        }
+    }
+
     pub fn set_running(&mut self, id: &str, running: bool) {
         if running {
             if !self.running_jobs.iter().any(|j| j == id) {
@@ -227,6 +234,11 @@ pub struct AgentRuntime {
     pub gate: ConcurrencyGate,
     pub started_at: Mutex<Option<SystemTime>>,
     pub last_error: Mutex<Option<String>>,
+    /// 运行中 Recipe 的取消令牌（schedule_id → token；§49/§54 取消扩展点）。
+    pub run_tokens:
+        Mutex<std::collections::HashMap<String, weave_core::prelude::CancellationToken>>,
+    /// Agent 级取消令牌（stop 时触发——当前 tick 线程以进程生命周期为界）。
+    pub agent_cancel: weave_core::prelude::CancellationToken,
     tick_count: AtomicU64,
 }
 
@@ -249,6 +261,8 @@ impl AgentRuntime {
             },
             queue: BoundedJobQueue::new(queue_capacity),
             gate: ConcurrencyGate::new(max_concurrent),
+            run_tokens: Mutex::new(std::collections::HashMap::new()),
+            agent_cancel: weave_core::prelude::CancellationToken::new(),
             started_at: Mutex::new(None),
             last_error: Mutex::new(None),
             tick_count: AtomicU64::new(0),

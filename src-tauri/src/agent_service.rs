@@ -377,24 +377,275 @@ pub fn start_agent(app: tauri::AppHandle) {
                     continue;
                 }
                 state.agent.record_tick();
-                let due = {
-                    let mut sched = state.agent.scheduler.lock().expect("sched");
-                    sched.collect_due(std::time::SystemTime::now())
+                let (recipe_dir, history) = {
+                    match crate::rename_service::resolve_history_dir(&app) {
+                        Ok(dir) => (
+                            dir.join("recipes"),
+                            crate::recipe::store_history::RunHistoryStore::at(
+                                dir.join("recipe-runs.json"),
+                            ),
+                        ),
+                        Err(_) => continue, // 存储不可用 ⇒ 本 tick 跳过（Recoverable §58）
+                    }
                 };
-                for task in due {
-                    // M2.6 无具体业务 Job——调度到已注册 handler（M2.7 Recipe 接入点 §52）。
-                    // 当前 handler 注册表为空 ⇒ 记录 tick 事实即可（Audit §39 安全元数据）。
-                    tracing::debug!(
-                        schedule = %task.id,
-                        job = %task.job_name,
-                        catch_up = task.is_catch_up,
-                        "scheduled tick"
-                    );
-                    let mut sched = state.agent.scheduler.lock().expect("sched");
-                    sched.set_running(&task.id, false);
-                    sched.last_success = Some(std::time::SystemTime::now());
+                let dispatched = dispatch_due_schedules(
+                    &mut state.agent.scheduler.lock().expect("sched"),
+                    &recipe_dir,
+                    &history,
+                    &mut state.agent.run_tokens.lock().expect("tokens"),
+                    &state.agent.agent_cancel,
+                );
+                if dispatched > 0 {
+                    tracing::debug!(dispatched, "agent scheduler dispatched recipe runs");
                 }
             }
         })
         .expect("spawn agent scheduler tick");
+}
+
+/// 到期调度分派（M2.7 §25/§43：tick 与测试共用的核心；test 可直调）。
+/// - `job_name = "recipe:<id>"` ⇒ 加载 Recipe 经 run_recipe 执行（同一 Plan
+///   走 M2.0 核心；Run History 记录计数/状态 §48）。
+/// - 其他 job_name ⇒ 未知 handler，仅登记事实（M2.7 无内置业务 Job）。
+/// - 每次运行独立 CancellationToken（登记进 run_tokens，供后续取消扩展）。
+pub fn dispatch_due_schedules(
+    scheduler: &mut crate::agent::SchedulerComponent,
+    recipe_store_dir: &std::path::Path,
+    history: &crate::recipe::store_history::RunHistoryStore,
+    run_tokens: &mut std::collections::HashMap<String, weave_core::prelude::CancellationToken>,
+    cancel: &weave_core::prelude::CancellationToken,
+) -> usize {
+    let now = std::time::SystemTime::now();
+    let due = scheduler.collect_due(now);
+    let mut dispatched = 0usize;
+    for task in due {
+        if cancel.is_cancelled() {
+            break;
+        }
+        let Some(recipe_id) = task.job_name.strip_prefix("recipe:") else {
+            // 未知 handler：登记事实后释放运行标记
+            scheduler.set_running(&task.id, false);
+            scheduler.last_result_for(&task.id, "no handler registered");
+            continue;
+        };
+        let token = weave_core::prelude::CancellationToken::new();
+        run_tokens.insert(task.id.clone(), token.clone());
+        let outcome = dispatch_recipe_run(recipe_store_dir, history, &recipe_id, &token, &task.id);
+        run_tokens.remove(&task.id);
+        scheduler.set_running(&task.id, false);
+        scheduler.last_result_for(&task.id, &outcome);
+        scheduler.last_success = Some(std::time::SystemTime::now());
+        dispatched += 1;
+    }
+    dispatched
+}
+
+fn dispatch_recipe_run(
+    recipe_store_dir: &std::path::Path,
+    history: &crate::recipe::store_history::RunHistoryStore,
+    recipe_id: &str,
+    token: &weave_core::prelude::CancellationToken,
+    schedule_id: &str,
+) -> String {
+    let store = match crate::recipe::model::RecipeStore::open(recipe_store_dir) {
+        Ok(store) => store,
+        Err(e) => return format!("store open failed: {}", e.code),
+    };
+    let outcome = store.load_all();
+    let Some(recipe) = outcome.recipes.into_iter().find(|r| r.id == recipe_id) else {
+        let msg = format!("recipe '{recipe_id}' not found");
+        let _ = history.append(&missing_recipe_record(recipe_id, schedule_id, &msg));
+        return msg;
+    };
+    let input_folder = recipe.input_folder.clone();
+    // §48：仅计数/状态进入历史——run_recipe 报告本就无文件内容
+    match crate::recipe::runner::run_recipe(
+        &recipe,
+        std::path::Path::new(&input_folder),
+        false,
+        token,
+        &mut |_, _| {},
+    ) {
+        Ok(report) => {
+            let summary = format!(
+                "status={:?} matched={} processed={} failed={}",
+                report.status, report.matched_files, report.total_processed, report.total_failed
+            );
+            let run_id = format!(
+                "run_{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0)
+            );
+            let _ = history.record_from_report(
+                &recipe,
+                &report,
+                &format!("schedule:{schedule_id}"),
+                &run_id,
+            );
+            summary
+        }
+        Err(e) => format!("recipe run failed: {}", e.code),
+    }
+}
+
+fn missing_recipe_record(
+    recipe_id: &str,
+    schedule_id: &str,
+    msg: &str,
+) -> crate::recipe::store_history::RecipeRunRecord {
+    crate::recipe::store_history::RecipeRunRecord {
+        run_id: format!("run_{schedule_id}_missing"),
+        recipe_id: recipe_id.to_string(),
+        recipe_name: String::new(),
+        recipe_snapshot: crate::recipe::model::Recipe {
+            id: recipe_id.to_string(),
+            name: String::new(),
+            description: msg.to_string(),
+            schema_version: crate::recipe::model::RECIPE_SCHEMA_VERSION,
+            enabled: false,
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            updated_at: std::time::SystemTime::UNIX_EPOCH,
+            input_folder: String::new(),
+            trigger: crate::recipe::model::RecipeTrigger::Manual,
+            parameters: Vec::new(),
+            actions: Vec::new(),
+        },
+        trigger: format!("schedule:{schedule_id}"),
+        dry_run: false,
+        status: "failed".to_string(),
+        matched_files: 0.0,
+        total_processed: 0.0,
+        total_skipped: 0.0,
+        total_failed: 1.0,
+        duration_ms: 0.0,
+        finished_at: std::time::SystemTime::now(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::recipe::model::{
+        ActionType, RECIPE_SCHEMA_VERSION, Recipe, RecipeAction, RecipeStore, RecipeTrigger,
+    };
+    use std::time::Duration;
+    use weave_core::prelude::CancellationToken;
+
+    fn sample_recipe(id: &str, input_folder: &std::path::Path) -> Recipe {
+        Recipe {
+            id: id.to_string(),
+            name: "scheduled manifest".to_string(),
+            description: String::new(),
+            schema_version: RECIPE_SCHEMA_VERSION,
+            enabled: true,
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            updated_at: std::time::SystemTime::UNIX_EPOCH,
+            input_folder: input_folder.to_string_lossy().into_owned(),
+            trigger: RecipeTrigger::Interval { seconds: 1 },
+            parameters: Vec::new(),
+            actions: vec![RecipeAction {
+                id: "a0".to_string(),
+                action_type: ActionType::HashManifest,
+                enabled: true,
+                parameter: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn due_schedule_dispatches_recipe_and_records_run() {
+        // §25/§43 集成：到期触发 → run_recipe 执行 → Run History 记录
+        let ws = weave_testkit::TempWorkspace::new("agent-recipe-dispatch").expect("ws");
+        let input_dir = ws.dir("input").expect("dir");
+        std::fs::write(input_dir.join("a.txt"), b"hello").expect("seed");
+
+        let recipe_dir = ws.path().join("recipes");
+        let recipe_id = "r_sched_test";
+        {
+            let store = RecipeStore::open(&recipe_dir).expect("store");
+            store
+                .save(&sample_recipe(recipe_id, &input_dir))
+                .expect("save recipe");
+        }
+        let history =
+            crate::recipe::store_history::RunHistoryStore::at(ws.path().join("recipe-runs.json"));
+
+        // Scheduler：Interval 1s，last_run 在过去 ⇒ 立即到期
+        let mut scheduler = crate::agent::SchedulerComponent::default();
+        scheduler.upsert(ScheduleDef {
+            id: "sched1".to_string(),
+            name: "test schedule".to_string(),
+            enabled: true,
+            kind: crate::agent::ScheduleKind::Interval { seconds: 1 },
+            missed_run_policy: MissedRunPolicy::Skip,
+            concurrency: crate::agent::ConcurrencyPolicy::SkipIfRunning,
+            job_name: format!("recipe:{recipe_id}"),
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            last_run_at: Some(std::time::SystemTime::now() - std::time::Duration::from_secs(60)),
+            last_result: None,
+            next_run_at_cached: None,
+        });
+
+        let mut tokens = std::collections::HashMap::new();
+        let dispatched = dispatch_due_schedules(
+            &mut scheduler,
+            &recipe_dir,
+            &history,
+            &mut tokens,
+            &CancellationToken::new(),
+        );
+        assert_eq!(dispatched, 1, "到期调度应分派一次");
+
+        // Run History 记录（§48：计数/状态，无内容）
+        let runs = history.load();
+        assert_eq!(runs.len(), 1, "run 被记录");
+        assert_eq!(runs[0].recipe_id, recipe_id);
+        assert_eq!(runs[0].status, "succeeded");
+        assert!(runs[0].trigger.starts_with("schedule:sched1"));
+        // Scheduler 状态回写
+        assert!(scheduler.running_jobs.is_empty(), "运行标记已释放");
+        assert!(scheduler.schedules.iter().any(|s| {
+            s.last_result
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("status=")
+        }));
+    }
+
+    #[test]
+    fn unknown_handler_job_is_released_without_dispatch() {
+        let ws = weave_testkit::TempWorkspace::new("agent-unknown-handler").expect("ws");
+        let recipe_dir = ws.path().join("recipes");
+        std::fs::create_dir_all(&recipe_dir).expect("dir");
+        let history =
+            crate::recipe::store_history::RunHistoryStore::at(ws.path().join("runs.json"));
+        let mut scheduler = crate::agent::SchedulerComponent::default();
+        scheduler.upsert(ScheduleDef {
+            id: "sched2".to_string(),
+            name: "unknown".to_string(),
+            enabled: true,
+            kind: crate::agent::ScheduleKind::Interval { seconds: 1 },
+            missed_run_policy: MissedRunPolicy::Skip,
+            concurrency: crate::agent::ConcurrencyPolicy::SkipIfRunning,
+            job_name: "someFutureJob".to_string(),
+            created_at: std::time::SystemTime::UNIX_EPOCH,
+            last_run_at: Some(std::time::SystemTime::now() - std::time::Duration::from_secs(60)),
+            last_result: None,
+            next_run_at_cached: None,
+        });
+        let mut tokens = std::collections::HashMap::new();
+        let dispatched = dispatch_due_schedules(
+            &mut scheduler,
+            &recipe_dir,
+            &history,
+            &mut tokens,
+            &CancellationToken::new(),
+        );
+        assert_eq!(dispatched, 0);
+        assert!(history.load().is_empty(), "未知 handler 不产生 run");
+        // 运行标记已释放
+        assert!(scheduler.running_jobs.is_empty());
+    }
 }
