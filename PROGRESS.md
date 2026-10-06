@@ -1315,3 +1315,47 @@ Known Limitations（P2 如实）:
 - 热键→捕获、Settings Glint 段、Privacy Preflight 接入、Show in
   Explorer：未做；录屏仅评估（成本高，按 §52 允许不引入）
 - OCR 行级 confidence 为 None（WinRT 不提供）；Audit=tracing 元数据
+
+## M2.9 Wisp / Paste Guard（2.0）
+
+状态：P0 COMPLETE（**Detection Capability = Limited 如实声明**）。提交：
+R1 (sensitivity model+rule engine+masking+risk engine) / R2 (service+
+M2.3 通路钩子+session 运行时+WispConfig) / R3 (WispPanel+palette+i18n) /
+lint (clippy 0) / docs。
+
+关键实现:
+
+- **检测**（§4-§6/§37-§39）：17 条内置规则 ruleset v1（具名凭证前缀
+  Critical/secret 赋值 placeholder 降置信/本地路径仅 Potentially/PII
+  保守）；findings 带 rule_id/confidence/severity/evidence/masked
+  preview/偏移；64K 截断如实；per-rule 20 上限防风暴
+- **风险**（§7-§10）：敏感性 ≠ 粘贴风险（同内容浏览器/未知目标升级；
+  Unknown ≠ Safe）；默认 Warn 不 Block；每应用规则（exe 身份 §22）
+  显式 Allow/Warn/Mask/Block 优先
+- **Paste Detection = Limited**（§14 如实）：unsafe=forbid ⇒ 无键盘
+  钩子；防线 = ①M2.3 同通路持续分类（无第二监听 §27）②guarded
+  recopy（Block/确认）③保护会话（mask→粘贴→TTL 指纹守卫恢复）
+- **保护会话**（§11/§12/§19/§20）：八态状态机；惰性 TTL；恢复前指纹
+  守卫（用户复制新内容 ⇒ 跳过恢复如实呈现，绝不覆盖）；崩溃恢复不
+  自动还原；原文落盘仅 retain_sensitive_payload 显式开启（默认关，
+  不伪装保险库 §25）
+- **自环**（§13）：masked/原文写入前登记 M2.3 suppress 指纹（同构
+  SHA-256，消自环+消 1s 轮询竞态）
+- **隐私**（§26/§52/§53/§55）：事件（有界 200）/日志/通知/决策对象
+  全部仅元数据；无键盘钩子无输入历史；零网络
+- **UI**（§44 轻量）：状态卡（Limited 如实）+粘贴前评估卡+会话卡
+  （TTL 倒计时/恢复/放弃）+检测自测+事件表；palette 三命令；i18n
+  zh/en 同笔
+
+Quality:
+
+- 全工作区 42 套件 0 failed；wisp 29 测试（误报/漏报/模糊/异常/守卫集）
+- tsc 0 / eslint 0 / vitest 38 绿 / fmt、clippy 0 / tauri build 5.57MiB
+- 交付文档：Spec/ifuyo Weave 2.0 M2.9 Wisp Paste Guard 实施总结.md
+  （§65 25 问逐项验收）
+
+Known Limitations（如实）:
+
+- 外部应用原生 Ctrl+V 不可拦截（平台能力边界，全链路声明 Limited）
+- 应用规则面板编辑器未做（配置 JSON 已持久化且引擎消费）
+- 1k/10k 压测基准表 P2（逻辑有界：监听节流+去重+事件上限）
