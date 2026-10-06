@@ -124,15 +124,15 @@ fn charset_from_meta(bytes: &[u8]) -> Option<String> {
 /// 解码为 UTF-8（§21 优先级：显式 charset → BOM → utf-8 best effort）。
 /// 返回 (text, used_charset_label)。
 pub fn decode_body(bytes: &[u8], charset_hint: Option<&str>) -> (String, String, CharsetSource) {
-    if let Some(hint) = charset_hint {
-        if let Some(enc) = encoding_rs::Encoding::for_label(hint.as_bytes()) {
-            let (text, _, _) = enc.decode(bytes);
-            return (
-                text.into_owned(),
-                enc.name().to_string(),
-                CharsetSource::HttpHeader,
-            );
-        }
+    if let Some(hint) = charset_hint
+        && let Some(enc) = encoding_rs::Encoding::for_label(hint.as_bytes())
+    {
+        let (text, _, _) = enc.decode(bytes);
+        return (
+            text.into_owned(),
+            enc.name().to_string(),
+            CharsetSource::HttpHeader,
+        );
     }
     if let Some((enc, bom_len)) = encoding_rs::Encoding::for_bom(bytes) {
         let (text, _, _) = enc.decode(&bytes[bom_len..]);
@@ -150,15 +150,15 @@ pub fn decode_body(bytes: &[u8], charset_hint: Option<&str>) -> (String, String,
             CharsetSource::Utf8Default,
         );
     }
-    if let Some(meta) = charset_from_meta(bytes) {
-        if let Some(enc) = encoding_rs::Encoding::for_label(meta.as_bytes()) {
-            let (decoded, _, _) = enc.decode(bytes);
-            return (
-                decoded.into_owned(),
-                enc.name().to_string(),
-                CharsetSource::MetaTag,
-            );
-        }
+    if let Some(meta) = charset_from_meta(bytes)
+        && let Some(enc) = encoding_rs::Encoding::for_label(meta.as_bytes())
+    {
+        let (decoded, _, _) = enc.decode(bytes);
+        return (
+            decoded.into_owned(),
+            enc.name().to_string(),
+            CharsetSource::MetaTag,
+        );
     }
     // 兜底：GBK 常见于中文站；再不行 lossy utf-8（如实标注）
     if let Some(enc) = encoding_rs::Encoding::for_label(b"gb18030") {

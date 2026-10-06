@@ -162,7 +162,7 @@ pub fn to_markdown(dom: &Html, base: Option<&str>) -> String {
 fn is_in_pre(el: &Option<ElementRef<'_>>) -> bool {
     el.as_ref()
         .and_then(|e| e.parent())
-        .and_then(|p| ElementRef::wrap(p))
+        .and_then(ElementRef::wrap)
         .is_some_and(|p| p.value().name() == "pre")
 }
 

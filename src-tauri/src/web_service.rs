@@ -20,10 +20,10 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 use crate::commands::IpcError;
-use crate::files_dto::JobHandleDto;
 use crate::config::WebConfig;
+use crate::files_dto::JobHandleDto;
 use crate::jobs::JobOutcome;
-use crate::web::fetch::{decode_body, fetch, FetchResponse, FetchLimits};
+use crate::web::fetch::{FetchLimits, FetchResponse, decode_body, fetch};
 use crate::web::html;
 use crate::web::markdown::to_markdown;
 use crate::web::model::{CharsetSource, WebContentType, WebDocument, WebFetchInfo, WebLink};
@@ -123,7 +123,8 @@ impl WebRuntime {
     }
 
     pub fn apply_config(&self, config: &WebConfig) {
-        self.allow_network.store(config.allow_network, Ordering::SeqCst);
+        self.allow_network
+            .store(config.allow_network, Ordering::SeqCst);
         *self.config.lock().expect("web config") = config.clone();
     }
 
@@ -147,7 +148,10 @@ impl WebRuntime {
             order.push(job_id.to_string());
             while order.len() > BATCH_REPORT_CACHE_CAP {
                 let evict = order.remove(0);
-                self.batch_reports.lock().expect("web reports").remove(&evict);
+                self.batch_reports
+                    .lock()
+                    .expect("web reports")
+                    .remove(&evict);
             }
         }
         self.batch_reports
@@ -157,7 +161,11 @@ impl WebRuntime {
     }
 
     pub fn batch_report(&self, job_id: &str) -> Option<WebBatchReport> {
-        self.batch_reports.lock().expect("web reports").get(job_id).cloned()
+        self.batch_reports
+            .lock()
+            .expect("web reports")
+            .get(job_id)
+            .cloned()
     }
 
     fn network_enabled(&self) -> bool {
@@ -197,7 +205,10 @@ fn ensure_network(rt: &WebRuntime) -> Result<(), IpcError> {
     if rt.network_enabled() {
         Ok(())
     } else {
-        Err(err("web.networkDisabled", "network access is disabled in settings"))
+        Err(err(
+            "web.networkDisabled",
+            "network access is disabled in settings",
+        ))
     }
 }
 
@@ -205,7 +216,10 @@ fn ensure_network(rt: &WebRuntime) -> Result<(), IpcError> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn web_clean_url(input: String, remove_tracking: bool) -> Result<crate::web::model::UrlCleanResult, IpcError> {
+pub fn web_clean_url(
+    input: String,
+    remove_tracking: bool,
+) -> Result<crate::web::model::UrlCleanResult, IpcError> {
     url::clean(&input, remove_tracking).map_err(IpcError::from)
 }
 
@@ -234,7 +248,11 @@ pub fn web_extract_urls_text(text: String) -> Vec<WebLink> {
 /// 本地 HTML 分析（§63：与远程同一 Parse/Extract/Transform 管线；不上网）。
 #[tauri::command]
 #[specta::specta]
-pub fn web_analyze_html(app: tauri::AppHandle, html_text: String, base_url: Option<String>) -> Result<WebDocument, IpcError> {
+pub fn web_analyze_html(
+    app: tauri::AppHandle,
+    html_text: String,
+    base_url: Option<String>,
+) -> Result<WebDocument, IpcError> {
     if html_text.len() > MAX_ANALYZE_BYTES {
         return Err(err(
             "web.contentTooLarge",
@@ -267,7 +285,11 @@ pub fn web_analyze_html(app: tauri::AppHandle, html_text: String, base_url: Opti
 /// 抓取任务（§13-§16/§44：后台 Job——可取消、不阻塞 UI）。
 #[tauri::command]
 #[specta::specta]
-pub fn web_fetch_url(app: tauri::AppHandle, url: String, allow_private: bool) -> Result<JobHandleDto, IpcError> {
+pub fn web_fetch_url(
+    app: tauri::AppHandle,
+    url: String,
+    allow_private: bool,
+) -> Result<JobHandleDto, IpcError> {
     let state = app.state::<crate::state::AppState>();
     ensure_network(&state.web)?;
     let limits = state.web.limits();
@@ -285,13 +307,17 @@ pub fn web_fetch_url(app: tauri::AppHandle, url: String, allow_private: bool) ->
                     doc: doc.clone(),
                     raw_html: raw,
                 });
-                app_state.jobs.finish(&job_id_task, JobOutcome::WebCompleted);
+                app_state
+                    .jobs
+                    .finish(&job_id_task, JobOutcome::WebCompleted);
             }
             Err(e) => app_state.jobs.fail(&job_id_task, e),
         }
     });
     drop(state_cell);
-    Ok(JobHandleDto { job_id: job_id.to_string() })
+    Ok(JobHandleDto {
+        job_id: job_id.to_string(),
+    })
 }
 
 fn do_fetch_document(
@@ -323,7 +349,10 @@ pub fn web_get_result(app: tauri::AppHandle, job_id: String) -> Result<WebDocume
     let slot = state.web.latest.lock().expect("web latest");
     match slot.as_ref() {
         Some(s) if s.job_id == job_id => Ok(s.doc.clone()),
-        _ => Err(err("web.noResult", format!("no web result for job '{job_id}'"))),
+        _ => Err(err(
+            "web.noResult",
+            format!("no web result for job '{job_id}'"),
+        )),
     }
 }
 
@@ -332,8 +361,8 @@ pub fn web_get_result(app: tauri::AppHandle, job_id: String) -> Result<WebDocume
 #[specta::specta]
 pub fn web_copy_text(app: tauri::AppHandle, text: String) -> Result<(), IpcError> {
     let state = app.state::<crate::state::AppState>();
-    if let Some(fp) =
-        weave_files::hash::hash_bytes(weave_core::prelude::HashAlgorithm::Sha256, text.as_bytes()).ok()
+    if let Ok(fp) =
+        weave_files::hash::hash_bytes(weave_core::prelude::HashAlgorithm::Sha256, text.as_bytes())
     {
         *state.clipboard.suppress.lock().expect("suppress") = Some(fp.to_lowercase());
     }
@@ -347,7 +376,10 @@ pub fn web_copy_text(app: tauri::AppHandle, text: String) -> Result<(), IpcError
 /// 导出（§37/§68/§69）：output-first + atomic_write + creation-undo。
 #[tauri::command]
 #[specta::specta]
-pub fn web_export_document(app: tauri::AppHandle, request: WebExportRequest) -> Result<WebExportResult, IpcError> {
+pub fn web_export_document(
+    app: tauri::AppHandle,
+    request: WebExportRequest,
+) -> Result<WebExportResult, IpcError> {
     use weave_files::atomic_write;
     let state = app.state::<crate::state::AppState>();
     let rt = &state.web;
@@ -403,10 +435,17 @@ pub fn web_export_document(app: tauri::AppHandle, request: WebExportRequest) -> 
             format!("output already exists: {} (output-first)", output.display()),
         ));
     }
-    atomic_write(&weave_files::fs::StdFilesystem, &output, content.as_bytes())
-        .map_err(|e| err("web.exportWriteFailed", format!("{}: {}", output.display(), e.message)))?;
+    atomic_write(&weave_files::fs::StdFilesystem, &output, content.as_bytes()).map_err(|e| {
+        err(
+            "web.exportWriteFailed",
+            format!("{}: {}", output.display(), e.message),
+        )
+    })?;
     if let Ok(hdir) = crate::rename_service::resolve_history_dir(&app) {
-        let masked_source = source_url.as_deref().map(url::mask_sensitive).unwrap_or_default();
+        let masked_source = source_url
+            .as_deref()
+            .map(url::mask_sensitive)
+            .unwrap_or_default();
         if let Err(e) = crate::batch_service::record_creation_transaction(
             &hdir,
             &[],
@@ -417,7 +456,10 @@ pub fn web_export_document(app: tauri::AppHandle, request: WebExportRequest) -> 
         }
     }
     tracing::info!(target: "web", out = %output.display(), bytes = content.len(), "web content exported");
-    Ok(WebExportResult { output: output.to_string_lossy().into_owned(), bytes: content.len() as f64 })
+    Ok(WebExportResult {
+        output: output.to_string_lossy().into_owned(),
+        bytes: content.len() as f64,
+    })
 }
 
 /// 批量抓取+导出（§41-§45/§72：有界并发/取消/失败隔离/汇总）。
@@ -434,7 +476,10 @@ pub fn web_batch_fetch(
         return Err(err("web.batchEmpty", "no URLs given"));
     }
     if urls.len() > MAX_BATCH_URLS {
-        return Err(err("web.batchTooLarge", format!("batch limited to {MAX_BATCH_URLS} URLs")));
+        return Err(err(
+            "web.batchTooLarge",
+            format!("batch limited to {MAX_BATCH_URLS} URLs"),
+        ));
     }
     let dest = std::path::PathBuf::from(dest_dir.trim());
     if !dest.is_dir() {
@@ -444,7 +489,10 @@ pub fn web_batch_fetch(
         ));
     }
     if !matches!(format.as_str(), "txt" | "md" | "html") {
-        return Err(err("web.unsupportedFormat", format!("format '{format}' not supported (txt/md/html)")));
+        return Err(err(
+            "web.unsupportedFormat",
+            format!("format '{format}' not supported (txt/md/html)"),
+        ));
     }
     let state = app.state::<crate::state::AppState>();
     ensure_network(&state.web)?;
@@ -509,10 +557,12 @@ pub fn web_batch_fetch(
                         &cancel_w,
                         allow_private,
                     );
-                    if item.status == "exported" {
-                        if let Some(fname) = &item.file_name {
-                            outs.lock().expect("web batch outputs").push(dest_w.join(fname));
-                        }
+                    if item.status == "exported"
+                        && let Some(fname) = &item.file_name
+                    {
+                        outs.lock()
+                            .expect("web batch outputs")
+                            .push(dest_w.join(fname));
                     }
                     items_w.lock().expect("web batch items")[idx] = item;
                     let d = {
@@ -538,38 +588,61 @@ pub fn web_batch_fetch(
             if item.status == "queued" {
                 *item = WebBatchItem {
                     masked_url: masked_urls[i].clone(),
-                    status: if cancelled { "cancelled".to_string() } else { "failed".to_string() },
+                    status: if cancelled {
+                        "cancelled".to_string()
+                    } else {
+                        "failed".to_string()
+                    },
                     file_name: None,
-                    error_code: if cancelled { None } else { Some("web.batchNotProcessed".to_string()) },
+                    error_code: if cancelled {
+                        None
+                    } else {
+                        Some("web.batchNotProcessed".to_string())
+                    },
                 };
             }
         }
         let report = WebBatchReport {
             total: total as f64,
-            succeeded: items_guard.iter().filter(|i| i.status == "exported").count() as f64,
+            succeeded: items_guard
+                .iter()
+                .filter(|i| i.status == "exported")
+                .count() as f64,
             failed: items_guard.iter().filter(|i| i.status == "failed").count() as f64,
-            cancelled: items_guard.iter().filter(|i| i.status == "cancelled").count() as f64,
+            cancelled: items_guard
+                .iter()
+                .filter(|i| i.status == "cancelled")
+                .count() as f64,
             skipped: items_guard.iter().filter(|i| i.status == "skipped").count() as f64,
             items: items_guard.clone(),
         };
         drop(items_guard);
         // 创建型事务：已写产物登记（可撤销 §69）——部分成功也如实登记
         let written = outputs.lock().expect("web batch outputs").clone();
-        if !written.is_empty() {
-            if let Ok(hdir) = crate::rename_service::resolve_history_dir(&handle) {
-                let _ = crate::batch_service::record_creation_transaction(
-                    &hdir,
-                    &[],
-                    &written,
-                    &format!("Web batch export · {} items · format {format}", written.len()),
-                );
-            }
+        if !written.is_empty()
+            && let Ok(hdir) = crate::rename_service::resolve_history_dir(&handle)
+        {
+            let _ = crate::batch_service::record_creation_transaction(
+                &hdir,
+                &[],
+                &written,
+                &format!(
+                    "Web batch export · {} items · format {format}",
+                    written.len()
+                ),
+            );
         }
-        app_state.web.store_batch_report(&job_id_task.to_string(), report);
-        app_state.jobs.finish(&job_id_task, JobOutcome::WebCompleted);
+        app_state
+            .web
+            .store_batch_report(&job_id_task.to_string(), report);
+        app_state
+            .jobs
+            .finish(&job_id_task, JobOutcome::WebCompleted);
     });
     drop(state_cell);
-    Ok(JobHandleDto { job_id: job_id.to_string() })
+    Ok(JobHandleDto {
+        job_id: job_id.to_string(),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -601,7 +674,11 @@ fn do_batch_item(
         return item;
     }
     // 转换（与单文档同一管线 §63）
-    let charset_hint = if response.info.charset.is_empty() { None } else { Some(response.info.charset.clone()) };
+    let charset_hint = if response.info.charset.is_empty() {
+        None
+    } else {
+        Some(response.info.charset.clone())
+    };
     let FetchResponse { info, body } = response;
     let doc = build_document(info, &body, charset_hint.as_deref());
     let content = match format {
@@ -656,10 +733,12 @@ fn do_batch_item(
 #[specta::specta]
 pub fn web_batch_result(app: tauri::AppHandle, job_id: String) -> Result<WebBatchReport, IpcError> {
     let state = app.state::<crate::state::AppState>();
-    state
-        .web
-        .batch_report(&job_id)
-        .ok_or_else(|| err("web.noResult", format!("no batch report for job '{job_id}'")))
+    state.web.batch_report(&job_id).ok_or_else(|| {
+        err(
+            "web.noResult",
+            format!("no batch report for job '{job_id}'"),
+        )
+    })
 }
 
 /// 设置立即生效（§84；持久化走既有 set_app_config 全量 round-trip）。

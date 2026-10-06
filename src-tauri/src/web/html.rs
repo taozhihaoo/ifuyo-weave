@@ -279,14 +279,14 @@ pub fn extract_main_content(dom: &Html) -> (String, ExtractionConfidence, String
         ("main", "main"),
         ("[role=main]", "[role=main]"),
     ] {
-        if let Ok(selector) = Selector::parse(sel) {
-            if let Some(el) = dom.select(&selector).next() {
-                return (
-                    el.inner_html(),
-                    ExtractionConfidence::High,
-                    source.to_string(),
-                );
-            }
+        if let Ok(selector) = Selector::parse(sel)
+            && let Some(el) = dom.select(&selector).next()
+        {
+            return (
+                el.inner_html(),
+                ExtractionConfidence::High,
+                source.to_string(),
+            );
         }
     }
     // 2) 文本密度启发式（readability-lite）：score = text_len × (1-link_density)

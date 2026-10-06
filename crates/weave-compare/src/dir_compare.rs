@@ -550,9 +550,11 @@ mod tests {
         let l = ws.dir("l").expect("l");
         let r = ws.dir("r").expect("r");
         std::fs::create_dir_all(l.join("a/b")).expect("mkdir");
+        // 两侧内容不同 ⇒ Metadata 档恒 Modified（内容相同会因 mtime 同毫秒
+        // 偶发 Same——本测试关注目录节点，不受文件内容影响）
         std::fs::write(l.join("a/b/deep.txt"), "deep").expect("w");
         std::fs::create_dir_all(r.join("a/b")).expect("mkdir");
-        std::fs::write(r.join("a/b/deep.txt"), "deep").expect("w");
+        std::fs::write(r.join("a/b/deep.txt"), "deep-different").expect("w");
         std::fs::create_dir_all(r.join("newdir")).expect("mkdir");
         let session = compare_directories(
             &StdFilesystem,

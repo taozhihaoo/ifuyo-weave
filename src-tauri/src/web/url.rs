@@ -150,14 +150,12 @@ pub fn clean(input: &str, remove_tracking: bool) -> Result<UrlCleanResult, Weave
                 value: v,
                 category: classify_parameter(&k.to_lowercase()),
             };
-            match param.category {
-                UrlParameterCategory::Unknown => unknown.push(param.clone()),
-                _ => {}
+            if param.category == UrlParameterCategory::Unknown {
+                unknown.push(param.clone())
             }
             preserved.push(param);
         }
     }
-    let mut warnings = warnings;
     for name in preserved
         .iter()
         .filter(|p| p.category == UrlParameterCategory::AuthRelated)
