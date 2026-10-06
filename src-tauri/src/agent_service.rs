@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::Manager;
 
-use crate::agent::{
-    AgentComponent, AgentRuntime, ComponentState, MissedRunPolicy, ScheduleDef, ScheduleKind,
-};
+use crate::agent::{ComponentState, MissedRunPolicy, ScheduleDef, ScheduleKind};
 use crate::commands::IpcError;
 use weave_core::prelude::WeaveError;
 
