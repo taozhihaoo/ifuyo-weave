@@ -227,7 +227,7 @@ pub fn verify_manifest(
         if cancel.is_cancelled() {
             break;
         }
-        let abs = root.join(rel.replace('/', "/"));
+        let abs = root.join(rel);
         let item_kind = match std::fs::metadata(&abs) {
             Err(_) => ManifestDiffKind::Removed,
             Ok(_) => match hash_file(&crate::fs::StdFilesystem, &abs, cancel, &mut |_| {}) {
