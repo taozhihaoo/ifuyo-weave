@@ -28,6 +28,11 @@ impl ClipboardComponent {
         self.paused_flag = paused;
         self.enabled_flag = enabled;
     }
+
+    /// M2.6 接线：由 Agent 启动时调用（start 语义内含 resume+enable）。
+    pub fn clipboard_inner_bind(&mut self) {
+        self.start();
+    }
 }
 
 impl Default for ClipboardComponent {

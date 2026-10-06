@@ -76,13 +76,11 @@ impl AppState {
             privacy_results: std::sync::Arc::new(crate::privacy_service::PrivacyResultCache::new()),
             archive_results: std::sync::Arc::new(crate::archive_service::ArchiveResultCache::new()),
             agent: {
-                let a = agent;
-                let mut arc = std::sync::Arc::new(a);
-                if let Ok(mut clip) = arc.clipboard.inner.try_lock() {
-                    clip.bind_flags(
-                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
-                    );
+                let mut arc = std::sync::Arc::new(agent);
+                if let Some(clip) = std::sync::Arc::get_mut(&mut arc) {
+                    // Arc 唯一引用 ⇒ 可变绑定 M2.3 标志（经 ClipboardComponent）
+                    use crate::agent::AgentComponent;
+                    clip.clipboard_inner_bind();
                 }
                 arc
             },
