@@ -1321,7 +1321,9 @@ Known Limitations（P2 如实）:
 状态：P0 COMPLETE（**Detection Capability = Limited 如实声明**）。提交：
 R1 (sensitivity model+rule engine+masking+risk engine) / R2 (service+
 M2.3 通路钩子+session 运行时+WispConfig) / R3 (WispPanel+palette+i18n) /
-lint (clippy 0) / docs。
+lint (clippy 0) / docs / **R4 (§32 设置区 + 配置持久化缺陷修复：
+set_app_config 整体替换 ⇒ persistTheme/Favorites/Locale 改全量
+round-trip——clipboard/wisp 段曾被主题/语言切换静默重置)**。
 
 关键实现:
 
@@ -1357,5 +1359,5 @@ Quality:
 Known Limitations（如实）:
 
 - 外部应用原生 Ctrl+V 不可拦截（平台能力边界，全链路声明 Limited）
-- 应用规则面板编辑器未做（配置 JSON 已持久化且引擎消费）
+- ~~应用规则面板编辑器未做~~（R4 已交付：检测开关/TTL/block_critical/retain/规则增删改启）
 - 1k/10k 压测基准表 P2（逻辑有界：监听节流+去重+事件上限）

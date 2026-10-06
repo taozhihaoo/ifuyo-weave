@@ -18,7 +18,8 @@
 - **Clipboard 自环**（§13/§58）：Wisp 全部剪贴板写入（masked/原文）**写前**登记 M2.3 `suppress` 指纹（规范 SHA-256 hex，与监听端同构）——消自环且消 M2.3 1s 轮询竞态；Wisp 后台分析挂在 **M2.3 监听线程同一轮询通路**（`note_clipboard_text` 钩子），无第二监听器/第二存储（§27/§44/§58 验收 1/2/20 通过）。
 - **经 Weave 的粘贴意图防线**：`wisp_recopy_guarded(id, confirmed)`——M2.3 recopy 前评估（Block ⇒ 拒绝并说明；Warn ⇒ 返回决策等 UI 确认；Allow ⇒ 委托 `clipboard_recopy` 复用不重建）。
 - **事件与通知**（§45/§48/§49）：有界安全事件（200 条，仅 Timestamp/Kind/Level/Risk/Action/Target-exe/RuleIds **无任何内容**）；通知复用 M2.6 NotificationCenter（60s 聚合，只报规则数量）；tracing 只记元数据。
-- **UI**（`WispPanel.tsx` §44 轻量）：状态卡（Enabled/Paused + **"检测能力：有限"如实声明** §31）；粘贴前评估卡（风险/目标+置信/决策/理由/发现表含 masked 预览 + Mask&Protect）；保护会话卡（状态/TTL 倒计时/恢复原文/放弃 + 跳过原因呈现）；检测自测文本框（§38 误报自查）；最近事件表 + 清空；palette 命令（Open Wisp / Toggle Pause / Recent Events §31）；i18n zh/en 同笔 key 对等（既有测试守门）。
+- **UI**（`WispPanel.tsx` §44 轻量）：状态卡（Enabled/Paused + **"检测能力：有限"如实声明** §31）；粘贴前评估卡（风险/目标+置信/决策/理由/发现表含 masked 预览 + Mask&Protect）；保护会话卡（状态/TTL 倒计时/恢复原文/放弃 + 跳过原因呈现）；检测自测文本框（§38 误报自查）；最近事件表 + 清空；**设置区（§32 UI：启用/四类检测开关/block_critical/TTL/retain 附如实说明/每应用规则增删改启）**；palette 命令（Open Wisp / Toggle Pause / Recent Events §31）；i18n zh/en 同笔 key 对等（既有测试守门）。
+- **设置持久化缺陷修复**：`set_app_config` 是整体替换——`persistTheme/persistFavorites/persistLocale` 及 App 内联保存原先只带 language/theme/favorites，**clipboard 与 wisp 段会被 serde default 静默重置**（主题/语言切换即触发）。修复 = `persistAppConfig(mutate)` 全量 fetch-modify-set round-trip，四处调用点全部收敛。
 
 ## 2. Architecture Audit（§1 事实结论）
 
@@ -51,7 +52,7 @@ M2.3（监听通路/抑制/store/敏感原语）、M2.6（通知中心/生命周
 
 ## 10. Application Policy
 
-AppConfig `WispConfig.app_rules`（exe + mode + enabled）；UI 本版经配置 JSON 生效（面板编辑器 P1——设置已持久化、引擎已消费）。
+AppConfig `WispConfig`（§32 全字段：启用/四类检测/block_critical/TTL/retain/`app_rules`（exe + mode + enabled））；WispPanel 设置区直接编辑，`wisp_apply_config` 立即生效 + 全量 round-trip 持久化。
 
 ## 11. Privacy / Security（§26/§52/§53/§54/§55）
 
@@ -80,14 +81,14 @@ M2.3 仍是唯一 Clipboard 数据源与唯一监听器；Wisp 写入全部经 M
 
 ## 16. Known Limitations（如实）
 
-- **LIMITATION**：无全局粘贴钩子（unsafe 禁令）——外部应用的原生 Ctrl+V 不可拦截，只有"内容已在剪贴板"与"Weave 内复制动作"两处设防；应用规则 UI 编辑器未做（配置 JSON 已生效）；palette 命令标签为静态（状态在面板如实呈现）；多显示器混合 DPI 环境未实测前台窗口矩形（不影响目标识别——只用进程名）。
+- **LIMITATION**：无全局粘贴钩子（unsafe 禁令）——外部应用的原生 Ctrl+V 不可拦截，只有"内容已在剪贴板"与"Weave 内复制动作"两处设防；palette 命令标签为静态（状态在面板如实呈现）；多显示器混合 DPI 环境未实测前台窗口矩形（不影响目标识别——只用进程名）。
 - **RISK**：规则为确定性启发式——**漏检可能**（规则覆盖不了的内容不会被发现）；Mask 是字面替换，不能保证对抗性还原。
 - **NOT SUPPORTED**：密码管理器/TOTP/Vault/DLP/键盘监听/浏览器注入/网页内容识别/云分析（§59 全清单未越界）。
 
 ## 17. P0/P1/P2
 
 - **P0 全部交付**（§63 清单逐项：检测/规则/置信/风险 ✓；Guard 三防线+会话 ✓；安全六项（不泄日志/不覆盖新内容/race 守卫/TTL/崩溃处理/Unknown≠Safe+Degraded）✓；集成五项 ✓；UX 四项 ✓；性能有界 ✓；测试矩阵 ✓）。
-- P1：应用规则面板编辑器、更丰富规则包、事件高级过滤。
+- P1：更丰富规则包、事件高级过滤。（应用规则编辑器已在 R4 交付）
 - P2：1k/10k 压测基准表、palette 动态状态标签。
 
 ## 18. 未实现能力
