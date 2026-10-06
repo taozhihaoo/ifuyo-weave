@@ -20,16 +20,6 @@ const boxStyle: CSSProperties = {
     borderRadius: "var(--radius-sm)",
     border: "1px solid var(--color-border)",
 };
-const areaStyle: CSSProperties = {
-    fontFamily: "var(--typography-mono-family)",
-    fontSize: "var(--typography-size-xs)",
-    padding: "var(--spacing-sm)",
-    borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--color-border)",
-    width: "100%",
-    boxSizing: "border-box",
-    whiteSpace: "pre-wrap",
-};
 
 interface ActionRow {
     actionType: "filterByExtension" | "renamePrefix" | "archiveCreate" | "hashManifest";
