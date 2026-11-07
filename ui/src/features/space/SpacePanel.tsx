@@ -133,7 +133,7 @@ export function SpacePanel({ locale, onOperationDone }: SpacePanelProps) {
                 setBusy(false);
                 setError(e instanceof Error ? e.message : String(e));
             });
-    }, [root]);
+    }, [root, t]);
 
     const doCancel = useCallback(() => {
         if (scanJobId) {
@@ -179,7 +179,7 @@ export function SpacePanel({ locale, onOperationDone }: SpacePanelProps) {
                 setBusy(false);
                 setError(e instanceof Error ? e.message : String(e));
             });
-    }, [report, selected, onOperationDone, t]);
+    }, [report, selected, onOperationDone]);
 
     const typeMax = Math.max(1, ...(report?.typeStats.map((x) => x.bytes ?? 0) ?? [1]));
 

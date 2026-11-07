@@ -18,35 +18,40 @@ const boxStyle: CSSProperties = {
 const overlayStyle: CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "var(--color-border)",
+  // 半透明遮罩 + 模糊（此前误用不透明的 --color-border 做遮罩）
+  background: "var(--surface-overlay)",
+  backdropFilter: "blur(6px)",
+  WebkitBackdropFilter: "blur(6px)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
-  paddingTop: "10vh",
+  paddingTop: "14vh",
   zIndex: 1000,
 };
 
 const panelStyle: CSSProperties = {
   width: "min(560px, 92vw)",
   background: "var(--color-surface)",
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--color-border-strong)",
+  borderRadius: "var(--radius-lg)",
+  boxShadow: "var(--shadow-lg)",
   overflow: "hidden",
   display: "flex",
   flexDirection: "column",
-  maxHeight: "60vh",
+  maxHeight: "64vh",
 };
 
 const inputStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "var(--spacing-sm) var(--spacing-md)",
+  padding: "var(--spacing-md) var(--spacing-lg)",
   border: "none",
   borderBottom: "1px solid var(--color-border)",
   background: "var(--color-surface)",
   color: "inherit",
-  fontSize: "var(--typography-size-md)",
+  fontSize: "var(--typography-size-lg)",
   outline: "none",
+  minHeight: "var(--control-height-lg)",
 };
 
 const listStyle: CSSProperties = {

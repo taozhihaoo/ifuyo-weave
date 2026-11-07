@@ -152,7 +152,7 @@ export function ArchivePanel({ onOperationDone }: ArchivePanelProps) {
                     .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
             },
         );
-    }, [sources, output, level, onOperationDone, t]);
+    }, [sources, output, level, onOperationDone, t, runJob]);
 
     const doInspect = useCallback(() => {
         setBusy(true);
@@ -207,7 +207,7 @@ export function ArchivePanel({ onOperationDone }: ArchivePanelProps) {
                     .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
             },
         );
-    }, [zipPath, destDir, overwrite, onOperationDone, t]);
+    }, [zipPath, destDir, overwrite, onOperationDone, t, runJob]);
 
     const doVerifyHash = useCallback(() => {
         setBusy(true);

@@ -130,7 +130,7 @@ export function RecipePanel({ onOperationDone }: RecipePanelProps) {
                     setError(e instanceof Error ? e.message : String(e));
                 });
         },
-        [savedId, inputFolder, load],
+        [savedId, inputFolder, load, t],
     );
 
     const addAction = useCallback((actionType: ActionRow["actionType"]) => {

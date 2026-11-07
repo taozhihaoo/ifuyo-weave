@@ -1,5 +1,10 @@
 {
   "app.milestone": "M2.14 候选发布",
+  "nav.home": "总览",
+  "app.tagline": "把文件、文本与数据，编织成简单、可靠、可控的本地工作流。",
+  "app.localOnly": "本地运行 · 无账号 · 无上传",
+  "app.quickActions": "快捷操作",
+  "app.dropTitle": "拖入文件或文件夹，即刻开始",
   "open.file": "打开文件…",
   "open.folder": "打开文件夹…",
   "app.language": "语言",

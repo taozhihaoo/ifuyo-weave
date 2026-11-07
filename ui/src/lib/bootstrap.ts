@@ -11,12 +11,18 @@ function asTheme(value: string): Theme {
 
 /// M11 §222/§223：解析 system（跟随 prefers-color-scheme）并应用 tokens。
 export function applyTheme(theme: Theme): void {
+  // 非 Tauri 环境（Vite 浏览器预览 / jsdom）可能没有 matchMedia；
+  // 缺失时按浅色降级，绝不因主题解析抛错拖垮启动。
+  const systemPrefersDark =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
   const resolved: AppliedTheme =
     theme === "dark"
       ? "dark"
       : theme === "light"
         ? "light"
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
+        : systemPrefersDark
           ? "dark"
           : "light";
   applyTokens(resolved);
@@ -85,8 +91,10 @@ export async function persistAppConfig(
 
 /** M11 §223 theme 持久化 + 应用（§224 fallback = system）。 */
 export async function persistTheme(theme: Theme): Promise<void> {
-  await persistAppConfig((config) => ({ ...config, theme }));
+  // 视觉反馈不依赖后端可达性：先即时应用，再持久化（结构化失败仍由
+  // persistAppConfig 写入 store 呈现，绝不静默伪装成功）。
   applyTheme(theme);
+  await persistAppConfig((config) => ({ ...config, theme }));
 }
 
 /** M11 §40 收藏持久化（AppConfig.favorites；失败经 store 错误呈现）。 */

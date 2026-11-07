@@ -1,5 +1,10 @@
 {
   "app.milestone": "M2.14 Release Candidate",
+  "nav.home": "Overview",
+  "app.tagline": "Weave files, text and data into simple, reliable, controllable local workflows.",
+  "app.localOnly": "Local-only · No account · No upload",
+  "app.quickActions": "Quick actions",
+  "app.dropTitle": "Drop a file or folder to get started",
   "open.file": "Open file…",
   "open.folder": "Open folder…",
   "app.language": "Language",
