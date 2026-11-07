@@ -21,8 +21,27 @@ allow = [
   # Unicode-3.0: Unicode 数据表（unicode-ident 等）
   "Unicode-3.0",
   "CC0-1.0",
-  # 注：OFL / CDLA / ISC / CC-BY / MIT-0 / Python-2.0 属前端依赖策略，
+  # —— 2.0 依赖树扩展（M2.x 引入，cargo deny check licenses CI 实测补齐）——
+  # ISC: ring/untrusted/rustls-webpki（TLS）、scraper/ego-tree（HTML）、libloading（OSI/FSF 自由）
+  "ISC",
+  # BSL-1.0: clipboard-win/error-code（arboard Windows 剪贴板链，Boost 宽松许可）
+  "BSL-1.0",
+  # NCSA: libfuzzer-sys（ravif→rav1e 传递依赖，(MIT OR Apache-2.0) AND NCSA）
+  "NCSA",
+  # CDLA-Permissive-2.0: webpki-roots（Mozilla 根 CA 证书数据的宽松数据许可）
+  "CDLA-Permissive-2.0",
+  # 注：OFL / CC-BY / MIT-0 / Python-2.0 属前端依赖策略，
   # 见 scripts/check-frontend-licenses.mjs 的白名单。
+]
+
+# display-info（screenshots 传递依赖）manifest 只声明 license-file 而无 license 表达式；
+# 其 LICENSE 文件内容为 Apache-2.0（hash 经 twox-hash 2.1 实测 = cargo-deny 的 XxHash32 规范化算法）。
+[[licenses.clarify]]
+name = "display-info"
+version = "0.4.8"
+expression = "Apache-2.0"
+license-files = [
+  { path = "LICENSE", hash = 0x0a6d4ed6 },
 ]
 
 [bans]
