@@ -1,67 +1,73 @@
 # PRIVACY
 
-Weave 的隐私边界（charter #19 / M0 §14）。这既是文档也是验收清单（charter #69）。
+> Applies to: **2.0.0-rc.1 (Release Candidate)**
 
-## 承诺 / Commitments
+Weave's privacy boundary (charter #19 / M0 §14). This document is also an acceptance checklist (charter #69). Because M2.10 Web / M2.11 Monitor introduced user-initiated outbound requests in 2.0, the commitments below distinguish "default behavior" from "explicitly initiated optional features" instead of claiming that every feature works offline.
 
-- **No Telemetry** — 不收集、不上报任何使用数据
-- **No Account** — 无账号体系
-- **No Cloud Requirement** — 所有功能离线可用
-- **No File Upload** — 用户文件永不离开本机
-- **Local-first** — 默认不联网；M0 的 capabilities 未授予任何网络权限
+## Commitments
 
-## M0 实施状态 / Implementation Status
+- **No Telemetry** — no usage data is collected or reported
+- **No Account** — no account system
+- **No Cloud Requirement** — all **core** features work offline; only Web fetching and website monitoring inherently require network access, and only when explicitly initiated by the user
+- **No File Upload** — user files are never uploaded. Web / Monitor only **download** remote content to the local machine; local file contents are never sent
+- **Local-first** — offline by default; the UI capability layer grants no network permission, and the single Rust-side egress endpoint is subject to SSRF protection (see [SECURITY.md](SECURITY.md))
 
-| 项 | 状态 | 位置 |
+## M0 Implementation Status
+
+| Item | Status | Location |
 | --- | --- | --- |
-| capabilities 最小化（仅 core:default，无 fs/shell/network） | ✅ | src-tauri/capabilities/default.json |
-| CSP：仅 self + IPC；无远程 JS/CSS/字体 | ✅ | src-tauri/tauri.conf.json |
-| 日志写入本地 `%APPDATA%/ifuyo/Weave/logs` | ✅ | src-tauri/src/logging.rs |
-| 日志禁止记录文件内容/密码/token | ✅（规约 + 评审，M0 无敏感路径写入） | logging.rs 文档注释 |
-| 配置仅存本机（language/theme） | ✅ | src-tauri/src/config.rs |
-| 崩溃上报 / analytics SDK | 不存在 | 依赖审计保证 |
+| Capability minimization: `core:default` + user-initiated `dialog:default`; no fs/shell/process/network | ✅ | src-tauri/capabilities/default.json |
+| CSP: self + IPC only; no remote JS/CSS/fonts | ✅ | src-tauri/tauri.conf.json |
+| Logs written locally to `%APPDATA%/ifuyo/Weave/logs` | ✅ | src-tauri/src/logging.rs |
+| Logs must not record file contents / passwords / tokens | ✅ (policy + review; M0 had no sensitive-path writes) | logging.rs doc comments |
+| Config stored locally only (language/theme/favorites + clipboard/wisp/web/monitor sections) | ✅ | src-tauri/src/config.rs:39-48 |
+| Crash reporting / analytics SDK | Absent | Guaranteed by dependency audit |
 
-## 验收（随里程碑复核）
+## 2.0 Network Egress Boundary (M2.10 / M2.11)
 
-- [ ] 无默认遥测
-- [ ] 无强制联网
-- [ ] 文件默认本地处理
-- [ ] 日志不包含敏感内容
-- [ ] 不上传用户文件
-- [ ] 路径经过校验
-- [ ] 删除默认进入回收站（M3 起）
-- [ ] 破坏性操作有 Preview / Confirm（M2 起）
+- The only egress path is the Rust-side `ureq` client, triggered explicitly by Web / Monitor commands (src-tauri/src/web/fetch.rs:192, src-tauri/src/monitor/check.rs); it **does not pass through Tauri capabilities**, so "capabilities grant no network" is not equivalent to "no network behavior".
+- Local / private / link-local targets are denied by default (SSRF classification at the DNS resolution layer); `allow_private` permits them only when explicitly enabled by the user (src-tauri/src/web/target.rs:1-7,90-130).
+- Fetch results are stored only on the local machine; requests carry no user file contents, account credentials or telemetry identifiers.
+- JavaScript-rendered pages and authenticated sessions are not supported (2.1 backlog, stated honestly).
 
-## M3 Duplicate Finder 实施状态 / M3 Implementation Status
+## Acceptance Checklist (2.0 RC review)
 
-| 项 | 状态 | 位置 |
+- [x] No telemetry by default
+- [x] No forced network access (everything except Web / Monitor works offline)
+- [x] Files processed locally by default
+- [x] User files never uploaded (outbound requests only download remote content)
+- [x] Logs contain no sensitive content (ids / counts only; paths appear only in error messages shown in the local UI, never in log macros)
+- [x] Paths are validated (roots pass validate_absolute_path; selections must belong to scan results)
+- [x] Deletion goes to the recycle bin by default (since M3: the only delete action)
+- [x] Destructive operations have Preview / Confirm (since M2; M3 adds Plan Preview + confirmation before recycling)
+- [x] Outbound targets deny private/local networks by default (M2.10 SSRF classification + regression tests)
+- [x] Config, history, Job Journal and clipboard history are local only, with no cloud sync
+
+## M3 Duplicate Finder Implementation Status
+
+| Item | Status | Location |
 | --- | --- | --- |
-| 哈希全部在本机计算（无 remote hash、无内容出机） | ✅ | weave-files duplicates 管线 |
-| 日志不记录文件内容；仅 operation_id / job_id / 计数 | ✅ | duplicates_service / m3_commands |
-| 历史（transactions/entries）只存路径、大小、时间等元数据，不存内容 | ✅ | weave-history（M2 复用） |
-| 删除唯一动作 = 系统回收站；无永久删除路径、无 fs::remove fallback | ✅ | crates/weave-files/src/recycle.rs（§126 P0 审计项） |
-| ScanCache / PlanCache 为内存态，进程退出即消失，不落盘 | ✅ | src-tauri/src/duplicates_service.rs |
-| 「最近扫描根目录」为纯会话态（appStore），不写入配置文件 | ✅ | ui/src/stores/appStore.ts |
-| 网络能力：无（capabilities 未授予任何网络权限，trash 适配器无网络调用） | ✅ | src-tauri/capabilities/default.json |
-| M4：文本全部本机解码/格式化/比较；正则在本进程执行（无 remote hash/远程格式化 API）；历史只记路径与计数不存内容 | ✅ | weave-text / text_service |
-| M4：Regex 引擎 = Rust regex（进程内线性时间），无外部服务 | ✅ | crates/weave-text |
-| M5：数据集全本机解析/清洗/转换；会话 ephemeral 不落盘；历史仅记操作事实不记内容 | ✅ | weave-data / data_service |
+| All hashes computed locally (no remote hash, no content leaving the machine) | ✅ | weave-files duplicates pipeline |
+| Logs never record file contents; only operation_id / job_id / counts | ✅ | duplicates_service / m3_commands |
+| History (transactions/entries) stores only metadata such as path, size and time — never content | ✅ | weave-history (reused from M2) |
+| The only delete action is the OS recycle bin; no permanent-delete path, no fs::remove fallback | ✅ | crates/weave-files/src/recycle.rs (§126 P0 audit item) |
+| ScanCache / PlanCache are in-memory only, disappear on process exit, never persisted | ✅ | src-tauri/src/duplicates_service.rs |
+| "Recent scan roots" are pure session state (appStore), never written to config | ✅ | ui/src/stores/appStore.ts |
+| Network capability: none (this module makes no network calls; see the global egress boundary above) | ✅ | src-tauri/src/duplicates_service.rs |
+| M4: text decoded/formatted/compared entirely locally; regex runs in-process (no remote hash / remote formatting API); history records paths and counts only | ✅ | weave-text / text_service |
+| M4: Regex engine = Rust regex (in-process, linear time), no external service | ✅ | crates/weave-text |
+| M5: datasets parsed/cleaned/converted entirely locally; sessions are ephemeral and never persisted; history records operation facts only | ✅ | weave-data / data_service |
 
-## 验收（随里程碑复核）
+## M7 Batch Engine Implementation Status
 
-- [x] 无默认遥测（M0–M3 复核）
-- [x] 无强制联网（M0–M3 复核）
-- [x] 文件默认本地处理（M0–M3 复核）
-- [x] 日志不包含敏感内容（M3 复核：仅 id/计数；路径仅在错误消息中面向本机 UI 呈现，不入日志宏）
-- [x] 不上传用户文件（M3 复核）
-- [x] 路径经过校验（M3 复核：roots 过 validate_absolute_path；选择必须属于扫描结果）
-- [x] 删除默认进入回收站（M3 达成：唯一删除动作）
-- [x] 破坏性操作有 Preview / Confirm（M2 起；M3 回收前 Plan Preview + 确认对话框）
+- Job Journal (`app-data/jobs/*.jsonl`): local only, records paths/sizes/status — same tier as History (local files, no upload).
+- No telemetry / no upload / no cloud / no network calls: batch execution is local end to end (§243 Final Audit N: PASS).
+- Logging: tracing uses a local non-blocking writer only; no path-level sensitive content is sent out.
 
-## M7 Batch Engine 实施状态
+## Additional M2.x Facts
 
-- Job Journal（`app-data/jobs/*.jsonl`）：仅本地，记录路径/大小/状态——
-  与 History 同级（本地文件，无上传）。
-- 无 Telemetry / 无 Upload / 无 Cloud / 无网络调用：批量执行全程本地
-  （下 §243 Final Audit N：PASS）。
-- 日志：tracing 仅本地 non-blocking 写入器，无路径级敏感内容外发。
+- **M2.3 Clipboard**: clipboard history is stored locally only; it can be paused, capped and marked sensitive; nothing is transmitted (`weave-clipboard`).
+- **M2.4 Privacy**: share preflight exports a **safe copy** and leaves the original untouched; detection and response are separated (`crates/weave-privacy/src/cleanup.rs`).
+- **M2.8 Glint**: capture and OCR both run locally with bounded storage; deletion uses the recycle bin.
+- **M2.9 Wisp**: sensitive-data detection for paste guard is **Limited** and declared as such — it does not claim to recognize every kind of sensitive content.
+- **M2.12 Smart**: produces suggestions only and never executes automatically; file contents are never sent to an external AI service.
